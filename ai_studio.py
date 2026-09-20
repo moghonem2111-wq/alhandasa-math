@@ -1,5 +1,5 @@
 import base64,json,html,re,uuid
-from datetime import date
+from datetime import date,datetime
 from urllib import request
 import streamlit as st
 import pandas as pd
@@ -61,7 +61,7 @@ def paper(title,grade,subject,qs,answers=False):
  return f"""<!doctype html><html dir='rtl'><meta charset='utf-8'><style>@page{{size:A4;margin:15mm}}body{{font-family:'DejaVu Sans','Tahoma',Arial,sans-serif;line-height:1.7}}.head{{border:2px solid #1677ff;border-radius:14px;padding:15px;margin-bottom:16px;background:#f6fbff}}h1{{color:#0757b8;margin:2px 0}}.meta{{display:grid;grid-template-columns:1fr 1fr;gap:6px}}.q{{border:1px solid #ccd6e3;border-radius:10px;padding:11px;margin:10px 0;page-break-inside:avoid}}.q>b{{color:#0757b8}}.opts{{display:grid;grid-template-columns:1fr 1fr;gap:7px}}.lines hr{{border:0;border-bottom:1px solid #bbb;margin:17px 0}}.ans{{background:#eef8ee;border:1px solid #8bc48b;padding:7px;border-radius:7px}}</style><body><div class='head'><small>البشمهندس x الرياضه</small><h1>{esc(title)}</h1><div class='meta'><div>الطالب: __________________</div><div>التاريخ: __________</div><div>الصف: {esc(grade)}</div><div>المادة: {esc(subject)}</div></div></div>{''.join(z)}<footer>إعداد المعلم — البشمهندس x الرياضه</footer></body></html>"""
 def mind(d):
  cards="".join(f"<div class='card'><h3>{esc(b.get('name',''))}</h3><ul>{''.join(f'<li>{esc(x)}</li>' for x in b.get('items',[]))}</ul></div>" for b in d.get('branches',[]))
- return f"""<!doctype html><html dir='rtl'><meta charset='utf-8'><style>@page{{size:A4 landscape;margin:12mm}}body{{font-family:'DejaVu Sans','Tahoma',Arial,sans-serif}}h1{{text-align:center;color:#0757b8}}.center{{margin:15px auto;padding:18px;border:3px solid #1677ff;border-radius:20px;text-align:center;font-size:22px;font-weight:900;max-width:420px;background:#eef7ff}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}.card{{border:2px solid #c8d3df;border-radius:14px;padding:10px;min-height:120px}}.card h3{{color:#1677ff}}</style><h1>خريطة ذهنية — {esc(d.get('title',''))}</h1><div class='center'>{esc(d.get('title',''))}</div><p style='text-align:center'>{esc(d.get('summary',''))}</p><div class='grid'>{cards}</div></html>"""
+ return f"""<!doctype html><html dir='rtl'><meta charset='utf-8'><style>@page{{size:A4 landscape;margin:12mm}}body{{font-family:'DejaVu Sans','Tahoma',Arial,sans-serif}}h1{{text-align:center;color:#0757b8}}.center{{margin:15px auto;padding:18px;border:3px solid #1677ff;border-radius:20px;text-align:center;font-size:24px;font-weight:900;max-width:420px;background:#eef7ff;font-family:'Noto Kufi Arabic','Noto Sans Arabic','Noto Naskh Arabic','DejaVu Sans',sans-serif}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}.card{{border:2px solid #c8d3df;border-radius:14px;padding:12px;min-height:120px;background:#fff}}.card h3{{color:#1677ff;font-family:'Noto Kufi Arabic','Noto Sans Arabic','Noto Naskh Arabic','DejaVu Sans',sans-serif;margin-top:0}}</style><h1>خريطة ذهنية — {esc(d.get('title',''))}</h1><div class='center'>{esc(d.get('title',''))}</div><p style='text-align:center'>{esc(d.get('summary',''))}</p><div class='grid'>{cards}</div></html>"""
 def save_q(kind,title,payload,cb):
  q=st.session_state.get("question_bank_df")
  if not isinstance(q,pd.DataFrame):return False
@@ -138,4 +138,31 @@ def render_ai_studio(save_callback=None):
    h=mind(x);st.components.v1.html(h,height=580,scrolling=True);z=pdf(h)
    if z:st.download_button("📄 تصدير الخريطة PDF",z,"خريطة_ذهنية_AI.pdf","application/pdf",key="aim_pdf")
    if st.button("💾 حفظ الخريطة في بنك المنصة",key="aim_save"):
-    if save_q("خريطة ذهنية AI",x["title"],{"grade":g,"subject":s,"mindmap":x},save_callback):st.success("تم حفظ الخريطة في بنك المنصة.")
+    payload={"grade":g,"subject":s,"mindmap":x,"saved_at":datetime.now().strftime("%Y-%m-%d %H:%M")}
+    if save_q("خريطة ذهنية AI",x["title"],payload,save_callback):
+     st.session_state["ai_mm_saved_title"]=x["title"]
+     st.success("تم حفظ الخريطة الذهنية في المنصة ويمكنك فتحها من قسم «الخرائط المحفوظة».")
+   
+   st.markdown("---")
+   st.markdown("### 📚 الخرائط الذهنية المحفوظة على المنصة")
+   qdf=st.session_state.get("question_bank_df")
+   saved=[]
+   if isinstance(qdf,pd.DataFrame) and not qdf.empty and "نوع_السؤال" in qdf.columns and "بيانات_السؤال_JSON" in qdf.columns:
+    for _,rr in qdf[qdf["نوع_السؤال"].astype(str).eq("خريطة ذهنية AI")].iterrows():
+     try:
+      obj=json.loads(str(rr.get("بيانات_السؤال_JSON","")))
+      pl=obj.get("payload",{})
+      mm=pl.get("mindmap",{})
+      saved.append({"id":rr.get("معرف_السؤال",""),"title":obj.get("title","خريطة ذهنية"),"grade":pl.get("grade",""),"subject":pl.get("subject",""),"saved_at":pl.get("saved_at",""),"mindmap":mm})
+     except Exception:
+      pass
+   if saved:
+    labels=[f'{v["title"]} — {v["grade"]} — {v["saved_at"]}' for v in saved]
+    idx=st.selectbox("اختر خريطة محفوظة لعرضها أو طباعتها",range(len(saved)),format_func=lambda i:labels[i],key="aim_saved_select")
+    chosen=saved[idx]
+    st.components.v1.html(mind(chosen["mindmap"]),height=520,scrolling=True)
+    saved_pdf=pdf(mind(chosen["mindmap"]))
+    if saved_pdf:
+     st.download_button("📄 طباعة / تحميل الخريطة المحفوظة PDF",saved_pdf,"خريطة_ذهنية_محفوظة.pdf","application/pdf",key="aim_saved_pdf")
+   else:
+    st.info("لا توجد خرائط ذهنية محفوظة حتى الآن. أنشئ خريطة ثم اضغط «حفظ الخريطة في بنك المنصة».")
