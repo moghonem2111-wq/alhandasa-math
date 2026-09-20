@@ -31,8 +31,8 @@ def _print_teacher():
 
 def math_html(value):
  s=str(value or "")
- for a,b in [(r"\\left",""),(r"\\right",""),(r"\\displaystyle",""),(r"\\pi","π"),(r"\\theta","θ"),(r"\\alpha","α"),(r"\\beta","β"),(r"\\gamma","γ"),(r"\\delta","δ"),(r"\\lambda","λ"),(r"\\mu","μ"),(r"\\sigma","σ"),(r"\\omega","ω"),(r"\\infty","∞"),(r"\\times","×"),(r"\\cdot","·"),(r"\\pm","±"),(r"\\leq","≤"),(r"\\geq","≥"),(r"\\neq","≠"),(r"\\approx","≈"),(r"\\to","→"),(r"\\sum","Σ"),(r"\\int","∫")]:s=s.replace(a,b)
- s=re.sub(r"\\text\\{([^{}]*)\\}",r"\\1",s)
+ for a,b in [(r"\left",""),(r"\right",""),(r"\displaystyle",""),(r"\pi","π"),(r"\theta","θ"),(r"\alpha","α"),(r"\beta","β"),(r"\gamma","γ"),(r"\delta","δ"),(r"\lambda","λ"),(r"\mu","μ"),(r"\sigma","σ"),(r"\omega","ω"),(r"\infty","∞"),(r"\times","×"),(r"\cdot","·"),(r"\pm","±"),(r"\leq","≤"),(r"\geq","≥"),(r"\neq","≠"),(r"\approx","≈"),(r"\to","→"),(r"\sum","Σ"),(r"\int","∫")]:s=s.replace(a,b)
+ s=re.sub(r"\text\{([^{}]*)\}",r"\\1",s)
  def bal(t,p):
   d=0
   for j in range(p,len(t)):
@@ -46,7 +46,7 @@ def math_html(value):
   def flush():
    if buf:out.append(html.escape("".join(buf),quote=False));buf.clear()
   while i<len(t):
-   if t.startswith(r"\\frac",i) or t.startswith(r"\\dfrac",i):
+   if t.startswith(r"\frac",i) or t.startswith(r"\dfrac",i):
     i+=7 if t.startswith(r"\\dfrac",i) else 5
     while i<len(t) and t[i].isspace():i+=1
     if i<len(t) and t[i]=="{":
@@ -55,7 +55,7 @@ def math_html(value):
      if i<len(t) and t[i]=="{":
       b,j=bal(t,i);i=j;flush();out.append(f"<span class='frac'><span class='num'>{render(a)}</span><span class='den'>{render(b)}</span></span>");continue
     buf.append("/");continue
-   if t.startswith(r"\\sqrt",i):
+   if t.startswith(r"\sqrt",i):
     i+=5
     while i<len(t) and t[i].isspace():i+=1
     if i<len(t) and t[i]=="{":
@@ -68,7 +68,7 @@ def math_html(value):
     else:a=""
     flush();out.append(f"<{tag}>{render(a)}</{tag}>");continue
    if t[i]=="\\" and i+1<len(t):
-    m=re.match(r"\\\\([A-Za-z]+)",t[i:])
+    m=re.match(r"\\([A-Za-z]+)",t[i:])
     if m:
      mp={"pi":"π","theta":"θ","alpha":"α","beta":"β","gamma":"γ","delta":"δ","lambda":"λ","mu":"μ","sigma":"σ","omega":"ω","infty":"∞","times":"×","cdot":"·","pm":"±","leq":"≤","geq":"≥","neq":"≠","approx":"≈","to":"→","sum":"Σ","int":"∫"};tok=m.group(1);buf.append(mp.get(tok,tok));i+=len(tok)+1;continue
    buf.append(t[i]);i+=1
