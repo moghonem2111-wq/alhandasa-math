@@ -51,7 +51,7 @@ def math_html(value):
    if buf:out.append(html.escape("".join(buf),quote=False));buf.clear()
   while i<len(t):
    if t.startswith(r"\frac",i) or t.startswith(r"\dfrac",i) or t.startswith(r"\tfrac",i):
-    cmd=7 if t.startswith(r"\dfrac",i) else (7 if t.startswith(r"\tfrac",i) else 5);i+=cmd
+    cmd=6 if t.startswith(r"\dfrac",i) else (6 if t.startswith(r"\tfrac",i) else 5);i+=cmd
     while i<len(t) and t[i].isspace():i+=1
     if i<len(t) and t[i]=="{":
      num,j=bal(t,i);i=j
@@ -81,8 +81,8 @@ def math_html(value):
    buf.append(t[i]);i+=1
   flush();return "".join(out)
  # Also recognize simple numeric/algebraic fractions written as 1/2 or (x+1)/(x-1).
- s=re.sub(r"(?<![\w])\(([^()]+)\)\s*/\s*\(([^()]+)\)",lambda m:f"\\\\frac{{{m.group(1)}}}{{{m.group(2)}}}",s)
- s=re.sub(r"(?<![\w])(-?\d+(?:\.\d+)?)\s*/\s(-?\d+(?:\.\d+)?)",lambda m:f"\\\\frac{{{m.group(1)}}}{{{m.group(2)}}}",s)
+ s=re.sub(r"(?<![\w])\(([^()]+)\)\s*/\s*\(([^()]+)\)",lambda m:f"\\frac{{{m.group(1)}}}{{{m.group(2)}}}",s)
+ s=re.sub(r"(?<![\w])(-?\d+(?:\.\d+)?)\s*/\s(-?\d+(?:\.\d+)?)",lambda m:f"\\frac{{{m.group(1)}}}{{{m.group(2)}}}",s)
  return render(s)
 def paper(title,grade,subject,qs,answers=False):
  teacher_name,teacher_phone=_print_teacher()
