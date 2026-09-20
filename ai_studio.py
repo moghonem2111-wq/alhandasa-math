@@ -27,9 +27,9 @@ def call(prompt,files):
  key=sec("GEMINI_API_KEY")
  if not key:raise RuntimeError("أضف GEMINI_API_KEY إلى Streamlit Secrets.")
  model=sec("GEMINI_MODEL",GEMINI_MODEL_DEFAULT)
- url=f"{API}{model}:generateContent?key={key}"
+ url=f"{API}{model}:generateContent"
  body={"contents":[{"role":"user","parts":_gemini_parts(prompt,files)}],"generationConfig":{"responseMimeType":"application/json","temperature":0.25}}
- req=request.Request(url,data=json.dumps(body,ensure_ascii=False).encode(),headers={"Content-Type":"application/json"},method="POST")
+ req=request.Request(url,data=json.dumps(body,ensure_ascii=False).encode(),headers={"Content-Type":"application/json","x-goog-api-key":key},method="POST")
  try:
   with request.urlopen(req,timeout=180) as r:o=json.loads(r.read().decode())
  except Exception as e:
