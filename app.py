@@ -1879,70 +1879,113 @@ else:
     _theme_css = ""
 st.markdown(f"<style>{_theme_css}</style>", unsafe_allow_html=True)
 
-# إخفاء/إظهار القائمة الجانبية من زر ☰ الحقيقي.
-# على الموبايل لا نستخدم display:none لأن Streamlit قد يترك عناصر collapsed control
-# أو نصوصاً صغيرة ظاهرة أسفل شريط البحث. بدلاً من ذلك نستخدم transform + z-index.
+# شريط جانبي احترافي: ينزلق بسلاسة من اليمين على الكمبيوتر والموبايل،
+# مع ظل قوي، شفافية أثناء الحركة، ومنع أي تفاعل معه عندما يكون مغلقاً.
 _sidebar_is_open = st.session_state.student_sidebar_open if is_student_mode else st.session_state.teacher_sidebar_open
-_sidebar_mobile_css = f"""
+_sidebar_shift = '0' if _sidebar_is_open else 'calc(100% + 28px)'
+_sidebar_visibility = 'visible' if _sidebar_is_open else 'hidden'
+_sidebar_opacity = '1' if _sidebar_is_open else '0'
+_sidebar_pointer = 'auto' if _sidebar_is_open else 'none'
+_sidebar_css = f"""
 <style>
+/* ================== Professional Sidebar ================== */
+[data-testid="stSidebar"] {{
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: auto !important;
+    bottom: 0 !important;
+    width: min(330px, 88vw) !important;
+    min-width: min(330px, 88vw) !important;
+    max-width: min(330px, 88vw) !important;
+    height: 100dvh !important;
+    z-index: 999999 !important;
+    transform: translateX({_sidebar_shift}) !important;
+    transition: transform .38s cubic-bezier(.22,.61,.36,1), opacity .22s ease, visibility .38s ease !important;
+    visibility: {_sidebar_visibility} !important;
+    opacity: {_sidebar_opacity} !important;
+    pointer-events: {_sidebar_pointer} !important;
+    box-shadow: -18px 0 50px rgba(2, 6, 23, .30) !important;
+    border-left: 1px solid rgba(148,163,184,.18) !important;
+    overflow: hidden !important;
+    will-change: transform, opacity !important;
+}}
+[data-testid="stSidebar"] > div:first-child {{
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    scrollbar-width: thin !important;
+}}
+[data-testid="stSidebar"] > div:first-child::-webkit-scrollbar {{ width: 6px !important; }}
+[data-testid="stSidebar"] > div:first-child::-webkit-scrollbar-thumb {{
+    background: rgba(148,163,184,.35) !important;
+    border-radius: 20px !important;
+}}
+[data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
+[data-testid="stSidebarNav"] {{ display: block !important; }}
+
+/* زر القائمة العائم */
+div[data-testid="stButton"] button[key="student_sidebar_toggle"],
+div[data-testid="stButton"] button[key="teacher_sidebar_toggle"] {{
+    width: 54px !important;
+    min-width: 54px !important;
+    height: 54px !important;
+    min-height: 54px !important;
+    padding: 0 !important;
+    border-radius: 17px !important;
+    border: 1px solid rgba(148,163,184,.25) !important;
+    background: rgba(255,255,255,.94) !important;
+    color: #0f172a !important;
+    box-shadow: 0 12px 30px rgba(15,23,42,.16) !important;
+    font-size: 25px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    transition: transform .2s ease, box-shadow .2s ease, background .2s ease !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+}}
+div[data-testid="stButton"] button[key="student_sidebar_toggle"]:hover,
+div[data-testid="stButton"] button[key="teacher_sidebar_toggle"]:hover {{
+    transform: translateY(-2px) scale(1.03) !important;
+    box-shadow: 0 16px 36px rgba(15,23,42,.22) !important;
+}}
+
+/* منع بقاء فراغ جانبي مزعج: المحتوى يستفيد من عرض الشاشة بالكامل */
+.main .block-container {{
+    max-width: 100% !important;
+}}
+
+/* موبايل */
 @media (max-width: 768px) {{
     [data-testid="stSidebar"] {{
-        position: fixed !important;
-        top: 0 !important;
-        right: 0 !important;
-        left: auto !important;
-        width: min(86vw, 360px) !important;
-        min-width: min(86vw, 360px) !important;
-        max-width: min(86vw, 360px) !important;
-        height: 100dvh !important;
-        z-index: 999999 !important;
-        transform: translateX({'0' if _sidebar_is_open else '110%'}) !important;
-        transition: transform .22s ease-in-out !important;
-        box-shadow: -12px 0 30px rgba(0,0,0,.28) !important;
-        visibility: {'visible' if _sidebar_is_open else 'hidden'} !important;
-        opacity: {'1' if _sidebar_is_open else '0'} !important;
-        pointer-events: {'auto' if _sidebar_is_open else 'none'} !important;
-    }}
-    [data-testid="stSidebar"] > div:first-child {{
-        width: 100% !important;
-        max-width: 100% !important;
-    }}
-    [data-testid="stSidebarCollapsedControl"] {{
-        display: none !important;
-    }}
-    [data-testid="stSidebarNav"] {{
-        display: block !important;
+        width: min(88vw, 360px) !important;
+        min-width: min(88vw, 360px) !important;
+        max-width: min(88vw, 360px) !important;
     }}
     .main .block-container {{
-        max-width: 100% !important;
         padding-left: 12px !important;
         padding-right: 12px !important;
     }}
-    button[data-testid="stBaseButton-secondary"][kind="secondary"] {{
-        touch-action: manipulation !important;
-    }}
     div[data-testid="stButton"] button[key="student_sidebar_toggle"],
     div[data-testid="stButton"] button[key="teacher_sidebar_toggle"] {{
-        min-width: 52px !important;
-        min-height: 48px !important;
-        font-size: 28px !important;
-        line-height: 1 !important;
-        border-radius: 14px !important;
-        touch-action: manipulation !important;
-        -webkit-tap-highlight-color: transparent !important;
+        width: 50px !important;
+        min-width: 50px !important;
+        height: 50px !important;
+        min-height: 50px !important;
+        border-radius: 15px !important;
+        font-size: 23px !important;
     }}
 }}
-@media (min-width: 769px) {{
-    [data-testid="stSidebar"] {{
-        transform: none !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-    }}
+
+/* وضع داكن */
+[data-testid="stSidebar"] div[data-testid="stButton"] button {{
+    transition: transform .18s ease, box-shadow .18s ease, background .18s ease !important;
 }}
 </style>
 """
-st.markdown(_sidebar_mobile_css, unsafe_allow_html=True)
+st.markdown(_sidebar_css, unsafe_allow_html=True)
 
 # ============================================================================== 
 # 1. واجهة الطالب الشاملة
@@ -1951,7 +1994,7 @@ if is_student_mode:
     # ===== زر ☰ لإظهار/إخفاء قائمة الطالب =====
     _st_menu_col, _st_spacer = st.columns([1, 11])
     with _st_menu_col:
-        if st.button("☰", key="student_sidebar_toggle", help="إظهار أو إخفاء القائمة الجانبية"):
+        if st.button(("✕" if st.session_state.student_sidebar_open else "☰"), key="student_sidebar_toggle", help="إظهار أو إخفاء القائمة الجانبية"):
             st.session_state.student_sidebar_open = not st.session_state.student_sidebar_open
             st.rerun()
     # ===== شريط الطالب الحديث بنفس شكل لوحة المعلم =====
@@ -2776,7 +2819,7 @@ total_students_count = len(st.session_state.users_df)
 # ===== زر ☰ لإظهار/إخفاء قائمة المعلم =====
 _teach_menu_col, _teach_menu_spacer = st.columns([1, 11])
 with _teach_menu_col:
-    if st.button("☰", key="teacher_sidebar_toggle", help="إظهار أو إخفاء القائمة الجانبية"):
+    if st.button(("✕" if st.session_state.teacher_sidebar_open else "☰"), key="teacher_sidebar_toggle", help="إظهار أو إخفاء القائمة الجانبية"):
         st.session_state.teacher_sidebar_open = not st.session_state.teacher_sidebar_open
         st.rerun()
 
