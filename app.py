@@ -1941,6 +1941,10 @@ if is_student_mode:
         else:
             st.markdown('<div class="top-navigation-collapsed"><span class="top-navigation-subtitle">شريط التنقل مخفي — اضغط ☰ لإظهاره</span></div>', unsafe_allow_html=True)
 
+    # صورة/أفاتار الشريط العلوي للطالب
+    _nav_uri = STUDENT_FIXED_IMAGE_URI
+    _nav_avatar_tag = f'<img src="{_nav_uri}" class="modern-avatar">' if _nav_uri else ''
+
     _student_name_for_header = str(st.session_state.logged_student.get("اسم الطالب", "طالبنا العزيز")) if st.session_state.logged_student else "طالبنا العزيز"
     _student_notifs = _app_notifications("student", _student_name_for_header if st.session_state.logged_student else "")
     _student_notif_count = len(_student_notifs)
@@ -2734,6 +2738,12 @@ with _pills_col:
                     st.rerun()
     else:
         st.markdown('<div class="top-navigation-collapsed"><span class="top-navigation-subtitle">شريط التنقل مخفي — اضغط ☰ لإظهاره</span></div>', unsafe_allow_html=True)
+
+# رابط دخول الطالب — ظاهر للمعلم دائمًا، وكتلة code تحتوي زر نسخ مدمج من Streamlit.
+_student_public_url = "https://engmohamedghonaim.streamlit.app/?role=student"
+st.markdown("### 🔗 رابط دخول الطلاب")
+st.caption("انسخ الرابط وأرسله للطلاب؛ الضغط على أيقونة النسخ داخل الخانة ينسخه مباشرة.")
+st.code(_student_public_url, language="text")
 
 t_page = st.session_state.teacher_page
 
