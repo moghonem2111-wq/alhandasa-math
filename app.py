@@ -16,6 +16,10 @@ import pandas as pd
 from PIL import Image
 import streamlit as st
 try:
+    from ai_studio import render_ai_studio
+except Exception:
+    render_ai_studio = None
+try:
     from weasyprint import HTML as WeasyHTML
 except Exception:
     WeasyHTML = None
@@ -2900,7 +2904,7 @@ with _brand_col:
     st.markdown("<div class='top-navigation-title'>البشمهندس x الرياضه</div><div class='top-navigation-subtitle'>لوحة تحكم المعلم • م/ محمد غنيم</div>", unsafe_allow_html=True)
 with _pills_col:
     if _nav_open:
-        _teacher_nav = [("◉ الرئيسية","dashboard"), ("◫ Zoom","online_schedule"), ("▦ المواعيد","weekly_schedule"), ("▣ الامتحانات","exam_maker"), ("▤ بنك الأسئلة","question_bank"), ("▶ الفيديوهات","videos"), ("✦ عبقري","abqary"), ("▥ الدرجات","grades"), ("✎ المقالي","essays"), ("◌ الرسائل","chat"), ("♙ الطلاب","students"), ("＋ حصة","add_session"), ("＋ واجب","add_hw"), ("✎ تعديل السجلات","edit_records"), ("▥ السجلات","all_records"), ("📢 الإعلانات","ads"), ("▤ ولي الأمر","parent_report"), ("▰ المدفوعات","payments"), ("💾 النسخ الاحتياطية","online_backup"), ("◈ واجهة الطالب","student_interface")]
+        _teacher_nav = [("◉ الرئيسية","dashboard"), ("◫ Zoom","online_schedule"), ("▦ المواعيد","weekly_schedule"), ("▣ الامتحانات","exam_maker"), ("🤖 استوديو AI","ai_studio"), ("▤ بنك الأسئلة","question_bank"), ("▶ الفيديوهات","videos"), ("✦ عبقري","abqary"), ("▥ الدرجات","grades"), ("✎ المقالي","essays"), ("◌ الرسائل","chat"), ("♙ الطلاب","students"), ("＋ حصة","add_session"), ("＋ واجب","add_hw"), ("✎ تعديل السجلات","edit_records"), ("▥ السجلات","all_records"), ("📢 الإعلانات","ads"), ("▤ ولي الأمر","parent_report"), ("▰ المدفوعات","payments"), ("💾 النسخ الاحتياطية","online_backup"), ("◈ واجهة الطالب","student_interface")]
         _teacher_cols = st.columns(5, gap="small")
         for _ti, (_label, _target) in enumerate(_teacher_nav):
             with _teacher_cols[_ti % 5]:
@@ -3807,6 +3811,14 @@ elif t_page == "exam_maker":
             st.session_state.temp_questions = []
             st.success(f"✓ تم نشر امتحان ({ex_title_input}) بنجاح لصف ({ex_grade_input})!")
             st.rerun()
+
+elif t_page == "ai_studio":
+    if render_ai_studio is None:
+        st.error("تعذر تحميل وحدة الذكاء الاصطناعي. تأكد من وجود ai_studio.py.")
+    else:
+        def _ai_save_all():
+            save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df, st.session_state.get("weekly_schedule_df"), st.session_state.get("payment_records_df"), st.session_state.get("ads_df"))
+        render_ai_studio(save_callback=_ai_save_all)
 
 elif t_page == "question_bank":
     if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
