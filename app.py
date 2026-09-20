@@ -579,7 +579,7 @@ COL_ABQARY = ["معرف_عبقري", "عنوان_الإمتحان", "المنه�
 COL_ONLINE_SCHEDULE = ["اسم الطالب", "اسم الأكاديمية", "المنهج/الدولة", "المجموعة/الصف", "رقم الطالب", "رقم مشرف الأكاديمية", "سعر الحصة", "تاريخ الحصة", "ساعة الحصة", "رابط زوم", "حالة فتح الحصة"]
 COL_WEEKLY_SCHEDULE = ["اسم الطالب", "اسم الأكاديمية", "المنهج/الدولة", "المجموعة/الصف", "رقم الطالب", "رقم مشرف الأكاديمية", "سعر الحصة", "اليوم", "الموعد", "اللون", "حالة الموعد"]
 COL_TEACHER_PROFILE = ["اسم المعلم", "الصورة_base64"]
-COL_STUDENT_INTERFACE = ["عنوان_الواجهة", "الشارة", "الوصف", "صورة_الواجهة_base64", "عنوان_الاشتراكات", "وصف_الاشتراكات", "عنوان_الحجز", "نص_الحجز", "نص_الفوتر", "صورة_الاشتراكات_base64", "صورة_البانر_base64"]
+COL_STUDENT_INTERFACE = ["عنوان_الواجهة", "الشارة", "عنوان_البطل", "وصف_البطل", "ميزة_1", "ميزة_2", "ميزة_3", "ميزة_4", "الوصف", "صورة_الواجهة_base64", "عنوان_الاشتراكات", "وصف_الاشتراكات", "عنوان_الحجز", "نص_الحجز", "نص_الفوتر", "صورة_الاشتراكات_base64", "صورة_البانر_base64"]
 COL_PAYMENT_RECORDS = ["التاريخ", "الشهر", "اسم الطالب", "المبلغ", "طريقة الدفع", "حالة الدفع", "ملاحظات"]
 COL_ADS = ["معرف_الإعلان", "تاريخ_النشر", "العنوان", "نوع_الإعلان", "النص", "الوسائط_base64", "نوع_الوسائط", "الرابط", "نص_الزر", "الحالة"]
 
@@ -606,6 +606,10 @@ def load_student_interface():
     defaults = {
         "عنوان_الواجهة": "أهلاً بيكم منورين المنصة! 🚀",
         "الشارة": "البشمهندس x الرياضه",
+        "عنوان_البطل": "رحلتك نحو التفوق في الرياضيات تبدأ من هنا",
+        "وصف_البطل": "شرح مبسط، تدريب مستمر، اختبارات ومتابعة تساعدك توصل لهدفك.",
+        "ميزة_1": "شرح مبسط وتفاعلي", "ميزة_2": "اختبارات وتقييم مستمر",
+        "ميزة_3": "متابعة مستوى الطالب", "ميزة_4": "دعم فني ومساعدة",
         "الوصف": "مع م / محمد غنيم. خبرة متميزة في تدريس الرياضيات والإحصاء للثانوية العامة والمرحلة الإعدادية. آلاف الطلاب حققوا التفوق والدرجات النهائية.",
         "صورة_الواجهة_base64": STUDENT_FIXED_IMAGE_B64, "عنوان_الاشتراكات": "📢 اشتراكات درسلي",
         "وصف_الاشتراكات": "اختر المرحلة وشاهد نظام الشرح والمتابعة والسعر الشهري",
@@ -1182,6 +1186,67 @@ def load_all_data_from_excel_bytes(excel_bytes):
                 if c not in df.columns: df[c]=""
             out.append(df[columns])
     return tuple(out)
+
+def _build_excel_backup_bytes():
+    """إنشاء نسخة Excel كاملة قابلة للحفظ على جهاز المعلم."""
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        sheets = [("Users","users_df"),("Sessions","sessions_df"),("Assessments","assessments_df"),("Messages","messages_df"),("Exams","exams_df"),("Essays","essays_df"),("Bookings","bookings_df"),("BankRequests","bank_requests_df"),("QuestionBank","question_bank_df"),("Videos","videos_df"),("VideoComments","video_comments_df"),("AbqaryExams","abqary_df"),("OnlineSchedule","online_schedule_df"),("WeeklySchedule","weekly_schedule_df"),("PaymentRecords","payment_records_df")]
+        for sheet,key in sheets:
+            st.session_state.get(key,pd.DataFrame()).to_excel(writer,sheet_name=sheet,index=False)
+        ads=st.session_state.get("ads_df",pd.DataFrame(columns=COL_ADS)).copy()
+        meta=ads.copy()
+        if "الوسائط_base64" in meta.columns: meta["الوسائط_base64"]=""
+        meta.to_excel(writer,sheet_name="Ads",index=False)
+        media=[]
+        for _,r in ads.iterrows():
+            aid=str(r.get("معرف_الإعلان","")); b64=str(r.get("الوسائط_base64","") or "").strip()
+            for n,pos in enumerate(range(0,len(b64),30000),1): media.append({"معرف_الإعلان":aid,"جزء":n,"البيانات":b64[pos:pos+30000]})
+        pd.DataFrame(media,columns=["معرف_الإعلان","جزء","البيانات"]).to_excel(writer,sheet_name="AdsMedia",index=False)
+        st.session_state.get("student_interface_df",load_student_interface()).to_excel(writer,sheet_name="StudentInterface",index=False)
+        st.session_state.get("teacher_profile_df",load_teacher_profile()).to_excel(writer,sheet_name="TeacherProfile",index=False)
+    return buf.getvalue()
+
+def _restore_ads_from_excel(xls):
+    ads=pd.read_excel(xls,"Ads") if "Ads" in xls.sheet_names else pd.DataFrame(columns=COL_ADS)
+    for c in COL_ADS:
+        if c not in ads.columns: ads[c]="نشط" if c=="الحالة" else ""
+    ads=ads[COL_ADS].copy(); media_map={}
+    if "AdsMedia" in xls.sheet_names:
+        m=pd.read_excel(xls,"AdsMedia")
+        if not m.empty:
+            for aid,g in m.groupby("معرف_الإعلان"):
+                media_map[str(aid)]="".join(str(v or "") for v in g.sort_values("جزء")["البيانات"].tolist())
+    for i,r in ads.iterrows():
+        aid=str(r.get("معرف_الإعلان",""))
+        if aid in media_map: ads.at[i,"الوسائط_base64"]=media_map[aid]
+    return ads
+
+def _restore_complete_backup(excel_bytes):
+    rec=load_all_data_from_excel_bytes(excel_bytes)
+    with pd.ExcelFile(io.BytesIO(excel_bytes),engine="openpyxl") as xls:
+        ads=_restore_ads_from_excel(xls)
+        interface=load_student_interface(); profile=load_teacher_profile()
+        if "StudentInterface" in xls.sheet_names:
+            t=pd.read_excel(xls,"StudentInterface")
+            if not t.empty:
+                for c in COL_STUDENT_INTERFACE:
+                    if c not in t.columns: t[c]=""
+                interface=t[COL_STUDENT_INTERFACE].copy()
+        if "TeacherProfile" in xls.sheet_names:
+            t=pd.read_excel(xls,"TeacherProfile")
+            if not t.empty:
+                for c in COL_TEACHER_PROFILE:
+                    if c not in t.columns: t[c]=""
+                profile=t[COL_TEACHER_PROFILE].copy()
+    if sum(len(x) for x in rec)==0 and ads.empty: raise ValueError("النسخة الاحتياطية لا تحتوي على بيانات أساسية.")
+    names=["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df"]
+    for n,df in zip(names,rec): st.session_state[n]=df
+    st.session_state.ads_df=ads; st.session_state.student_interface_df=interface; st.session_state.teacher_profile_df=profile
+    ok=save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df,st.session_state.ads_df)
+    if _cloud_storage_enabled() and not ok: raise RuntimeError("فشل تأكيد حفظ النسخة المسترجعة في التخزين السحابي.")
+    _cloud_save_student_interface(st.session_state.student_interface_df)
+    return sum(len(x) for x in rec)+len(ads)
 
 def save_all_data(users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df, bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df, abqary_df, online_schedule_df, weekly_schedule_df=None, payment_records_df=None, ads_df=None):
     if weekly_schedule_df is None:
@@ -2049,12 +2114,13 @@ if is_student_mode:
                     <img class="landing-welcome-photo" src="{STUDENT_FIXED_IMAGE_URI}" alt="م/ محمد غنيم">
                     <h2>{ui_title}</h2>
                   </div>
-                  <p>رحلتك نحو التفوق في الرياضيات تبدأ من هنا — شرح مبسط، تدريب مستمر، اختبارات ومتابعة تساعدك توصل لهدفك.</p>
+                  <h3 style="margin:8px 0 4px;">{html.escape(str(si.get("عنوان_البطل", "رحلتك نحو التفوق في الرياضيات تبدأ من هنا")))}</h3>
+                  <p>{html.escape(str(si.get("وصف_البطل", "شرح مبسط، تدريب مستمر، اختبارات ومتابعة تساعدك توصل لهدفك.")))}</p>
                   <div class="landing-features">
-                    <div class="landing-feature"><div class="i">▶</div><div>شرح مبسط وتفاعلي</div></div>
-                    <div class="landing-feature"><div class="i">▣</div><div>اختبارات وتقييم مستمر</div></div>
-                    <div class="landing-feature"><div class="i">↗</div><div>متابعة مستوى الطالب</div></div>
-                    <div class="landing-feature"><div class="i">◉</div><div>دعم فني ومساعدة</div></div>
+                    <div class="landing-feature"><div class="i">▶</div><div>{html.escape(str(si.get("ميزة_1", "شرح مبسط وتفاعلي")))}</div></div>
+                    <div class="landing-feature"><div class="i">▣</div><div>{html.escape(str(si.get("ميزة_2", "اختبارات وتقييم مستمر")))}</div></div>
+                    <div class="landing-feature"><div class="i">↗</div><div>{html.escape(str(si.get("ميزة_3", "متابعة مستوى الطالب")))}</div></div>
+                    <div class="landing-feature"><div class="i">◉</div><div>{html.escape(str(si.get("ميزة_4", "دعم فني ومساعدة")))}</div></div>
                   </div>
                 </div>
                 <img class="landing-photo" src="{ui_main_uri}" alt="م/ محمد غنيم">
@@ -2764,6 +2830,15 @@ if t_page == "student_interface":
         st.markdown("### 📝 نصوص الواجهة")
         si_title = st.text_input("عنوان الواجهة:", value=str(si.get("عنوان_الواجهة", "أهلاً بيكم منورين المنصة! 🚀")), key="si_title")
         si_badge = st.text_input("الشارة تحت العنوان:", value=str(si.get("الشارة", "البشمهندس x الرياضه")), key="si_badge")
+        si_hero_title = st.text_input("عنوان البطل الرئيسي:", value=str(si.get("عنوان_البطل", "رحلتك نحو التفوق في الرياضيات تبدأ من هنا")), key="si_hero_title")
+        si_hero_desc = st.text_area("وصف البطل الرئيسي:", value=str(si.get("وصف_البطل", "شرح مبسط، تدريب مستمر، اختبارات ومتابعة تساعدك توصل لهدفك.")), key="si_hero_desc")
+        f1,f2=st.columns(2)
+        with f1:
+            si_feature1=st.text_input("الميزة 1:",value=str(si.get("ميزة_1","شرح مبسط وتفاعلي")),key="si_feature1")
+            si_feature2=st.text_input("الميزة 2:",value=str(si.get("ميزة_2","اختبارات وتقييم مستمر")),key="si_feature2")
+        with f2:
+            si_feature3=st.text_input("الميزة 3:",value=str(si.get("ميزة_3","متابعة مستوى الطالب")),key="si_feature3")
+            si_feature4=st.text_input("الميزة 4:",value=str(si.get("ميزة_4","دعم فني ومساعدة")),key="si_feature4")
         si_desc = st.text_area("وصف الواجهة:", value=str(si.get("الوصف", "")), height=110, key="si_desc")
         a, b = st.columns(2)
         with a:
@@ -2808,9 +2883,11 @@ if t_page == "student_interface":
         st.markdown(f"<h2 style='text-align:center;color:#059669'>{si_title}</h2>", unsafe_allow_html=True)
         st.markdown(f"<div style='text-align:center'><span style='background:#059669;color:white;padding:6px 14px;border-radius:20px;font-weight:900'>{si_badge}</span></div>", unsafe_allow_html=True)
         st.markdown(f"<p style='text-align:center;font-weight:800'>{si_desc}</p>", unsafe_allow_html=True)
+    st.markdown("### 👀 معاينة مباشرة للصفحة الرئيسية للطالب")
+    st.markdown(f"""<div class='landing-wrap'><div class='landing-hero'><div class='landing-copy'><div class='brand-pill'>{html.escape(si_badge)}</div><h1>منصة <span>البشمهندس x الرياضه</span></h1><div class='landing-welcome-row'><img class='landing-welcome-photo' src='{teacher_image_data_uri(main_b64) or STUDENT_FIXED_IMAGE_URI}'><h2>{html.escape(si_title)}</h2></div><h3>{html.escape(si_hero_title)}</h3><p>{html.escape(si_hero_desc)}</p><div class='landing-features'><div class='landing-feature'><div class='i'>▶</div><div>{html.escape(si_feature1)}</div></div><div class='landing-feature'><div class='i'>▣</div><div>{html.escape(si_feature2)}</div></div><div class='landing-feature'><div class='i'>↗</div><div>{html.escape(si_feature3)}</div></div><div class='landing-feature'><div class='i'>◉</div><div>{html.escape(si_feature4)}</div></div></div></div><img class='landing-photo' src='{teacher_image_data_uri(main_b64) or STUDENT_FIXED_IMAGE_URI}'><div class='landing-login'><h2>مرحباً بك في منصة</h2><h2>البشمهندس x الرياضه</h2><p>اختر ما يناسبك لبدء رحلتك التعليمية</p></div></div></div>""",unsafe_allow_html=True)
     if st.button("💾 حفظ واجهة الطالب", key="save_student_interface", use_container_width=True):
         st.session_state.student_interface_df = pd.DataFrame([{
-            "عنوان_الواجهة": si_title.strip(), "الشارة": si_badge.strip(), "الوصف": si_desc.strip(), "صورة_الواجهة_base64": main_b64,
+            "عنوان_الواجهة": si_title.strip(), "الشارة": si_badge.strip(), "عنوان_البطل": si_hero_title.strip(), "وصف_البطل": si_hero_desc.strip(), "ميزة_1": si_feature1.strip(), "ميزة_2": si_feature2.strip(), "ميزة_3": si_feature3.strip(), "ميزة_4": si_feature4.strip(), "الوصف": si_desc.strip(), "صورة_الواجهة_base64": main_b64,
             "عنوان_الاشتراكات": si_sub_title.strip(), "وصف_الاشتراكات": si_sub_desc.strip(), "عنوان_الحجز": si_booking_title.strip(),
             "نص_الحجز": si_booking_text.strip(), "نص_الفوتر": si_footer.strip(), "صورة_الاشتراكات_base64": sub_b64, "صورة_البانر_base64": str(si.get("صورة_البانر_base64", "") or "")
         }], columns=COL_STUDENT_INTERFACE)
@@ -4609,6 +4686,31 @@ elif t_page == "all_records":
             )
 
 elif t_page == "online_backup":
+    st.subheader("💾 النسخ الاحتياطية — على الموقع + على جهازك")
+    st.info("بيانات المنصة محفوظة سحابياً، ويمكنك أيضاً تنزيل نسخة كاملة على اللاب ثم رفعها لاحقاً لاسترجاع الموقع إذا حدثت مشكلة.")
+    st.markdown("### 💻 1) تنزيل نسخة كاملة على اللاب")
+    try:
+        _backup_bytes=_build_excel_backup_bytes()
+        st.download_button("📥 تنزيل النسخة الاحتياطية الكاملة",_backup_bytes,file_name=f"alhandasa_full_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True,type="primary",key="download_full_local_backup")
+    except Exception as e: st.error(f"تعذر إنشاء النسخة: {e}")
+    st.markdown("### ♻️ 2) رفع نسخة واسترجاعها للموقع")
+    st.caption("قبل الاسترجاع تُحفظ نسخة أمان من البيانات الحالية في Supabase، ثم تُحدّث البيانات والجداول المنظمة.")
+    _up=st.file_uploader("اختر ملف النسخة الاحتياطية (.xlsx)",type=["xlsx"],key="full_backup_restore_upload")
+    if _up is not None:
+        try:
+            _up_bytes=_up.getvalue()
+            with pd.ExcelFile(io.BytesIO(_up_bytes),engine="openpyxl") as _ux: _sheet_count=len(_ux.sheet_names)
+            st.success(f"✓ تم التعرف على ملف النسخة ويحتوي على {_sheet_count} أوراق بيانات.")
+            if st.button("🚨 استرجاع هذه النسخة إلى الموقع",use_container_width=True,type="primary",key="restore_full_backup_to_cloud"):
+                try:
+                    _n=_restore_complete_backup(_up_bytes)
+                    st.success(f"✅ تم الاسترجاع بنجاح وتحديث الموقع وSupabase. السجلات المسترجعة: {_n}.")
+                    st.rerun()
+                except Exception as e: st.error(f"❌ فشل الاسترجاع: {e}")
+        except Exception as e: st.error(f"ملف النسخة غير صالح: {e}")
+    st.markdown("### ☁️ 3) النسخ السحابية داخل Supabase")
+    st.caption("كل حفظ ناجح ينشئ Snapshot مستقل قبل تحديث النسخة الرئيسية، لذلك لديك طبقة حماية سحابية أيضاً.")
+    st.markdown("---")
     st.subheader("💾 النسخ الاحتياطية و Excel Online")
     st.caption("يتم رفع نفس ملف بيانات المنصة إلى Excel Online/OneDrive بعد كل حفظ آمن، ويمكن تنزيله أو استرجاعه.")
     if not _onedrive_enabled():
