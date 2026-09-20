@@ -7,7 +7,8 @@ try:
  from weasyprint import HTML as WeasyHTML
 except Exception:
  WeasyHTML=None
-API="https://api.openai.com/v1/responses"
+API="https://generativelanguage.googleapis.com/v1beta/models/"
+GEMINI_MODEL_DEFAULT="gemini-3.8-flash"
 def sec(k,d=""):
  try:return str(st.secrets.get(k,d)).strip()
  except:return d
@@ -16,21 +17,35 @@ def pdf(s):
  try:return WeasyHTML(string=s).write_pdf()
  except:return None
 def esc(x):return html.escape(str(x or ""))
-def call(prompt,files):
- key=sec("OPENAI_API_KEY")
- if not key:raise RuntimeError("أضف OPENAI_API_KEY إلى Streamlit Secrets.")
- c=[{"type":"input_text","text":prompt}]
+_esc=esc
+def _gemini_parts(prompt,files):
+ parts=[{"text":prompt}]
  for kind,name,data in files:
-  b=base64.b64encode(data).decode()
-  c.append({"type":"input_image","detail":"high","image_url":f"data:{'image/png' if name.lower().endswith('.png') else 'image/jpeg'};base64,{b}"} if kind=="image" else {"type":"input_file","filename":name,"file_data":f"data:application/pdf;base64,{b}"})
- req=request.Request(API,data=json.dumps({"model":sec("OPENAI_MODEL","gpt-5.6-luna"),"input":[{"role":"user","content":c}]}).encode(),headers={"Authorization":f"Bearer {key}","Content-Type":"application/json"},method="POST")
+  parts.append({"inline_data":{"mime_type":("application/pdf" if kind=="pdf" else ("image/png" if name.lower().endswith(".png") else ("image/webp" if name.lower().endswith(".webp") else "image/jpeg"))),"data":base64.b64encode(data).decode()}})
+ return parts
+def call(prompt,files):
+ key=sec("GEMINI_API_KEY")
+ if not key:raise RuntimeError("أضف GEMINI_API_KEY إلى Streamlit Secrets.")
+ model=sec("GEMINI_MODEL",GEMINI_MODEL_DEFAULT)
+ url=f"{API}{model}:generateContent?key={key}"
+ body={"contents":[{"role":"user","parts":_gemini_parts(prompt,files)}],"generationConfig":{"responseMimeType":"application/json","temperature":0.25}}
+ req=request.Request(url,data=json.dumps(body,ensure_ascii=False).encode(),headers={"Content-Type":"application/json"},method="POST")
  try:
   with request.urlopen(req,timeout=180) as r:o=json.loads(r.read().decode())
  except Exception as e:
-  body=getattr(e,"read",lambda:b"")();raise RuntimeError((body.decode(errors="ignore") if body else str(e))[:1200])
- t=o.get("output_text","") or "\n".join(x.get("text","") for y in o.get("output",[]) for x in y.get("content",[]) if x.get("type") in ("output_text","text"))
- t=re.sub(r"```(?:json)?|```","",t,flags=re.I).strip();m=re.search(r"{.*}",t,re.S)
- return json.loads(m.group(0) if m else t)
+  body=getattr(e,"read",lambda:b"")()
+  msg=body.decode(errors="ignore") if body else str(e)
+  raise RuntimeError(msg[:1500])
+ try:
+  t=o["candidates"][0]["content"]["parts"][0]["text"]
+ except Exception:
+  raise RuntimeError(json.dumps(o,ensure_ascii=False)[:1500])
+ t=re.sub(r"^```(?:json)?|^```$","",t.strip(),flags=re.I|re.M).strip()
+ try:return json.loads(t)
+ except Exception:
+  m=re.search(r"\{.*\}",t,re.S)
+  if not m: raise RuntimeError("Gemini لم يُرجع JSON صالحًا.")
+  return json.loads(m.group(0))
 def uploads(key):
  fs=st.file_uploader("📎 ارفع صور صفحات الكتاب أو PDF",type=["png","jpg","jpeg","webp","pdf"],accept_multiple_files=True,key=key);out=[]
  for f in fs or []:out.append(("pdf" if f.name.lower().endswith(".pdf") else "image",f.name,f.getvalue()))
@@ -56,7 +71,7 @@ def save_q(kind,title,payload,cb):
  return True
 def render_ai_studio(save_callback=None):
  st.markdown("# 🤖 استوديو الذكاء الاصطناعي")
- if not sec("OPENAI_API_KEY"):st.warning("أضف OPENAI_API_KEY في Streamlit Secrets لتشغيل AI. لا تضع المفتاح في GitHub.")
+ if not sec("GEMINI_API_KEY"):st.warning("أضف GEMINI_API_KEY في Streamlit Secrets لتشغيل AI. لا تضع المفتاح في GitHub.")
  a,b,c=st.tabs(["📝 اختبارات AI","📚 واجبات AI","🧠 خرائط ذهنية"])
  with a:
   g=st.text_input("الصف / المرحلة",value="الصف الثالث الثانوي (علمي رياضة)",key="ai_g");s=st.text_input("المادة",value="الرياضيات",key="ai_s");n=st.number_input("عدد الأسئلة",1,40,10,key="ai_n");d=st.selectbox("الصعوبة",["متدرج","سهل","متوسط","صعب"],key="ai_d");typ=st.multiselect("الأنواع",["اختيار من متعدد","مقالي","صح أو خطأ"],["اختيار من متعدد","مقالي"],key="ai_t");src=st.text_area("✍️ نص الدرس / المصدر (اختياري)",height=120,key="ai_txt");fs=uploads("ai_files")
