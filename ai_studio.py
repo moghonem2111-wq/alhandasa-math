@@ -124,7 +124,8 @@ def math_html(value):
   flush();return "".join(out)
  # Also recognize simple numeric/algebraic fractions written as 1/2 or (x+1)/(x-1).
  s=re.sub(r"(?<![\w])\(([^()]+)\)\s*/\s*\(([^()]+)\)",lambda m:f"\\frac{{{m.group(1)}}}{{{m.group(2)}}}",s)
- s=re.sub(r"(?<![\w])(-?\d+(?:\.\d+)?)\s*/\s(-?\d+(?:\.\d+)?)",lambda m:f"\\frac{{{m.group(1)}}}{{{m.group(2)}}}",s)
+ s=re.sub(r"(?<![\w])(-?\d+(?:\.\d+)?)\s*/\s*(-?\d+(?:\.\d+)?)",lambda m:f"\\frac{{{m.group(1)}}}{{{m.group(2)}}}",s)
+ s=re.sub(r"(?<![\w])(-?\d+(?:\.\d+)?)\s*/\s*(-?\d+(?:\.\d+)?)",lambda m:f"\\frac{{{m.group(1)}}}{{{m.group(2)}}}",s)
  return render(s)
 def paper(title,grade,subject,qs,answers=False):
  teacher_name,teacher_phone=_print_teacher()
