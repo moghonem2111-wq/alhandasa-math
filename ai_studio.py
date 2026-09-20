@@ -25,27 +25,37 @@ def _gemini_parts(prompt,files):
  return parts
 def call(prompt,files):
  key=sec("GEMINI_API_KEY")
- if not key:raise RuntimeError("أضف GEMINI_API_KEY إلى Streamlit Secrets.")
- model=sec("GEMINI_MODEL",GEMINI_MODEL_DEFAULT)
- url=f"{API}{model}:generateContent"
- body={"contents":[{"role":"user","parts":_gemini_parts(prompt,files)}],"generationConfig":{"responseMimeType":"application/json","temperature":0.25}}
- req=request.Request(url,data=json.dumps(body,ensure_ascii=False).encode(),headers={"Content-Type":"application/json","x-goog-api-key":key},method="POST")
- try:
-  with request.urlopen(req,timeout=180) as r:o=json.loads(r.read().decode())
- except Exception as e:
-  body=getattr(e,"read",lambda:b"")()
-  msg=body.decode(errors="ignore") if body else str(e)
-  raise RuntimeError(msg[:1500])
- try:
-  t=o["candidates"][0]["content"]["parts"][0]["text"]
- except Exception:
-  raise RuntimeError(json.dumps(o,ensure_ascii=False)[:1500])
- t=re.sub(r"^```(?:json)?|^```$","",t.strip(),flags=re.I|re.M).strip()
- try:return json.loads(t)
- except Exception:
-  m=re.search(r"\{.*\}",t,re.S)
-  if not m: raise RuntimeError("Gemini لم يُرجع JSON صالحًا.")
-  return json.loads(m.group(0))
+ if not key:raise RuntimeError("AI_KEY_MISSING")
+ preferred=sec("GEMINI_MODEL",GEMINI_MODEL_DEFAULT)
+ models=[]
+ for m in [preferred,"gemini-3.7-flash","gemini-3.6-flash","gemini-3.5-flash","gemini-2.5-flash"]:
+  if m and m not in models:models.append(m)
+ last=""
+ for model in models:
+  for attempt in range(3):
+   url=f"{API}{model}:generateContent"
+   body={"contents":[{"role":"user","parts":_gemini_parts(prompt,files)}],"generationConfig":{"responseMimeType":"application/json"}}
+   req=request.Request(url,data=json.dumps(body,ensure_ascii=False).encode(),headers={"Content-Type":"application/json","x-goog-api-key":key},method="POST")
+   try:
+    with request.urlopen(req,timeout=180) as r:o=json.loads(r.read().decode())
+    t=o["candidates"][0]["content"]["parts"][0]["text"].strip()
+    t=re.sub(r"^```(?:json)?|^```$","",t,flags=re.I|re.M).strip()
+    try:return json.loads(t)
+    except Exception:
+     s=t.find("{");e=t.rfind("}")
+     if s<0 or e<=s:raise ValueError("invalid_json")
+     return json.loads(t[s:e+1])
+   except Exception as ex:
+    raw=getattr(ex,"read",lambda:b"")()
+    msg=raw.decode(errors="ignore") if raw else str(ex)
+    last=msg
+    retryable=any(x in msg for x in ["\"code\":429","\"code\":500","\"code\":502","\"code\":503","\"code\":504","HTTP Error 429","HTTP Error 503"])
+    if retryable:
+     import time
+     time.sleep(2*(attempt+1))
+     continue
+    break
+ raise RuntimeError("AI_TEMPORARILY_UNAVAILABLE")
 def uploads(key):
  fs=st.file_uploader("📎 ارفع صور صفحات الكتاب أو PDF",type=["png","jpg","jpeg","webp","pdf"],accept_multiple_files=True,key=key);out=[]
  for f in fs or []:out.append(("pdf" if f.name.lower().endswith(".pdf") else "image",f.name,f.getvalue()))
