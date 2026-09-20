@@ -194,7 +194,8 @@ def render_ai_studio(save_callback=None):
     else:st.download_button("🖨️ الاختبار للطباعة",h.encode(),"اختبار_AI.html","text/html",key="ai_html")
    with c2:
     z=pdf(k)
-    if z:st.download_button("🗝️ مفتاح الإجابة PDF",z,"مفتاح_إجابة_AI.pdf","application/pdf",key="ai_key")
+    if z:st.download_button("🗝️ طباعة نموذج الإجابة PDF",z,"نموذج_إجابة_الاختبار_AI.pdf","application/pdf",key="ai_key")
+    else:st.download_button("🖨️ طباعة نموذج الإجابة",k.encode(),"نموذج_إجابة_الاختبار_AI.html","text/html",key="ai_key_html")
    with c3:
     if st.button("🚀 نشر إلكترونياً للطلاب",key="ai_pub"):
      r={"معرف_الامتحان":f"AI_EX_{uuid.uuid4().hex[:10]}","عنوان الامتحان":x["title"],"وصف الامتحان":x.get("description",""),"كلمة المرور":"","المنهج/الدولة":"المنهج المصري 🇪🇬","المجموعة/الصف":g,"المادة":s,"الفصل الدراسي":"","مدة الامتحان بالدقائق":60,"الأسئلة_JSON":json.dumps(x["questions"],ensure_ascii=False),"تاريخ الإنشاء":str(date.today())}
@@ -242,7 +243,8 @@ def render_ai_studio(save_callback=None):
     if z:st.download_button("📄 الواجب PDF",z,"واجب_AI.pdf","application/pdf",key="aih_pdf")
     else:st.download_button("🖨️ طباعة الواجب",h.encode(),"واجب_AI.html","text/html",key="aih_html")
    with c2:
-    if ak:st.download_button("🗝️ نموذج إجابة الواجب PDF",ak,"نموذج_إجابة_واجب_AI.pdf","application/pdf",key="aih_key_pdf")
+    if ak:st.download_button("🗝️ طباعة نموذج إجابة الواجب PDF",ak,"نموذج_إجابة_واجب_AI.pdf","application/pdf",key="aih_key_pdf")
+    else:st.download_button("🖨️ طباعة نموذج إجابة الواجب",k.encode(),"نموذج_إجابة_واجب_AI.html","text/html",key="aih_key_html")
    if st.button("💾 حفظ الواجب في بنك المنصة",key="aih_save"):
     if save_q("واجب AI",x["title"],{"grade":g,"subject":s,"notes":notes_h,"questions":x["questions"]},save_callback):st.success("تم حفظ الواجب في بنك المنصة.")
    if st.button("🗑️ مسح الواجب الحالي",key="aih_clear"):
