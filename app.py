@@ -1915,28 +1915,29 @@ if is_student_mode:
     with _pills_col:
         if _nav_open:
             if st.session_state.logged_student:
-                _student_nav = {"⌂ الرئيسية":"dashboard", "▣ المقررات":"videos", "▤ الواجبات":"hw_grades", "◫ الجدول":"dashboard", "▥ النتائج":"exam_grades", ("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"):"__theme__", "↪ خروج":"__logout__"}
+                _student_nav = [("⌂ الرئيسية","dashboard"), ("▣ المقررات","videos"), ("▤ الواجبات","hw_grades"), ("◫ الجدول","attendance"), ("▥ النتائج","exam_grades"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__"), ("↪ خروج","__logout__")]
                 _student_current = st.session_state.student_sub_page
             else:
-                _student_nav = {"⌂ الرئيسية":"__home__", "👤 دخول":"__login__", "✨ حساب جديد":"__register__", "👥 ضيف":"__guest__", ("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"):"__theme__"}
+                _student_nav = [("⌂ الرئيسية","__home__"), ("👤 دخول","__login__"), ("✨ حساب جديد","__register__"), ("👥 ضيف","__guest__"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__")]
                 _student_current = st.session_state.page_view
-            _student_default = next((k for k,v in _student_nav.items() if v == _student_current), list(_student_nav.keys())[0])
-            try:
-                _student_choice = st.pills("", list(_student_nav.keys()), default=_student_default, key="student_top_nav", label_visibility="collapsed")
-            except AttributeError:
-                _student_choice = st.radio("", list(_student_nav.keys()), index=list(_student_nav.keys()).index(_student_default), horizontal=True, key="student_top_nav_fallback", label_visibility="collapsed")
-            if _student_choice:
-                _student_target = _student_nav[_student_choice]
-                if _student_target == "__theme__":
-                    st.session_state.dark_mode = not st.session_state.dark_mode; st.rerun()
-                elif _student_target == "__logout__":
-                    st.session_state.logged_student=None; st.session_state.page_view="home"; st.session_state.student_sub_page="dashboard"; st.query_params.clear(); st.query_params["role"]="student"; st.rerun()
-                elif _student_target == "__home__": st.session_state.page_view="home"; st.rerun()
-                elif _student_target == "__login__": st.session_state.page_view="login"; st.rerun()
-                elif _student_target == "__register__": st.session_state.page_view="register"; st.rerun()
-                elif _student_target == "__guest__": st.session_state.page_view="guest_reg"; st.rerun()
-                elif st.session_state.logged_student and _student_target != _student_current:
-                    st.session_state.student_sub_page=_student_target; st.rerun()
+
+            # أزرار حقيقية بدل st.pills لضمان استجابة النقر على جميع إصدارات Streamlit Cloud.
+            _nav_cols = st.columns(len(_student_nav), gap="small")
+            for _ni, (_label, _target) in enumerate(_student_nav):
+                with _nav_cols[_ni]:
+                    _is_current = (_target == _student_current)
+                    if st.button(_label, key=f"student_top_nav_btn_{_ni}", use_container_width=True, type="primary" if _is_current else "secondary"):
+                        if _target == "__theme__":
+                            st.session_state.dark_mode = not st.session_state.dark_mode
+                        elif _target == "__logout__":
+                            st.session_state.logged_student=None; st.session_state.page_view="home"; st.session_state.student_sub_page="dashboard"; st.query_params.clear(); st.query_params["role"]="student"
+                        elif _target == "__home__": st.session_state.page_view="home"
+                        elif _target == "__login__": st.session_state.page_view="login"
+                        elif _target == "__register__": st.session_state.page_view="register"
+                        elif _target == "__guest__": st.session_state.page_view="guest_reg"
+                        elif st.session_state.logged_student:
+                            st.session_state.student_sub_page=_target
+                        st.rerun()
         else:
             st.markdown('<div class="top-navigation-collapsed"><span class="top-navigation-subtitle">شريط التنقل مخفي — اضغط ☰ لإظهاره</span></div>', unsafe_allow_html=True)
 
@@ -2724,16 +2725,13 @@ with _brand_col:
     st.markdown("<div class='top-navigation-title'>البشمهندس x الرياضه</div><div class='top-navigation-subtitle'>لوحة تحكم المعلم • م/ محمد غنيم</div>", unsafe_allow_html=True)
 with _pills_col:
     if _nav_open:
-        _teacher_nav = {"◉ الرئيسية":"dashboard", "◫ Zoom":"online_schedule", "▦ المواعيد":"weekly_schedule", "▣ الامتحانات":"exam_maker", "▤ بنك الأسئلة":"question_bank", "▶ الفيديوهات":"videos", "✦ عبقري":"abqary", "▥ الدرجات":"grades", "✎ المقالي":"essays", "◌ الرسائل":"chat", "♙ الطلاب":"students", "＋ حصة":"add_session", "＋ واجب":"add_hw", "✎ تعديل السجلات":"edit_records", "▥ السجلات":"all_records", "📢 الإعلانات":"ads", "▤ ولي الأمر":"parent_report", "▰ المدفوعات":"payments", "💾 النسخ الاحتياطية":"online_backup", "◈ واجهة الطالب":"student_interface"}
-        _teacher_default = st.session_state.teacher_page if st.session_state.teacher_page in _teacher_nav.values() else "dashboard"
-        _teacher_default_label = next(k for k,v in _teacher_nav.items() if v == _teacher_default)
-        try:
-            _teacher_choice = st.pills("", list(_teacher_nav.keys()), default=_teacher_default_label, key="teacher_top_nav", label_visibility="collapsed")
-        except AttributeError:
-            _teacher_choice = st.radio("", list(_teacher_nav.keys()), index=list(_teacher_nav.keys()).index(_teacher_default_label), horizontal=True, key="teacher_top_nav_fallback", label_visibility="collapsed")
-        if _teacher_choice and _teacher_nav[_teacher_choice] != st.session_state.teacher_page:
-            st.session_state.teacher_page = _teacher_nav[_teacher_choice]
-            st.rerun()
+        _teacher_nav = [("◉ الرئيسية","dashboard"), ("◫ Zoom","online_schedule"), ("▦ المواعيد","weekly_schedule"), ("▣ الامتحانات","exam_maker"), ("▤ بنك الأسئلة","question_bank"), ("▶ الفيديوهات","videos"), ("✦ عبقري","abqary"), ("▥ الدرجات","grades"), ("✎ المقالي","essays"), ("◌ الرسائل","chat"), ("♙ الطلاب","students"), ("＋ حصة","add_session"), ("＋ واجب","add_hw"), ("✎ تعديل السجلات","edit_records"), ("▥ السجلات","all_records"), ("📢 الإعلانات","ads"), ("▤ ولي الأمر","parent_report"), ("▰ المدفوعات","payments"), ("💾 النسخ الاحتياطية","online_backup"), ("◈ واجهة الطالب","student_interface")]
+        _teacher_cols = st.columns(5, gap="small")
+        for _ti, (_label, _target) in enumerate(_teacher_nav):
+            with _teacher_cols[_ti % 5]:
+                if st.button(_label, key=f"teacher_top_nav_btn_{_ti}", use_container_width=True, type="primary" if _target == st.session_state.teacher_page else "secondary"):
+                    st.session_state.teacher_page = _target
+                    st.rerun()
     else:
         st.markdown('<div class="top-navigation-collapsed"><span class="top-navigation-subtitle">شريط التنقل مخفي — اضغط ☰ لإظهاره</span></div>', unsafe_allow_html=True)
 
