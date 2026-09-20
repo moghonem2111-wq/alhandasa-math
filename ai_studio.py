@@ -32,7 +32,7 @@ def _print_teacher():
 def math_html(value):
  s=str(value or "")
  for a,b in [(r"\left",""),(r"\right",""),(r"\displaystyle",""),(r"\pi","π"),(r"\theta","θ"),(r"\alpha","α"),(r"\beta","β"),(r"\gamma","γ"),(r"\delta","δ"),(r"\lambda","λ"),(r"\mu","μ"),(r"\sigma","σ"),(r"\omega","ω"),(r"\infty","∞"),(r"\times","×"),(r"\cdot","·"),(r"\pm","±"),(r"\leq","≤"),(r"\geq","≥"),(r"\neq","≠"),(r"\approx","≈"),(r"\to","→"),(r"\sum","Σ"),(r"\int","∫")]:s=s.replace(a,b)
- s=re.sub(r"\text\{([^{}]*)\}",r"\\1",s)
+ s=re.sub(r"\text\{([^{}]*)\}",r"\1",s)
  def bal(t,p):
   d=0
   for j in range(p,len(t)):
@@ -47,7 +47,7 @@ def math_html(value):
    if buf:out.append(html.escape("".join(buf),quote=False));buf.clear()
   while i<len(t):
    if t.startswith(r"\frac",i) or t.startswith(r"\dfrac",i):
-    i+=7 if t.startswith(r"\\dfrac",i) else 5
+    i+=6 if t.startswith(r"\dfrac",i) else 5
     while i<len(t) and t[i].isspace():i+=1
     if i<len(t) and t[i]=="{":
      a,j=bal(t,i);i=j
