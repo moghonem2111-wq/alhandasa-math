@@ -18,6 +18,62 @@ def pdf(s):
  except:return None
 def esc(x):return html.escape(str(x or ""))
 _esc=esc
+
+def _print_teacher():
+ name="م/ محمد غنيم"; phone="01016361440"
+ try:
+  df=st.session_state.get("teacher_profile_df",pd.DataFrame())
+  if isinstance(df,pd.DataFrame) and not df.empty:
+   n=str(df.iloc[0].get("اسم المعلم","")).strip()
+   if n and n.lower()!="nan":name=n
+ except Exception:pass
+ return name,phone
+
+def math_html(value):
+ s=str(value or "")
+ for a,b in [(r"\\left",""),(r"\\right",""),(r"\\displaystyle",""),(r"\\pi","π"),(r"\\theta","θ"),(r"\\alpha","α"),(r"\\beta","β"),(r"\\gamma","γ"),(r"\\delta","δ"),(r"\\lambda","λ"),(r"\\mu","μ"),(r"\\sigma","σ"),(r"\\omega","ω"),(r"\\infty","∞"),(r"\\times","×"),(r"\\cdot","·"),(r"\\pm","±"),(r"\\leq","≤"),(r"\\geq","≥"),(r"\\neq","≠"),(r"\\approx","≈"),(r"\\to","→"),(r"\\sum","Σ"),(r"\\int","∫")]:s=s.replace(a,b)
+ s=re.sub(r"\\text\\{([^{}]*)\\}",r"\\1",s)
+ def bal(t,p):
+  d=0
+  for j in range(p,len(t)):
+   if t[j]=="{":d+=1
+   elif t[j]=="}":
+    d-=1
+    if d==0:return t[p+1:j],j+1
+  return t[p+1:],len(t)
+ def render(t):
+  out=[];i=0;buf=[]
+  def flush():
+   if buf:out.append(html.escape("".join(buf),quote=False));buf.clear()
+  while i<len(t):
+   if t.startswith(r"\\frac",i) or t.startswith(r"\\dfrac",i):
+    i+=7 if t.startswith(r"\\dfrac",i) else 5
+    while i<len(t) and t[i].isspace():i+=1
+    if i<len(t) and t[i]=="{":
+     a,j=bal(t,i);i=j
+     while i<len(t) and t[i].isspace():i+=1
+     if i<len(t) and t[i]=="{":
+      b,j=bal(t,i);i=j;flush();out.append(f"<span class='frac'><span class='num'>{render(a)}</span><span class='den'>{render(b)}</span></span>");continue
+    buf.append("/");continue
+   if t.startswith(r"\\sqrt",i):
+    i+=5
+    while i<len(t) and t[i].isspace():i+=1
+    if i<len(t) and t[i]=="{":
+     a,j=bal(t,i);i=j;flush();out.append(f"<span class='sqrt'><span class='radicand'>{render(a)}</span></span>");continue
+    buf.append("√");continue
+   if t[i] in "^_":
+    tag="sup" if t[i]=="^" else "sub";i+=1
+    if i<len(t) and t[i]=="{":a,j=bal(t,i);i=j
+    elif i<len(t):a=t[i];i+=1
+    else:a=""
+    flush();out.append(f"<{tag}>{render(a)}</{tag}>");continue
+   if t[i]=="\\" and i+1<len(t):
+    m=re.match(r"\\\\([A-Za-z]+)",t[i:])
+    if m:
+     mp={"pi":"π","theta":"θ","alpha":"α","beta":"β","gamma":"γ","delta":"δ","lambda":"λ","mu":"μ","sigma":"σ","omega":"ω","infty":"∞","times":"×","cdot":"·","pm":"±","leq":"≤","geq":"≥","neq":"≠","approx":"≈","to":"→","sum":"Σ","int":"∫"};tok=m.group(1);buf.append(mp.get(tok,tok));i+=len(tok)+1;continue
+   buf.append(t[i]);i+=1
+  flush();return "".join(out)
+ return render(s)
 def _gemini_parts(prompt,files):
  parts=[{"text":prompt}]
  for kind,name,data in files:
@@ -61,17 +117,15 @@ def uploads(key):
  for f in fs or []:out.append(("pdf" if f.name.lower().endswith(".pdf") else "image",f.name,f.getvalue()))
  return out
 def paper(title,grade,subject,qs,answers=False):
+ teacher_name,teacher_phone=_print_teacher()
  z=[]
  for i,q in enumerate(qs,1):
-  s=f"<div class='q'><b>السؤال {i} — {_esc(q.get('type','مقالي'))} ({q.get('points',1)} درجة)</b><p>{esc(q.get('question',''))}</p>"
-  if q.get("options"):s+="<div class='opts'>"+"".join(f"<div>□ {esc(x)}</div>" for x in q["options"])+"</div>"
+  s=f"<div class='q'><div class='qhead'><b>السؤال {i}</b><span>{esc(q.get('type','مقالي'))} — {q.get('points',1)} درجة</span></div><div class='qtext'>{math_html(q.get('question',''))}</div>"
+  if q.get("options"):s+="<div class='opts'>"+"".join(f"<div>□ {math_html(x)}</div>" for x in q["options"])+"</div>"
   elif not answers:s+="<div class='lines'>"+"<hr>"*4+"</div>"
-  if answers:s+=f"<div class='ans'><b>الإجابة:</b> {esc(q.get('answer',''))}<br>{esc(q.get('explanation',''))}</div>"
+  if answers:s+=f"<div class='ans'><b>الإجابة:</b> {math_html(q.get('answer',''))}<br>{math_html(q.get('explanation',''))}</div>"
   z.append(s+"</div>")
- return f"""<!doctype html><html dir='rtl'><meta charset='utf-8'><style>@page{{size:A4;margin:15mm}}body{{font-family:'DejaVu Sans','Tahoma',Arial,sans-serif;line-height:1.7}}.head{{border:2px solid #1677ff;border-radius:14px;padding:15px;margin-bottom:16px;background:#f6fbff}}h1{{color:#0757b8;margin:2px 0}}.meta{{display:grid;grid-template-columns:1fr 1fr;gap:6px}}.q{{border:1px solid #ccd6e3;border-radius:10px;padding:11px;margin:10px 0;page-break-inside:avoid}}.q>b{{color:#0757b8}}.opts{{display:grid;grid-template-columns:1fr 1fr;gap:7px}}.lines hr{{border:0;border-bottom:1px solid #bbb;margin:17px 0}}.ans{{background:#eef8ee;border:1px solid #8bc48b;padding:7px;border-radius:7px}}</style><body><div class='head'><small>البشمهندس x الرياضه</small><h1>{esc(title)}</h1><div class='meta'><div>الطالب: __________________</div><div>التاريخ: __________</div><div>الصف: {esc(grade)}</div><div>المادة: {esc(subject)}</div></div></div>{''.join(z)}<footer>إعداد المعلم — البشمهندس x الرياضه</footer></body></html>"""
-def mind(d):
- cards="".join(f"<div class='card'><h3>{esc(b.get('name',''))}</h3><ul>{''.join(f'<li>{esc(x)}</li>' for x in b.get('items',[]))}</ul></div>" for b in d.get('branches',[]))
- return f"""<!doctype html><html dir='rtl'><meta charset='utf-8'><style>@page{{size:A4 landscape;margin:12mm}}body{{font-family:'DejaVu Sans','Tahoma',Arial,sans-serif}}h1{{text-align:center;color:#0757b8}}.center{{margin:15px auto;padding:18px;border:3px solid #1677ff;border-radius:20px;text-align:center;font-size:24px;font-weight:900;max-width:420px;background:#eef7ff;font-family:'Noto Kufi Arabic','Noto Sans Arabic','Noto Naskh Arabic','DejaVu Sans',sans-serif}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}.card{{border:2px solid #c8d3df;border-radius:14px;padding:12px;min-height:120px;background:#fff}}.card h3{{color:#1677ff;font-family:'Noto Kufi Arabic','Noto Sans Arabic','Noto Naskh Arabic','DejaVu Sans',sans-serif;margin-top:0}}</style><h1>خريطة ذهنية — {esc(d.get('title',''))}</h1><div class='center'>{esc(d.get('title',''))}</div><p style='text-align:center'>{esc(d.get('summary',''))}</p><div class='grid'>{cards}</div></html>"""
+ return f"""<!doctype html><html dir='rtl' lang='ar'><meta charset='utf-8'><style>@page{{size:A4;margin:12mm}}*{{box-sizing:border-box}}body{{font-family:'Noto Kufi Arabic','Noto Sans Arabic','Amiri','Tahoma',Arial,sans-serif;color:#10233f;font-weight:700;line-height:1.9;margin:0}}.header{{border:2px solid #0f766e;border-radius:18px;padding:14px 18px;margin-bottom:14px;background:linear-gradient(135deg,#effcf8,#eef7ff);display:flex;align-items:center;justify-content:space-between}}.brand h2{{margin:0 0 3px;font-size:22px;color:#075985;font-weight:900}}.brand div{{color:#475569;font-size:12px;font-weight:800}}.brand .phone{{font-size:13px;color:#334155;margin-top:4px}}.title{{text-align:center;margin:10px 0 14px;font-size:23px;color:#0f172a;font-weight:900}}.meta{{display:grid;grid-template-columns:1fr 1fr;gap:6px;border:1px solid #cbd5e1;border-radius:12px;padding:9px 12px;background:#f8fafc;font-size:12px;margin-bottom:12px}}.q{{border:1.5px solid #cbd5e1;border-radius:12px;padding:12px 14px;margin:10px 0;page-break-inside:avoid;background:#fff}}.qhead{{display:flex;justify-content:space-between;gap:10px;color:#075985;font-size:13px;border-bottom:1px solid #e2e8f0;padding-bottom:5px;margin-bottom:7px}}.qtext{{font-size:17px;line-height:2.05;font-weight:800;direction:rtl}}.opts{{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px;font-size:15px}}.lines hr{{border:0;border-bottom:1px solid #cbd5e1;margin:17px 0}}.ans{{background:#eef8ee;border:1px solid #8bc48b;padding:8px;border-radius:8px;margin-top:8px}}.frac{{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;margin:0 .12em;min-width:1.4em}}.frac .num{{border-bottom:1.5px solid #10233f;padding:0 .18em}}.frac .den{{padding:0 .18em}}.sqrt{{display:inline-block;position:relative;margin:0 .08em;padding-left:.72em;vertical-align:middle}}.sqrt:before{{content:'√';position:absolute;left:0;top:-.12em;font-size:1.25em;font-weight:900}}.sqrt .radicand{{display:inline-block;border-top:1.5px solid #10233f;padding:0 .12em;min-width:.6em}}sup,sub{{font-size:.72em;line-height:0}}.footer{{margin-top:18px;padding-top:9px;border-top:1px solid #cbd5e1;text-align:center;font-size:10.5px;color:#475569;font-weight:800}}</style><body><div class='header'><div class='brand'><h2>{esc(teacher_name)}</h2><div>البشمهندس x الرياضه</div><div class='phone'>📞 {esc(teacher_phone)}</div></div><div style='font-size:28px'>📐</div></div><div class='title'>{esc(title)}</div><div class='meta'><div>الطالب: __________________</div><div>التاريخ: __________</div><div>الصف: {esc(grade)}</div><div>المادة: {esc(subject)}</div></div>{''.join(z)}<div class='footer'>إعداد ومتابعة: <b>{esc(teacher_name)}</b> &nbsp; | &nbsp; 📞 {esc(teacher_phone)} &nbsp; | &nbsp; البشمهندس x الرياضه</div></body></html>"""
 def save_q(kind,title,payload,cb):
  q=st.session_state.get("question_bank_df")
  if not isinstance(q,pd.DataFrame):return False
