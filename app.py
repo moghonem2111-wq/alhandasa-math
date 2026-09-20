@@ -10,6 +10,7 @@ import urllib.request
 import urllib.error
 import urllib.parse
 import uuid
+import zipfile
 from datetime import date, datetime, time
 import pandas as pd
 from PIL import Image
@@ -1187,25 +1188,129 @@ def load_all_data_from_excel_bytes(excel_bytes):
             out.append(df[columns])
     return tuple(out)
 
+def _backup_tables_map():
+    """كل بيانات المنصة الموجودة في ذاكرة التطبيق، بما فيها الجداول الإضافية."""
+    return {
+        "Users": st.session_state.get("users_df", pd.DataFrame()),
+        "Sessions": st.session_state.get("sessions_df", pd.DataFrame()),
+        "Assessments": st.session_state.get("assessments_df", pd.DataFrame()),
+        "Messages": st.session_state.get("messages_df", pd.DataFrame()),
+        "Exams": st.session_state.get("exams_df", pd.DataFrame()),
+        "Essays": st.session_state.get("essays_df", pd.DataFrame()),
+        "Bookings": st.session_state.get("bookings_df", pd.DataFrame()),
+        "BankRequests": st.session_state.get("bank_requests_df", pd.DataFrame()),
+        "QuestionBank": st.session_state.get("question_bank_df", pd.DataFrame()),
+        "Videos": st.session_state.get("videos_df", pd.DataFrame()),
+        "VideoComments": st.session_state.get("video_comments_df", pd.DataFrame()),
+        "AbqaryExams": st.session_state.get("abqary_df", pd.DataFrame()),
+        "OnlineSchedule": st.session_state.get("online_schedule_df", pd.DataFrame()),
+        "WeeklySchedule": st.session_state.get("weekly_schedule_df", pd.DataFrame()),
+        "PaymentRecords": st.session_state.get("payment_records_df", pd.DataFrame()),
+        "Ads": st.session_state.get("ads_df", pd.DataFrame(columns=COL_ADS)),
+        "StudentInterface": st.session_state.get("student_interface_df", load_student_interface()),
+        "TeacherProfile": st.session_state.get("teacher_profile_df", load_teacher_profile()),
+    }
+
 def _build_excel_backup_bytes():
-    """إنشاء نسخة Excel كاملة قابلة للحفظ على جهاز المعلم."""
+    """نسخة Excel للقراءة البشرية، مع فصل الوسائط الكبيرة حتى لا تُقص داخل خلية Excel."""
     buf = io.BytesIO()
+    tables = _backup_tables_map()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        sheets = [("Users","users_df"),("Sessions","sessions_df"),("Assessments","assessments_df"),("Messages","messages_df"),("Exams","exams_df"),("Essays","essays_df"),("Bookings","bookings_df"),("BankRequests","bank_requests_df"),("QuestionBank","question_bank_df"),("Videos","videos_df"),("VideoComments","video_comments_df"),("AbqaryExams","abqary_df"),("OnlineSchedule","online_schedule_df"),("WeeklySchedule","weekly_schedule_df"),("PaymentRecords","payment_records_df")]
-        for sheet,key in sheets:
-            st.session_state.get(key,pd.DataFrame()).to_excel(writer,sheet_name=sheet,index=False)
-        ads=st.session_state.get("ads_df",pd.DataFrame(columns=COL_ADS)).copy()
-        meta=ads.copy()
-        if "الوسائط_base64" in meta.columns: meta["الوسائط_base64"]=""
-        meta.to_excel(writer,sheet_name="Ads",index=False)
-        media=[]
-        for _,r in ads.iterrows():
-            aid=str(r.get("معرف_الإعلان","")); b64=str(r.get("الوسائط_base64","") or "").strip()
-            for n,pos in enumerate(range(0,len(b64),30000),1): media.append({"معرف_الإعلان":aid,"جزء":n,"البيانات":b64[pos:pos+30000]})
-        pd.DataFrame(media,columns=["معرف_الإعلان","جزء","البيانات"]).to_excel(writer,sheet_name="AdsMedia",index=False)
-        st.session_state.get("student_interface_df",load_student_interface()).to_excel(writer,sheet_name="StudentInterface",index=False)
-        st.session_state.get("teacher_profile_df",load_teacher_profile()).to_excel(writer,sheet_name="TeacherProfile",index=False)
+        for sheet, df in tables.items():
+            out = df.copy()
+            # Excel لديه حد 32767 حرفاً للخلية؛ الوسائط الكبيرة محفوظة كاملة داخل ZIP/manifest.
+            for c in list(out.columns):
+                if "base64" in str(c).lower() or "إيصال" in str(c):
+                    out[c] = out[c].apply(lambda v: "[محفوظة كاملة داخل backup_manifest.json/assets]" if str(v or "").strip() not in ("", "nan", "None") else "")
+            out.to_excel(writer, sheet_name=sheet[:31], index=False)
+        # نسخة نصية منفصلة للإعلانات حتى يمكن قراءتها بسهولة.
+        ads = tables["Ads"].copy()
+        if "الوسائط_base64" in ads.columns:
+            ads["الوسائط_base64"] = "[محفوظة كاملة داخل assets]"
+        ads.to_excel(writer, sheet_name="Ads", index=False)
     return buf.getvalue()
+
+def _backup_zip_bytes():
+    """نسخة أمان كاملة جداً: Excel + JSON دقيق + كل الصور/الفيديوهات/الإيصالات كأصول منفصلة."""
+    tables = _backup_tables_map()
+    manifest = {
+        "format": "alhandasa-complete-backup-v2",
+        "created_at": datetime.now().isoformat(),
+        "tables": {},
+        "notes": [
+            "هذا الملف هو النسخة الأساسية للاسترجاع.",
+            "بيانات التقارير مثل تقرير ولي الأمر محفوظة من خلال الجداول التي تُبنى منها التقارير: الطلاب والحصص والتقييمات والمدفوعات والجداول.",
+            "الوسائط الكبيرة والإيصالات والفيديوهات محفوظة كملفات مستقلة داخل assets للحفاظ عليها بدون قص Excel."
+        ]
+    }
+    assets = {}
+    for sheet, df in tables.items():
+        df = df.copy()
+        manifest["tables"][sheet] = {"columns": [str(c) for c in df.columns], "rows": []}
+        for _, row in df.iterrows():
+            out = {}
+            for col in df.columns:
+                val = row.get(col, "")
+                if pd.isna(val):
+                    val = ""
+                if isinstance(val, (datetime, date)):
+                    val = val.isoformat()
+                else:
+                    val = str(val)
+                low = str(col).lower()
+                # كل الصور/الفيديوهات/الإيصالات المشفرة تُفصل عن JSON، مع الحفاظ على قيمتها الأصلية 100%.
+                external = ("base64" in low or "إيصال" in str(col) or "صورة" in str(col) or "فيديو" in str(col)) and len(val) > 0
+                if external and val not in ("nan", "None"):
+                    safe_sheet = re.sub(r"[^A-Za-z0-9_-]+", "_", str(sheet))[:40]
+                    asset_id = f"assets/{safe_sheet}/{uuid.uuid4().hex}.b64"
+                    assets[asset_id] = val.encode("utf-8")
+                    out[col] = {"__asset__": asset_id, "encoding": "base64-text"}
+                else:
+                    out[col] = val
+            manifest["tables"][sheet]["rows"].append(out)
+    excel_bytes = _build_excel_backup_bytes()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        z.writestr("platform_readable.xlsx", excel_bytes)
+        z.writestr("backup_manifest.json", json.dumps(manifest, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        readme = "نسخة احتياطية كاملة لمنصة البشمهندس x الرياضه. الاسترجاع من هذا الملف يعيد الجداول والوسائط والإيصالات والفيديوهات كما كانت في وقت النسخ."
+        z.writestr("README.txt", readme.encode("utf-8"))
+        for path, data in assets.items():
+            z.writestr(path, data)
+    return buf.getvalue()
+
+def _restore_complete_zip(zip_bytes):
+    """استرجاع النسخة الكاملة من ZIP مع إعادة كل الأصول المشفرة إلى أعمدة البيانات الأصلية."""
+    with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as z:
+        if "backup_manifest.json" not in z.namelist():
+            raise ValueError("هذا ليس ملف النسخة الكاملة الجديد. استخدم ملف XLSX القديم أو نسخة ZIP صحيحة.")
+        manifest = json.loads(z.read("backup_manifest.json").decode("utf-8"))
+        tables = {}
+        for sheet, info in manifest.get("tables", {}).items():
+            rows = []
+            for row in info.get("rows", []):
+                out = {}
+                for col, val in row.items():
+                    if isinstance(val, dict) and "__asset__" in val:
+                        out[col] = z.read(val["__asset__"]).decode("utf-8")
+                    else:
+                        out[col] = val
+                rows.append(out)
+            tables[sheet] = pd.DataFrame(rows, columns=info.get("columns", []))
+        rec_names = ["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df"]
+        rec_sheets = ["Users","Sessions","Assessments","Messages","Exams","Essays","Bookings","BankRequests","QuestionBank","Videos","VideoComments","AbqaryExams","OnlineSchedule","WeeklySchedule","PaymentRecords"]
+        for n, sheet in zip(rec_names, rec_sheets):
+            st.session_state[n] = tables.get(sheet, pd.DataFrame())
+        st.session_state.ads_df = tables.get("Ads", pd.DataFrame(columns=COL_ADS))
+        st.session_state.student_interface_df = tables.get("StudentInterface", load_student_interface())
+        st.session_state.teacher_profile_df = tables.get("TeacherProfile", load_teacher_profile())
+        if sum(len(st.session_state[n]) for n in rec_names) == 0 and st.session_state.ads_df.empty:
+            raise ValueError("النسخة الاحتياطية لا تحتوي على بيانات أساسية.")
+        ok = save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df, st.session_state.weekly_schedule_df, st.session_state.payment_records_df, st.session_state.ads_df)
+        if _cloud_storage_enabled() and not ok:
+            raise RuntimeError("فشل تأكيد حفظ النسخة المسترجعة في التخزين السحابي.")
+        _cloud_save_student_interface(st.session_state.student_interface_df)
+        return sum(len(st.session_state[n]) for n in rec_names) + len(st.session_state.ads_df)
 
 def _restore_ads_from_excel(xls):
     ads=pd.read_excel(xls,"Ads") if "Ads" in xls.sheet_names else pd.DataFrame(columns=COL_ADS)
@@ -4690,20 +4795,20 @@ elif t_page == "online_backup":
     st.info("بيانات المنصة محفوظة سحابياً، ويمكنك أيضاً تنزيل نسخة كاملة على اللاب ثم رفعها لاحقاً لاسترجاع الموقع إذا حدثت مشكلة.")
     st.markdown("### 💻 1) تنزيل نسخة كاملة على اللاب")
     try:
-        _backup_bytes=_build_excel_backup_bytes()
-        st.download_button("📥 تنزيل النسخة الاحتياطية الكاملة",_backup_bytes,file_name=f"alhandasa_full_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True,type="primary",key="download_full_local_backup")
+        _backup_bytes=_backup_zip_bytes()
+        st.download_button("📦 تنزيل النسخة الاحتياطية الكاملة جداً (كل البيانات + الصور + الفيديوهات + الإيصالات)",_backup_bytes,file_name=f"alhandasa_COMPLETE_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",mime="application/zip",use_container_width=True,type="primary",key="download_full_local_backup_zip")
+        st.caption("النسخة ZIP هي النسخة المعتمدة للاسترجاع. تحتوي Excel للقراءة + ملف بيانات دقيق + كل الوسائط والإيصالات والفيديوهات كملفات مستقلة، لتجنب قص البيانات داخل Excel.")
     except Exception as e: st.error(f"تعذر إنشاء النسخة: {e}")
     st.markdown("### ♻️ 2) رفع نسخة واسترجاعها للموقع")
-    st.caption("قبل الاسترجاع تُحفظ نسخة أمان من البيانات الحالية في Supabase، ثم تُحدّث البيانات والجداول المنظمة.")
-    _up=st.file_uploader("اختر ملف النسخة الاحتياطية (.xlsx)",type=["xlsx"],key="full_backup_restore_upload")
+    st.caption("قبل الاسترجاع تُحفظ نسخة أمان من البيانات الحالية في Supabase، ثم تُعاد كل الجداول والوسائط والإيصالات والفيديوهات من النسخة.")
+    _up=st.file_uploader("اختر النسخة الكاملة (.zip) أو النسخة القديمة (.xlsx)",type=["zip","xlsx"],key="full_backup_restore_upload")
     if _up is not None:
         try:
-            _up_bytes=_up.getvalue()
-            with pd.ExcelFile(io.BytesIO(_up_bytes),engine="openpyxl") as _ux: _sheet_count=len(_ux.sheet_names)
-            st.success(f"✓ تم التعرف على ملف النسخة ويحتوي على {_sheet_count} أوراق بيانات.")
+            _up_bytes=_up.getvalue(); _is_zip=str(_up.name).lower().endswith(".zip")
+            st.success("✓ تم التعرف على النسخة الكاملة ZIP." if _is_zip else "✓ تم التعرف على نسخة Excel القديمة.")
             if st.button("🚨 استرجاع هذه النسخة إلى الموقع",use_container_width=True,type="primary",key="restore_full_backup_to_cloud"):
                 try:
-                    _n=_restore_complete_backup(_up_bytes)
+                    _n=_restore_complete_zip(_up_bytes) if _is_zip else _restore_complete_backup(_up_bytes)
                     st.success(f"✅ تم الاسترجاع بنجاح وتحديث الموقع وSupabase. السجلات المسترجعة: {_n}.")
                     st.rerun()
                 except Exception as e: st.error(f"❌ فشل الاسترجاع: {e}")
