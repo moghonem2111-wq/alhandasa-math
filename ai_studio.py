@@ -79,6 +79,14 @@ def save_q(kind,title,payload,cb):
  st.session_state.question_bank_df=pd.concat([q,pd.DataFrame([r])],ignore_index=True)
  if cb:cb()
  return True
+def delete_q(qid,cb):
+ q=st.session_state.get("question_bank_df")
+ if not isinstance(q,pd.DataFrame) or "معرف_السؤال" not in q.columns:return False
+ before=len(q)
+ st.session_state.question_bank_df=q[q["معرف_السؤال"].astype(str).ne(str(qid))].reset_index(drop=True)
+ changed=len(st.session_state.question_bank_df)<before
+ if changed and cb:cb()
+ return changed
 def render_ai_studio(save_callback=None):
  st.markdown("# 🤖 استوديو الذكاء الاصطناعي")
  if not sec("GEMINI_API_KEY"):st.warning("أضف GEMINI_API_KEY في Streamlit Secrets لتشغيل AI. المفتاح محفوظ في Secrets وليس داخل GitHub.")
@@ -121,6 +129,20 @@ def render_ai_studio(save_callback=None):
     if st.button("🚀 نشر إلكترونياً للطلاب",key="ai_pub"):
      r={"معرف_الامتحان":f"AI_EX_{uuid.uuid4().hex[:10]}","عنوان الامتحان":x["title"],"وصف الامتحان":x.get("description",""),"كلمة المرور":"","المنهج/الدولة":"المنهج المصري 🇪🇬","المجموعة/الصف":g,"المادة":s,"الفصل الدراسي":"","مدة الامتحان بالدقائق":60,"الأسئلة_JSON":json.dumps(x["questions"],ensure_ascii=False),"تاريخ الإنشاء":str(date.today())}
      st.session_state.exams_df=pd.concat([st.session_state.exams_df,pd.DataFrame([r])],ignore_index=True);save_callback() if save_callback else None;st.success("تم حفظ الاختبار في سجل الامتحانات.")
+   if st.button("🗑️ مسح الاختبار الحالي",key="ai_clear"):
+    st.session_state.pop("ai_exam",None);st.session_state.pop("ai_exam_meta",None);st.rerun()
+   edf=st.session_state.get("exams_df")
+   if isinstance(edf,pd.DataFrame) and not edf.empty and "معرف_الامتحان" in edf.columns:
+    ai_edf=edf[edf["معرف_الامتحان"].astype(str).str.startswith("AI_EX_")]
+    if not ai_edf.empty:
+     exam_labels=[f'{rr.get("عنوان الامتحان","اختبار AI")} — {rr.get("المجموعة/الصف","")} — {rr.get("تاريخ الإنشاء","")}' for _,rr in ai_edf.iterrows()]
+     exam_ids=ai_edf["معرف_الامتحان"].astype(str).tolist()
+     exi=st.selectbox("اختر اختبار AI منشور للحذف",range(len(exam_labels)),format_func=lambda i:exam_labels[i],key="ai_delete_exam_select")
+     if st.button("🗑️ حذف الاختبار المنشور",key="ai_delete_exam"):
+      st.session_state.exams_df=edf[~edf["معرف_الامتحان"].astype(str).eq(exam_ids[exi])].reset_index(drop=True)
+      save_callback() if save_callback else None
+      st.success("تم حذف الاختبار من سجل الامتحانات.")
+      st.rerun()
  with b:
   g=st.text_input("الصف / المرحلة",value="الصف الثالث الثانوي",key="aih_g");s=st.text_input("المادة",value="الرياضيات",key="aih_s");n=st.number_input("عدد الأسئلة",1,40,8,key="aih_n");d=st.selectbox("الصعوبة",["متدرج","سهل","متوسط","صعب"],key="aih_d");typ=st.multiselect("الأنواع",["اختيار من متعدد","مقالي","صح أو خطأ"],["مقالي","اختيار من متعدد"],key="aih_t");src=st.text_area("✍️ نص الواجب / المصدر",height=120,key="aih_txt");fs=uploads("aih_files")
   if st.button("✨ إنشاء الواجب بالذكاء الاصطناعي",type="primary",key="aih_make"):
@@ -149,6 +171,23 @@ def render_ai_studio(save_callback=None):
    else:st.download_button("🖨️ طباعة الواجب",h.encode(),"واجب_AI.html","text/html",key="aih_html")
    if st.button("💾 حفظ الواجب في بنك المنصة",key="aih_save"):
     if save_q("واجب AI",x["title"],{"grade":g,"subject":s,"questions":x["questions"]},save_callback):st.success("تم حفظ الواجب في بنك المنصة.")
+   if st.button("🗑️ مسح الواجب الحالي",key="aih_clear"):
+    st.session_state.pop("ai_hw",None);st.session_state.pop("ai_hw_meta",None);st.rerun()
+   qdf_hw=st.session_state.get("question_bank_df")
+   hw_saved=[]
+   if isinstance(qdf_hw,pd.DataFrame) and not qdf_hw.empty and "نوع_السؤال" in qdf_hw.columns and "بيانات_السؤال_JSON" in qdf_hw.columns:
+    for _,rr in qdf_hw[qdf_hw["نوع_السؤال"].astype(str).eq("واجب AI")].iterrows():
+     try:
+      obj=json.loads(str(rr.get("بيانات_السؤال_JSON","")));pl=obj.get("payload",{})
+      hw_saved.append({"id":rr.get("معرف_السؤال",""),"title":obj.get("title","واجب AI"),"grade":pl.get("grade",""),"saved_at":pl.get("saved_at","")})
+     except Exception:pass
+   if hw_saved:
+    hw_labels=[f'{v["title"]} — {v["grade"]}' for v in hw_saved]
+    hwi=st.selectbox("اختر واجب AI محفوظ للحذف",range(len(hw_labels)),format_func=lambda i:hw_labels[i],key="aih_delete_select")
+    if st.button("🗑️ حذف الواجب المحفوظ",key="aih_delete"):
+     if delete_q(hw_saved[hwi]["id"],save_callback):
+      st.success("تم حذف الواجب من بنك المنصة.")
+      st.rerun()
  with c:
   g=st.text_input("الصف / المرحلة",value="الصف الثالث الثانوي",key="aim_g");s=st.text_input("المادة",value="الرياضيات",key="aim_s");src=st.text_area("✍️ اسم الدرس أو محتواه",height=120,key="aim_txt");fs=uploads("aim_files")
   if st.button("🧠 إنشاء الخريطة الذهنية",type="primary",key="aim_make"):
@@ -179,6 +218,8 @@ def render_ai_studio(save_callback=None):
     if save_q("خريطة ذهنية AI",x["title"],payload,save_callback):
      st.session_state["ai_mm_saved_title"]=x["title"]
      st.success("تم حفظ الخريطة الذهنية في المنصة ويمكنك فتحها من قسم «الخرائط المحفوظة».")
+   if st.button("🗑️ مسح الخريطة الحالية",key="aim_clear"):
+    st.session_state.pop("ai_mm",None);st.session_state.pop("ai_mm_meta",None);st.rerun()
    
    st.markdown("---")
    st.markdown("### 📚 الخرائط الذهنية المحفوظة على المنصة")
@@ -201,5 +242,9 @@ def render_ai_studio(save_callback=None):
     saved_pdf=pdf(mind(chosen["mindmap"]))
     if saved_pdf:
      st.download_button("📄 طباعة / تحميل الخريطة المحفوظة PDF",saved_pdf,"خريطة_ذهنية_محفوظة.pdf","application/pdf",key="aim_saved_pdf")
+    if st.button("🗑️ حذف الخريطة المحفوظة",key="aim_delete_saved"):
+     if delete_q(chosen["id"],save_callback):
+      st.success("تم حذف الخريطة الذهنية من بنك المنصة.")
+      st.rerun()
    else:
     st.info("لا توجد خرائط ذهنية محفوظة حتى الآن. أنشئ خريطة ثم اضغط «حفظ الخريطة في بنك المنصة».")
