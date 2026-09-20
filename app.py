@@ -224,6 +224,111 @@ def _cloud_save_excel_bytes(excel_bytes, reason="autosave"):
         return False
 
 
+def _cloud_sync_dataframe(table_name, df, label=None):
+    """مزامنة جدول DataFrame كاملًا مع جدول Supabase المقابل.
+
+    التطبيق يظل محتفظًا بنسخة Excel الرئيسية، بينما هذه الجداول تصبح نسخة منظمة
+    يمكن رؤيتها والبحث فيها من Table Editor. تتم المزامنة فقط عندما يتغير الجدول.
+    """
+    if not _cloud_storage_enabled():
+        return True
+    label = label or table_name
+    try:
+        if df is None:
+            df = pd.DataFrame()
+        work = df.copy()
+        # ثبّت الأعمدة والقيم قبل التحويل إلى JSON.
+        if not work.empty:
+            work.columns = [str(c) for c in work.columns]
+            records = json.loads(work.to_json(orient="records", force_ascii=False, date_format="iso"))
+        else:
+            records = []
+
+        # لا نكرر نفس المزامنة في كل rerun.
+        sig_source = work.copy()
+        try:
+            sig_source.columns = [str(c) for c in sig_source.columns]
+            for col in sig_source.columns:
+                sig_source[col] = sig_source[col].map(lambda x: "" if pd.isna(x) else str(x))
+            raw_sig = pd.util.hash_pandas_object(sig_source, index=True).values.tobytes()
+            signature = hashlib.sha256(
+                (table_name + "|" + "|".join(sig_source.columns) + "|" + str(len(sig_source))).encode("utf-8") + raw_sig
+            ).hexdigest()
+        except Exception:
+            signature = hashlib.sha256(repr(records).encode("utf-8")).hexdigest()
+
+        cache_key = f"_structured_sync_sig_{table_name}"
+        if st.session_state.get(cache_key) == signature:
+            return True
+
+        base_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{table_name}"
+
+        # حذف النسخة المنظمة القديمة حتى تعكس الجدول الحالي بالكامل، بما في ذلك الحذف.
+        delete_url = base_url + "?id=not.is.null"
+        delete_headers = _supabase_headers()
+        delete_headers["Prefer"] = "return=minimal"
+        req = urllib.request.Request(delete_url, headers=delete_headers, method="DELETE")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+
+        if records:
+            # أرسل دفعات صغيرة، خصوصًا للجداول التي قد تحتوي على صور/ملفات Base64.
+            batch_size = 10 if any("base64" in str(c).lower() for c in work.columns) else 50
+            for start in range(0, len(records), batch_size):
+                batch = records[start:start + batch_size]
+                body = json.dumps(batch, ensure_ascii=False, allow_nan=False).encode("utf-8")
+                headers = _supabase_headers()
+                headers["Prefer"] = "return=minimal"
+                req = urllib.request.Request(base_url, data=body, headers=headers, method="POST")
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    resp.read()
+
+        st.session_state[cache_key] = signature
+        st.session_state["structured_sync_last_error"] = ""
+        return True
+    except Exception as exc:
+        st.session_state["structured_sync_last_error"] = f"{label}: {exc}"
+        # لا نوقف عمل المنصة؛ نسخة Excel الرئيسية تظل هي النسخة الآمنة.
+        return False
+
+
+def _cloud_sync_all_structured_tables(users_df, sessions_df, assessments_df, messages_df,
+                                      exams_df, essays_df, bookings_df, bank_requests_df,
+                                      question_bank_df, videos_df, video_comments_df, abqary_df,
+                                      online_schedule_df, weekly_schedule_df, payment_records_df,
+                                      ads_df):
+    """تحديث كل القوائم المنظمة في Supabase بجانب platform_storage."""
+    tables = [
+        ("users", users_df, "الطلاب"),
+        ("sessions", sessions_df, "الحصص والحضور"),
+        ("assessments", assessments_df, "الواجبات والتقييمات"),
+        ("messages", messages_df, "الرسائل"),
+        ("exams", exams_df, "الامتحانات"),
+        ("essays", essays_df, "الحلول المقالية"),
+        ("bookings", bookings_df, "الحجوزات"),
+        ("bank_requests", bank_requests_df, "طلبات البنك"),
+        ("question_bank", question_bank_df, "بنك الأسئلة"),
+        ("videos", videos_df, "الفيديوهات"),
+        ("video_comments", video_comments_df, "تعليقات الفيديو"),
+        ("abqary", abqary_df, "عبقري"),
+        ("online_schedule", online_schedule_df, "جداول Zoom"),
+        ("weekly_schedule", weekly_schedule_df, "المواعيد الأسبوعية"),
+        ("payment_records", payment_records_df, "المدفوعات"),
+        ("ads", ads_df, "الإعلانات"),
+    ]
+    # الجداول ذات السجل الواحد: تُزامن من نفس مصدرها الحالي.
+    teacher_profile_df = st.session_state.get("teacher_profile_df", pd.DataFrame(columns=COL_TEACHER_PROFILE))
+    student_interface_df = st.session_state.get("student_interface_df", pd.DataFrame(columns=COL_STUDENT_INTERFACE))
+    tables.extend([
+        ("teacher_profile", teacher_profile_df, "بيانات المعلم"),
+        ("student_interface", student_interface_df, "واجهة الطالب"),
+    ])
+    results = []
+    for table_name, df, label in tables:
+        results.append(_cloud_sync_dataframe(table_name, df, label))
+    return all(results)
+
+
 def _cloud_load_student_interface():
     """قراءة إعدادات واجهة الطالب وحدها من التخزين الدائم، بدون الاعتماد على ملف Excel الكبير."""
     if not _cloud_storage_enabled():
@@ -879,40 +984,93 @@ def _ad_text_html(text):
     return re.sub(pattern, _link, safe).replace("\n", "<br>")
 
 def render_student_ads():
+    """عرض الإعلانات النشطة للطالب في صورة شرائح (Carousel) إعلانًا واحدًا في كل مرة."""
     ads_df = st.session_state.get("ads_df", pd.DataFrame(columns=COL_ADS)).copy()
     if ads_df.empty:
         return
     active = ads_df[ads_df["الحالة"].astype(str).str.strip().isin(["نشط", "فعال", "مفعل", "مفعّل", "نعم"])].copy() if "الحالة" in ads_df.columns else ads_df.copy()
     if active.empty:
         return
+    active = active.iloc[::-1].reset_index(drop=True)
+
     st.markdown("<div class='vertical-section-header'>📢 الإعلانات</div>", unsafe_allow_html=True)
     st.markdown("<div style='text-align:center;color:#64748b;font-weight:800;margin-bottom:14px;'>آخر الإعلانات والتنبيهات المنشورة من لوحة المعلم</div>", unsafe_allow_html=True)
-    for idx, row in active.iloc[::-1].iterrows():
-        title = html.escape(str(row.get("العنوان", "إعلان جديد") or "إعلان جديد"))
-        text = str(row.get("النص", "") or "").strip()
-        kind = str(row.get("نوع_الإعلان", "") or "").strip()
-        media_uri = _ad_media_uri(row)
-        link = str(row.get("الرابط", "") or "").strip()
-        button = html.escape(str(row.get("نص_الزر", "افتح الإعلان") or "افتح الإعلان").strip())
-        with st.container(border=True):
-            st.markdown(f"<div style='direction:rtl;text-align:right'><div style='font-size:21px;font-weight:900;color:#0f172a'>{title}</div><div style='font-size:12px;color:#64748b;margin-top:4px'>{html.escape(str(row.get('تاريخ_النشر','')))}</div></div>", unsafe_allow_html=True)
-            if media_uri and kind in ["صورة", "صورة + بوست", "صورة وبوست"]:
-                # عرض الصورة الأصلية مباشرة بدون إعادة ضغط أو تصغير من Streamlit.
-                st.markdown(f"<div style='width:100%;text-align:center;margin:12px 0'><img src='{media_uri}' loading='eager' decoding='auto' style='display:block;width:100%;height:auto;max-width:100%;object-fit:contain;border-radius:14px;image-rendering:auto;'></div>", unsafe_allow_html=True)
-            elif media_uri and kind == "فيديو":
-                try:
-                    st.video(base64.b64decode(str(row.get("الوسائط_base64", ""))))
-                except Exception:
-                    if link:
-                        try: st.video(link)
-                        except Exception: pass
-            elif kind == "فيديو" and link:
-                try: st.video(link)
-                except Exception: pass
-            if text:
-                st.markdown(f"<div style='direction:rtl;text-align:right;line-height:2;font-weight:800;font-size:16px;padding:10px 2px;word-break:break-word'>{_ad_text_html(text)}</div>", unsafe_allow_html=True)
-            if link:
-                st.link_button(button or "فتح الرابط", link, use_container_width=True)
+
+    slide_key = "student_ad_slide"
+    if slide_key not in st.session_state:
+        st.session_state[slide_key] = 0
+    if st.session_state[slide_key] >= len(active):
+        st.session_state[slide_key] = 0
+    if st.session_state[slide_key] < 0:
+        st.session_state[slide_key] = len(active) - 1
+
+    slide_no = int(st.session_state[slide_key])
+    row = active.iloc[slide_no]
+    title = html.escape(str(row.get("العنوان", "إعلان جديد") or "إعلان جديد"))
+    text = str(row.get("النص", "") or "").strip()
+    kind = str(row.get("نوع_الإعلان", "") or "").strip()
+    media_uri = _ad_media_uri(row)
+    link = str(row.get("الرابط", "") or "").strip()
+    button = html.escape(str(row.get("نص_الزر", "افتح الإعلان") or "افتح الإعلان").strip())
+
+    with st.container(border=True):
+        st.markdown(
+            f"<div style='direction:rtl;text-align:right'>"
+            f"<div style='font-size:23px;font-weight:900;color:#0f172a'>{title}</div>"
+            f"<div style='font-size:12px;color:#64748b;margin-top:4px'>{html.escape(str(row.get('تاريخ_النشر','')))}</div>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+        if media_uri and kind in ["صورة", "صورة + بوست", "صورة وبوست"]:
+            st.markdown(
+                f"<div style='width:100%;text-align:center;margin:14px 0;'>"
+                f"<img src='{media_uri}' loading='eager' decoding='auto' "
+                f"style='display:block;width:100%;height:auto;max-height:520px;object-fit:contain;"
+                f"border-radius:16px;image-rendering:auto;'></div>",
+                unsafe_allow_html=True
+            )
+        elif media_uri and kind == "فيديو":
+            try:
+                st.video(base64.b64decode(str(row.get("الوسائط_base64", ""))))
+            except Exception:
+                if link:
+                    try:
+                        st.video(link)
+                    except Exception:
+                        pass
+        elif kind == "فيديو" and link:
+            try:
+                st.video(link)
+            except Exception:
+                pass
+
+        if text:
+            st.markdown(
+                f"<div style='direction:rtl;text-align:right;line-height:2;font-weight:800;"
+                f"font-size:16px;padding:10px 2px;word-break:break-word'>{_ad_text_html(text)}</div>",
+                unsafe_allow_html=True
+            )
+        if link:
+            st.link_button(button or "فتح الرابط", link, use_container_width=True)
+
+    # أزرار الشرائح أسفل الإعلان.
+    prev_col, info_col, next_col = st.columns([1, 2, 1])
+    with prev_col:
+        if st.button("❮ السابق", use_container_width=True, key="student_ad_prev"):
+            st.session_state[slide_key] = (slide_no - 1) % len(active)
+            st.rerun()
+    with info_col:
+        dots = " ".join("●" if i == slide_no else "○" for i in range(len(active)))
+        st.markdown(
+            f"<div style='text-align:center;font-weight:900;color:#2563eb;padding:8px 0;'>"
+            f"{dots}<br><span style='color:#64748b;font-size:12px'>{slide_no + 1} / {len(active)}</span></div>",
+            unsafe_allow_html=True
+        )
+    with next_col:
+        if st.button("التالي ❯", use_container_width=True, key="student_ad_next"):
+            st.session_state[slide_key] = (slide_no + 1) % len(active)
+            st.rerun()
 
 
 def _parse_parent_report_date(value):
@@ -1075,7 +1233,15 @@ def save_all_data(users_df, sessions_df, assessments_df, messages_df, exams_df, 
     except Exception:
         pass
     _cloud_ok = _cloud_save_excel_bytes(excel_bytes, reason="manual_or_autosave")
-    return bool(_cloud_ok)
+    _structured_ok = True
+    if _cloud_ok:
+        # بالإضافة إلى ملف Excel الرئيسي، حافظ على نسخة منظمة داخل كل جدول Supabase.
+        _structured_ok = _cloud_sync_all_structured_tables(
+            users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df,
+            bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df,
+            abqary_df, online_schedule_df, weekly_schedule_df, payment_records_df, ads_df
+        )
+    return bool(_cloud_ok and _structured_ok)
 
 if "users_df" not in st.session_state:
     u_df, s_df, a_df, m_df, e_df, es_df, b_df, br_df, qb_df, v_df, vc_df, ab_df, os_df, ws_df, pr_df = load_all_data()
@@ -4644,19 +4810,210 @@ elif t_page == "ads":
                 st.success("✓ تم نشر الإعلان وحفظه، وسيظهر في الصفحة الرئيسية للطالب.")
                 st.rerun()
 
+    # ------------------------------------------------------------------
+    # تعديل إعلان موجود
+    # ------------------------------------------------------------------
+    editing_ad_idx = st.session_state.get("editing_ad_idx", None)
+
+    if editing_ad_idx is not None and not ads_df.empty and editing_ad_idx in ads_df.index:
+        edit_row = ads_df.loc[editing_ad_idx].copy()
+
+        st.markdown("### ✏️ تعديل الإعلان")
+        st.info("عدّل بيانات الإعلان ثم اضغط «💾 حفظ التعديلات». إذا لم ترفع ملفًا جديدًا ستظل الصورة/الفيديو الحالي كما هو.")
+
+        with st.container(border=True):
+            with st.form(f"edit_ad_form_{editing_ad_idx}"):
+                edit_title = st.text_input(
+                    "عنوان الإعلان",
+                    value=str(edit_row.get("العنوان", "") or ""),
+                    key=f"edit_ad_title_{editing_ad_idx}"
+                )
+
+                current_type = str(edit_row.get("نوع_الإعلان", "نص") or "نص")
+                ad_types = ["صورة + بوست", "فيديو", "رابط", "واتساب", "نص"]
+                edit_type = st.selectbox(
+                    "نوع الإعلان",
+                    ad_types,
+                    index=ad_types.index(current_type) if current_type in ad_types else 0,
+                    key=f"edit_ad_type_{editing_ad_idx}"
+                )
+
+                edit_text = st.text_area(
+                    "نص / محتوى الإعلان",
+                    value=str(edit_row.get("النص", "") or ""),
+                    key=f"edit_ad_text_{editing_ad_idx}"
+                )
+
+                edit_link = st.text_input(
+                    "الرابط (فيديو / موقع / واتساب)",
+                    value=str(edit_row.get("الرابط", "") or ""),
+                    key=f"edit_ad_link_{editing_ad_idx}"
+                )
+
+                edit_button = st.text_input(
+                    "نص زر الرابط",
+                    value=str(edit_row.get("نص_الزر", "افتح الإعلان") or "افتح الإعلان"),
+                    key=f"edit_ad_button_{editing_ad_idx}"
+                )
+
+                current_media = str(edit_row.get("الوسائط_base64", "") or "").strip()
+                current_mime = str(edit_row.get("نوع_الوسائط", "") or "").strip()
+
+                if current_media:
+                    st.caption("📎 يوجد حاليًا ملف صورة/فيديو مرتبط بهذا الإعلان.")
+
+                edit_file = None
+                if edit_type in ["صورة + بوست", "فيديو"]:
+                    edit_file = st.file_uploader(
+                        "استبدال الصورة أو الفيديو (اختياري)",
+                        type=["png", "jpg", "jpeg", "webp", "mp4", "webm", "mov"],
+                        key=f"edit_ad_media_upload_{editing_ad_idx}"
+                    )
+
+                remove_media = st.checkbox(
+                    "🗑️ إزالة الصورة/الفيديو الحالي",
+                    value=False,
+                    key=f"edit_ad_remove_media_{editing_ad_idx}"
+                )
+
+                current_active = str(edit_row.get("الحالة", "نشط") or "نشط").strip() in [
+                    "نشط", "فعال", "مفعل", "مفعّل", "نعم"
+                ]
+                edit_active = st.checkbox(
+                    "الإعلان ظاهر للطلاب",
+                    value=current_active,
+                    key=f"edit_ad_active_{editing_ad_idx}"
+                )
+
+                save_edit, cancel_edit = st.columns(2)
+                with save_edit:
+                    save_edit_btn = st.form_submit_button(
+                        "💾 حفظ التعديلات",
+                        use_container_width=True,
+                        type="primary"
+                    )
+                with cancel_edit:
+                    cancel_edit_btn = st.form_submit_button(
+                        "↩️ إلغاء",
+                        use_container_width=True
+                    )
+
+                if cancel_edit_btn:
+                    st.session_state.pop("editing_ad_idx", None)
+                    st.rerun()
+
+                if save_edit_btn:
+                    final_link = edit_link.strip()
+                    if edit_type == "واتساب" and final_link and not final_link.startswith("http"):
+                        final_link = "https://wa.me/" + final_link.replace("+", "").replace(" ", "")
+
+                    # الاحتفاظ بالوسائط القديمة افتراضيًا.
+                    new_media_b64 = current_media
+                    new_media_mime = current_mime
+
+                    # إزالة الوسائط إذا اختار المعلم ذلك.
+                    if remove_media:
+                        new_media_b64 = ""
+                        new_media_mime = ""
+
+                    # إذا تم رفع ملف جديد، استبدال الوسائط القديمة.
+                    if edit_file is not None:
+                        raw = edit_file.getvalue()
+                        new_media_b64 = base64.b64encode(raw).decode("utf-8")
+                        new_media_mime = str(
+                            getattr(edit_file, "type", "") or "application/octet-stream"
+                        )
+
+                    st.session_state.ads_df.at[editing_ad_idx, "العنوان"] = edit_title.strip() or "إعلان جديد"
+                    st.session_state.ads_df.at[editing_ad_idx, "نوع_الإعلان"] = edit_type
+                    st.session_state.ads_df.at[editing_ad_idx, "النص"] = edit_text.strip()
+                    st.session_state.ads_df.at[editing_ad_idx, "الرابط"] = final_link
+                    st.session_state.ads_df.at[editing_ad_idx, "نص_الزر"] = edit_button.strip() or "افتح الإعلان"
+                    st.session_state.ads_df.at[editing_ad_idx, "الوسائط_base64"] = new_media_b64
+                    st.session_state.ads_df.at[editing_ad_idx, "نوع_الوسائط"] = new_media_mime
+                    st.session_state.ads_df.at[editing_ad_idx, "الحالة"] = "نشط" if edit_active else "متوقف"
+                    st.session_state.ads_df.at[editing_ad_idx, "تاريخ_النشر"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+                    save_all_data(
+                        st.session_state.users_df,
+                        st.session_state.sessions_df,
+                        st.session_state.assessments_df,
+                        st.session_state.messages_df,
+                        st.session_state.exams_df,
+                        st.session_state.essays_df,
+                        st.session_state.bookings_df,
+                        st.session_state.bank_requests_df,
+                        st.session_state.question_bank_df,
+                        st.session_state.videos_df,
+                        st.session_state.video_comments_df,
+                        st.session_state.abqary_df,
+                        st.session_state.online_schedule_df,
+                        st.session_state.get("weekly_schedule_df"),
+                        st.session_state.get("payment_records_df"),
+                        st.session_state.ads_df
+                    )
+
+                    st.session_state.pop("editing_ad_idx", None)
+                    st.success("✓ تم تعديل الإعلان وحفظ التغييرات بنجاح.")
+                    st.rerun()
+
     st.markdown("### 📋 الإعلانات المنشورة")
     if ads_df.empty:
         st.info("لا توجد إعلانات حتى الآن.")
     else:
         for ad_idx, row in ads_df.iloc[::-1].iterrows():
-            c1, c2 = st.columns([5,1])
+            c1, c2, c3 = st.columns([5, 1, 1])
             with c1:
-                st.markdown(f"**{row.get('العنوان','إعلان')}** — {row.get('نوع_الإعلان','')} — {row.get('تاريخ_النشر','')}")
+                st.markdown(
+                    f"**{row.get('العنوان','إعلان')}** — "
+                    f"{row.get('نوع_الإعلان','')} — "
+                    f"{row.get('تاريخ_النشر','')}"
+                )
                 st.caption(str(row.get("النص", ""))[:250])
+
             with c2:
-                if st.button("🗑️ حذف", key=f"delete_ad_{ad_idx}", use_container_width=True):
-                    st.session_state.ads_df = st.session_state.ads_df.drop(index=ad_idx).reset_index(drop=True)
-                    save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df, st.session_state.get("weekly_schedule_df"), st.session_state.get("payment_records_df"), st.session_state.ads_df)
+                if st.button(
+                    "✏️ تعديل",
+                    key=f"edit_ad_{ad_idx}",
+                    use_container_width=True
+                ):
+                    st.session_state["editing_ad_idx"] = int(ad_idx)
+                    st.rerun()
+
+            with c3:
+                if st.button(
+                    "🗑️ حذف",
+                    key=f"delete_ad_{ad_idx}",
+                    use_container_width=True
+                ):
+                    st.session_state.ads_df = (
+                        st.session_state.ads_df
+                        .drop(index=ad_idx)
+                        .reset_index(drop=True)
+                    )
+
+                    # إذا كان الإعلان الجاري تعديله هو الذي تم حذفه، أغلق نموذج التعديل.
+                    if st.session_state.get("editing_ad_idx") == ad_idx:
+                        st.session_state.pop("editing_ad_idx", None)
+
+                    save_all_data(
+                        st.session_state.users_df,
+                        st.session_state.sessions_df,
+                        st.session_state.assessments_df,
+                        st.session_state.messages_df,
+                        st.session_state.exams_df,
+                        st.session_state.essays_df,
+                        st.session_state.bookings_df,
+                        st.session_state.bank_requests_df,
+                        st.session_state.question_bank_df,
+                        st.session_state.videos_df,
+                        st.session_state.video_comments_df,
+                        st.session_state.abqary_df,
+                        st.session_state.online_schedule_df,
+                        st.session_state.get("weekly_schedule_df"),
+                        st.session_state.get("payment_records_df"),
+                        st.session_state.ads_df
+                    )
                     st.rerun()
 
 elif t_page == "parent_report":
