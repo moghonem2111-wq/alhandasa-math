@@ -71,7 +71,7 @@ def save_q(kind,title,payload,cb):
  return True
 def render_ai_studio(save_callback=None):
  st.markdown("# 🤖 استوديو الذكاء الاصطناعي")
- if not sec("GEMINI_API_KEY"):st.warning("أضف GEMINI_API_KEY في Streamlit Secrets لتشغيل AI. لا تضع المفتاح في GitHub.")
+ if not sec("GEMINI_API_KEY"):st.warning("أضف GEMINI_API_KEY في Streamlit Secrets لتشغيل AI. المفتاح محفوظ في Secrets وليس داخل GitHub.")
  a,b,c=st.tabs(["📝 اختبارات AI","📚 واجبات AI","🧠 خرائط ذهنية"])
  with a:
   g=st.text_input("الصف / المرحلة",value="الصف الثالث الثانوي (علمي رياضة)",key="ai_g");s=st.text_input("المادة",value="الرياضيات",key="ai_s");n=st.number_input("عدد الأسئلة",1,40,10,key="ai_n");d=st.selectbox("الصعوبة",["متدرج","سهل","متوسط","صعب"],key="ai_d");typ=st.multiselect("الأنواع",["اختيار من متعدد","مقالي","صح أو خطأ"],["اختيار من متعدد","مقالي"],key="ai_t");src=st.text_area("✍️ نص الدرس / المصدر (اختياري)",height=120,key="ai_txt");fs=uploads("ai_files")
