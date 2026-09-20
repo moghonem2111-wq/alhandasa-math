@@ -1879,169 +1879,66 @@ else:
     _theme_css = ""
 st.markdown(f"<style>{_theme_css}</style>", unsafe_allow_html=True)
 
-# شريط جانبي احترافي: ينزلق بسلاسة من اليمين على الكمبيوتر والموبايل،
-# مع ظل قوي، شفافية أثناء الحركة، ومنع أي تفاعل معه عندما يكون مغلقاً.
-_sidebar_is_open = st.session_state.student_sidebar_open if is_student_mode else st.session_state.teacher_sidebar_open
-_sidebar_shift = '0' if _sidebar_is_open else 'calc(100% + 28px)'
-_sidebar_visibility = 'visible' if _sidebar_is_open else 'hidden'
-_sidebar_opacity = '1' if _sidebar_is_open else '0'
-_sidebar_pointer = 'auto' if _sidebar_is_open else 'none'
-_sidebar_css = f"""
+# شريط تنقل علوي احترافي للطالب والمعلم — بدون قائمة جانبية
+_nav_css = """
 <style>
-/* ================== Professional Sidebar ================== */
-[data-testid="stSidebar"] {{
-    position: fixed !important;
-    top: 0 !important;
-    right: 0 !important;
-    left: auto !important;
-    bottom: 0 !important;
-    width: min(330px, 88vw) !important;
-    min-width: min(330px, 88vw) !important;
-    max-width: min(330px, 88vw) !important;
-    height: 100dvh !important;
-    z-index: 999999 !important;
-    transform: translateX({_sidebar_shift}) !important;
-    transition: transform .38s cubic-bezier(.22,.61,.36,1), opacity .22s ease, visibility .38s ease !important;
-    visibility: {_sidebar_visibility} !important;
-    opacity: {_sidebar_opacity} !important;
-    pointer-events: {_sidebar_pointer} !important;
-    box-shadow: -18px 0 50px rgba(2, 6, 23, .30) !important;
-    border-left: 1px solid rgba(148,163,184,.18) !important;
-    overflow: hidden !important;
-    will-change: transform, opacity !important;
-}}
-[data-testid="stSidebar"] > div:first-child {{
-    width: 100% !important;
-    max-width: 100% !important;
-    height: 100% !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    scrollbar-width: thin !important;
-}}
-[data-testid="stSidebar"] > div:first-child::-webkit-scrollbar {{ width: 6px !important; }}
-[data-testid="stSidebar"] > div:first-child::-webkit-scrollbar-thumb {{
-    background: rgba(148,163,184,.35) !important;
-    border-radius: 20px !important;
-}}
-[data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
-[data-testid="stSidebarNav"] {{ display: block !important; }}
-
-/* زر القائمة العائم */
-div[data-testid="stButton"] button[key="student_sidebar_toggle"],
-div[data-testid="stButton"] button[key="teacher_sidebar_toggle"] {{
-    width: 54px !important;
-    min-width: 54px !important;
-    height: 54px !important;
-    min-height: 54px !important;
-    padding: 0 !important;
-    border-radius: 17px !important;
-    border: 1px solid rgba(148,163,184,.25) !important;
-    background: rgba(255,255,255,.94) !important;
-    color: #0f172a !important;
-    box-shadow: 0 12px 30px rgba(15,23,42,.16) !important;
-    font-size: 25px !important;
-    font-weight: 900 !important;
-    line-height: 1 !important;
-    transition: transform .2s ease, box-shadow .2s ease, background .2s ease !important;
-    touch-action: manipulation !important;
-    -webkit-tap-highlight-color: transparent !important;
-}}
-div[data-testid="stButton"] button[key="student_sidebar_toggle"]:hover,
-div[data-testid="stButton"] button[key="teacher_sidebar_toggle"]:hover {{
-    transform: translateY(-2px) scale(1.03) !important;
-    box-shadow: 0 16px 36px rgba(15,23,42,.22) !important;
-}}
-
-/* منع بقاء فراغ جانبي مزعج: المحتوى يستفيد من عرض الشاشة بالكامل */
-.main .block-container {{
-    max-width: 100% !important;
-}}
-
-/* موبايل */
-@media (max-width: 768px) {{
-    [data-testid="stSidebar"] {{
-        width: min(88vw, 360px) !important;
-        min-width: min(88vw, 360px) !important;
-        max-width: min(88vw, 360px) !important;
-    }}
-    .main .block-container {{
-        padding-left: 12px !important;
-        padding-right: 12px !important;
-    }}
-    div[data-testid="stButton"] button[key="student_sidebar_toggle"],
-    div[data-testid="stButton"] button[key="teacher_sidebar_toggle"] {{
-        width: 50px !important;
-        min-width: 50px !important;
-        height: 50px !important;
-        min-height: 50px !important;
-        border-radius: 15px !important;
-        font-size: 23px !important;
-    }}
-}}
-
-/* وضع داكن */
-[data-testid="stSidebar"] div[data-testid="stButton"] button {{
-    transition: transform .18s ease, box-shadow .18s ease, background .18s ease !important;
-}}
+[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] { display:none !important; }
+.main .block-container { max-width:100% !important; padding-top:1rem !important; }
+.top-navigation-shell { position:sticky; top:0; z-index:999990; background:rgba(255,255,255,.94); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-bottom:1px solid rgba(148,163,184,.22); box-shadow:0 8px 28px rgba(15,23,42,.08); direction:rtl; }
+.top-navigation-title { font-size:12px; font-weight:900; color:#0f172a; white-space:nowrap; }
+.top-navigation-subtitle { font-size:10px; color:#64748b; white-space:nowrap; }
+.top-navigation-collapsed { display:flex; align-items:center; justify-content:center; min-height:48px; border-radius:16px; background:rgba(255,255,255,.95); border:1px solid rgba(148,163,184,.25); box-shadow:0 8px 22px rgba(15,23,42,.10); }
+div[data-testid="stPills"] { width:100% !important; }
+div[data-testid="stPills"] > div { gap:7px !important; overflow-x:auto !important; scrollbar-width:thin !important; padding:2px 2px 7px !important; }
+div[data-testid="stPills"] button { white-space:nowrap !important; border-radius:13px !important; min-height:38px !important; padding:6px 13px !important; font-weight:850 !important; border:1px solid rgba(148,163,184,.22) !important; transition:all .18s ease !important; }
+div[data-testid="stPills"] button:hover { transform:translateY(-1px) !important; box-shadow:0 7px 18px rgba(15,23,42,.10) !important; }
+div[role="radiogroup"] { overflow-x:auto !important; flex-wrap:nowrap !important; gap:7px !important; padding:2px 2px 7px !important; scrollbar-width:thin !important; }
+div[role="radiogroup"] label { white-space:nowrap !important; border-radius:13px !important; }
+@media (max-width:768px) { .main .block-container { padding-left:10px !important; padding-right:10px !important; } div[data-testid="stPills"] button { min-height:36px !important; padding:5px 10px !important; font-size:12px !important; } }
 </style>
 """
-st.markdown(_sidebar_css, unsafe_allow_html=True)
+st.markdown(_nav_css, unsafe_allow_html=True)
 
 # ============================================================================== 
 # 1. واجهة الطالب الشاملة
 # ==============================================================================
 if is_student_mode:
-    # ===== زر ☰ لإظهار/إخفاء قائمة الطالب =====
-    _st_menu_col, _st_spacer = st.columns([1, 11])
-    with _st_menu_col:
-        if st.button(("✕" if st.session_state.student_sidebar_open else "☰"), key="student_sidebar_toggle", help="إظهار أو إخفاء القائمة الجانبية"):
+    # ===== شريط الطالب العلوي =====
+    _nav_open = st.session_state.student_sidebar_open
+    _toggle_col, _brand_col, _pills_col = st.columns([1.0, 2.2, 8.8], vertical_alignment="center")
+    with _toggle_col:
+        if st.button(("✕" if _nav_open else "☰"), key="student_sidebar_toggle", use_container_width=True, help="إظهار أو إخفاء شريط التنقل"):
             st.session_state.student_sidebar_open = not st.session_state.student_sidebar_open
             st.rerun()
-    # ===== شريط الطالب الحديث بنفس شكل لوحة المعلم =====
-    _nav_uri = STUDENT_FIXED_IMAGE_URI
-    _nav_avatar_tag = f'<img src="{_nav_uri}" class="modern-avatar">' if _nav_uri else ''
-    # زر إغلاق/رجوع واضح داخل القائمة على الموبايل حتى يمكن العودة للشاشة الرئيسية بسهولة.
-    if st.sidebar.button("✕  إغلاق القائمة والرجوع", use_container_width=True, key="student_sidebar_close_inside"):
-        st.session_state.student_sidebar_open = False
-        st.rerun()
-    st.sidebar.markdown(f"""
-        <div style="text-align:center;padding:10px 4px 18px;direction:rtl;">
-            {_nav_avatar_tag}
-            <div style="font-size:20px;font-weight:900;margin-top:8px;color:#fff!important;">البشمهندس x الرياضه</div>
-            <div style="font-size:11px;color:#cbd5e1!important;">م/ محمد غنيم</div>
-        </div>
-    """, unsafe_allow_html=True)
-    if st.session_state.logged_student:
-        _sb_student = str(st.session_state.logged_student.get("اسم الطالب", "الطالب"))
-        st.sidebar.markdown(f"<div style='background:rgba(37,99,235,.20);border-radius:12px;padding:9px 10px;margin-bottom:8px;text-align:right;font-size:12px;color:#dbeafe!important;'>مرحباً، {_sb_student}</div>", unsafe_allow_html=True)
-        if st.sidebar.button("⌂  الصفحة الرئيسية", use_container_width=True, key="student_sb_home"):
-            st.session_state.student_sub_page="dashboard"; st.rerun()
-        if st.sidebar.button("▣  المقررات الدراسية", use_container_width=True, key="student_sb_courses"):
-            st.session_state.student_sub_page="videos"; st.rerun()
-        if st.sidebar.button("▤  الواجبات", use_container_width=True, key="student_sb_hw"):
-            st.session_state.student_sub_page="hw_grades"; st.rerun()
-        if st.sidebar.button("◫  الجدول الزمني", use_container_width=True, key="student_sb_schedule"):
-            st.session_state.student_sub_page="dashboard"; st.rerun()
-        if st.sidebar.button("▥  النتائج والتقارير", use_container_width=True, key="student_sb_results"):
-            st.session_state.student_sub_page="exam_grades"; st.rerun()
-        if st.sidebar.button(("☀  الوضع الفاتح" if st.session_state.dark_mode else "🌙  الوضع الداكن"), use_container_width=True, key="student_sb_settings"):
-            st.session_state.dark_mode=not st.session_state.dark_mode; st.rerun()
-        st.sidebar.write("---")
-        if st.sidebar.button("↪  تسجيل الخروج", use_container_width=True, key="student_sb_logout"):
-            st.session_state.logged_student=None; st.session_state.page_view="home"; st.session_state.student_sub_page="dashboard"
-            st.query_params.clear(); st.query_params["role"]="student"; st.rerun()
-    else:
-        if st.sidebar.button("⌂  الصفحة الرئيسية", use_container_width=True, key="guest_sb_home"):
-            st.session_state.page_view="home"; st.rerun()
-        if st.sidebar.button("👤 تسجيل الدخول", use_container_width=True, key="guest_sb_login"):
-            st.session_state.page_view="login"; st.rerun()
-        if st.sidebar.button("✨ إنشاء حساب", use_container_width=True, key="guest_sb_register"):
-            st.session_state.page_view="register"; st.rerun()
-        if st.sidebar.button("👥 الدخول كضيف", use_container_width=True, key="guest_sb_guest"):
-            st.session_state.page_view="guest_reg"; st.rerun()
-        if st.sidebar.button(("☀  الوضع الفاتح" if st.session_state.dark_mode else "🌙  الوضع الداكن"), use_container_width=True, key="guest_sb_theme"):
-            st.session_state.dark_mode=not st.session_state.dark_mode; st.rerun()
-    st.sidebar.markdown("<div style='margin-top:25px;text-align:center;font-size:11px;color:#94a3b8!important;'>جميع الحقوق محفوظة © 2026</div>", unsafe_allow_html=True)
+    with _brand_col:
+        st.markdown("<div class='top-navigation-title'>البشمهندس x الرياضه</div><div class='top-navigation-subtitle'>م/ محمد غنيم</div>", unsafe_allow_html=True)
+    with _pills_col:
+        if _nav_open:
+            if st.session_state.logged_student:
+                _student_nav = {"⌂ الرئيسية":"dashboard", "▣ المقررات":"videos", "▤ الواجبات":"hw_grades", "◫ الجدول":"dashboard", "▥ النتائج":"exam_grades", ("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"):"__theme__", "↪ خروج":"__logout__"}
+                _student_current = st.session_state.student_sub_page
+            else:
+                _student_nav = {"⌂ الرئيسية":"__home__", "👤 دخول":"__login__", "✨ حساب جديد":"__register__", "👥 ضيف":"__guest__", ("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"):"__theme__"}
+                _student_current = st.session_state.page_view
+            _student_default = next((k for k,v in _student_nav.items() if v == _student_current), list(_student_nav.keys())[0])
+            try:
+                _student_choice = st.pills("", list(_student_nav.keys()), default=_student_default, key="student_top_nav", label_visibility="collapsed")
+            except AttributeError:
+                _student_choice = st.radio("", list(_student_nav.keys()), index=list(_student_nav.keys()).index(_student_default), horizontal=True, key="student_top_nav_fallback", label_visibility="collapsed")
+            if _student_choice:
+                _student_target = _student_nav[_student_choice]
+                if _student_target == "__theme__":
+                    st.session_state.dark_mode = not st.session_state.dark_mode; st.rerun()
+                elif _student_target == "__logout__":
+                    st.session_state.logged_student=None; st.session_state.page_view="home"; st.session_state.student_sub_page="dashboard"; st.query_params.clear(); st.query_params["role"]="student"; st.rerun()
+                elif _student_target == "__home__": st.session_state.page_view="home"; st.rerun()
+                elif _student_target == "__login__": st.session_state.page_view="login"; st.rerun()
+                elif _student_target == "__register__": st.session_state.page_view="register"; st.rerun()
+                elif _student_target == "__guest__": st.session_state.page_view="guest_reg"; st.rerun()
+                elif st.session_state.logged_student and _student_target != _student_current:
+                    st.session_state.student_sub_page=_student_target; st.rerun()
+        else:
+            st.markdown('<div class="top-navigation-collapsed"><span class="top-navigation-subtitle">شريط التنقل مخفي — اضغط ☰ لإظهاره</span></div>', unsafe_allow_html=True)
 
     _student_name_for_header = str(st.session_state.logged_student.get("اسم الطالب", "طالبنا العزيز")) if st.session_state.logged_student else "طالبنا العزيز"
     _student_notifs = _app_notifications("student", _student_name_for_header if st.session_state.logged_student else "")
@@ -2816,90 +2713,29 @@ if is_student_mode:
 total_exams_count = len(st.session_state.exams_df)
 total_students_count = len(st.session_state.users_df)
 
-# ===== زر ☰ لإظهار/إخفاء قائمة المعلم =====
-_teach_menu_col, _teach_menu_spacer = st.columns([1, 11])
-with _teach_menu_col:
-    if st.button(("✕" if st.session_state.teacher_sidebar_open else "☰"), key="teacher_sidebar_toggle", help="إظهار أو إخفاء القائمة الجانبية"):
+# ===== شريط المعلم العلوي =====
+_nav_open = st.session_state.teacher_sidebar_open
+_toggle_col, _brand_col, _pills_col = st.columns([1.0, 2.3, 8.7], vertical_alignment="center")
+with _toggle_col:
+    if st.button(("✕" if _nav_open else "☰"), key="teacher_sidebar_toggle", use_container_width=True, help="إظهار أو إخفاء شريط التنقل"):
         st.session_state.teacher_sidebar_open = not st.session_state.teacher_sidebar_open
         st.rerun()
-
-_teacher_sidebar_uri=STUDENT_FIXED_IMAGE_URI
-# زر إغلاق/رجوع واضح داخل قائمة المعلم على الموبايل.
-if st.sidebar.button("✕  إغلاق القائمة والرجوع", use_container_width=True, key="teacher_sidebar_close_inside"):
-    st.session_state.teacher_sidebar_open = False
-    st.rerun()
-st.sidebar.markdown(f"""
-    <div style="text-align:center;padding:10px 4px 18px;direction:rtl;">
-        <img src="{_teacher_sidebar_uri}" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid #60a5fa;box-shadow:0 8px 20px rgba(0,0,0,.25);">
-        <div style="font-size:20px;font-weight:900;margin-top:8px;color:#fff!important;">البشمهندس x الرياضه</div>
-        <div style="font-size:12px;color:#cbd5e1!important;font-weight:800;">م/ محمد غنيم</div>
-        <div style="font-size:11px;color:#94a3b8!important;margin-top:3px;">لوحة تحكم المعلم الاحترافية</div>
-    </div>
-""", unsafe_allow_html=True)
-
-if st.sidebar.button("◉  الرئيسية", use_container_width=True):
-    st.session_state.teacher_page = "dashboard"
-    st.rerun()
-if st.sidebar.button("◫  جداول Zoom", use_container_width=True):
-    st.session_state.teacher_page = "online_schedule"
-    st.rerun()
-if st.sidebar.button("▦  مواعيد الطلاب", use_container_width=True):
-    st.session_state.teacher_page = "weekly_schedule"
-    st.rerun()
-if st.sidebar.button("▣  الامتحانات", use_container_width=True):
-    st.session_state.teacher_page = "exam_maker"
-    st.rerun()
-if st.sidebar.button("▤  بنك الأسئلة", use_container_width=True):
-    st.session_state.teacher_page = "question_bank"
-    st.rerun()
-if st.sidebar.button("▶  الفيديوهات", use_container_width=True):
-    st.session_state.teacher_page = "videos"
-    st.rerun()
-if st.sidebar.button("✦  عبقري", use_container_width=True):
-    st.session_state.teacher_page = "abqary"
-    st.rerun()
-if st.sidebar.button("▥  الدرجات", use_container_width=True):
-    st.session_state.teacher_page = "grades"
-    st.rerun()
-if st.sidebar.button("✎  تصحيح المقالي", use_container_width=True):
-    st.session_state.teacher_page = "essays"
-    st.rerun()
-if st.sidebar.button("◌  الرسائل والدردشة", use_container_width=True):
-    st.session_state.teacher_page = "chat"
-    st.rerun()
-if st.sidebar.button("♙  الطلاب", use_container_width=True):
-    st.session_state.teacher_page = "students"
-    st.rerun()
-if st.sidebar.button("＋  رصد حصة", use_container_width=True):
-    st.session_state.teacher_page = "add_session"
-    st.rerun()
-if st.sidebar.button("＋  رصد واجب", use_container_width=True):
-    st.session_state.teacher_page = "add_hw"
-    st.rerun()
-if st.sidebar.button("✎  تعديل السجلات", use_container_width=True):
-    st.session_state.teacher_page = "edit_records"
-    st.rerun()
-if st.sidebar.button("▥  السجلات", use_container_width=True):
-    st.session_state.teacher_page = "all_records"
-    st.rerun()
-if st.sidebar.button("📢  الإعلانات", use_container_width=True):
-    st.session_state.teacher_page = "ads"
-    st.rerun()
-if st.sidebar.button("▤  تقارير ولي الأمر", use_container_width=True):
-    st.session_state.teacher_page = "parent_report"
-    st.rerun()
-if st.sidebar.button("▰  المدفوعات", use_container_width=True):
-    st.session_state.teacher_page = "payments"
-    st.rerun()
-if st.sidebar.button("💾  النسخ الاحتياطية / Excel Online", use_container_width=True):
-    st.session_state.teacher_page = "online_backup"
-    st.rerun()
-if st.sidebar.button("◈  واجهة الطالب", use_container_width=True):
-    st.session_state.teacher_page = "student_interface"
-    st.rerun()
-
-st.sidebar.write("---")
-st.sidebar.code("https://engmohamedghonaim.streamlit.app/?role=student", language="text")
+with _brand_col:
+    st.markdown("<div class='top-navigation-title'>البشمهندس x الرياضه</div><div class='top-navigation-subtitle'>لوحة تحكم المعلم • م/ محمد غنيم</div>", unsafe_allow_html=True)
+with _pills_col:
+    if _nav_open:
+        _teacher_nav = {"◉ الرئيسية":"dashboard", "◫ Zoom":"online_schedule", "▦ المواعيد":"weekly_schedule", "▣ الامتحانات":"exam_maker", "▤ بنك الأسئلة":"question_bank", "▶ الفيديوهات":"videos", "✦ عبقري":"abqary", "▥ الدرجات":"grades", "✎ المقالي":"essays", "◌ الرسائل":"chat", "♙ الطلاب":"students", "＋ حصة":"add_session", "＋ واجب":"add_hw", "✎ تعديل السجلات":"edit_records", "▥ السجلات":"all_records", "📢 الإعلانات":"ads", "▤ ولي الأمر":"parent_report", "▰ المدفوعات":"payments", "💾 النسخ الاحتياطية":"online_backup", "◈ واجهة الطالب":"student_interface"}
+        _teacher_default = st.session_state.teacher_page if st.session_state.teacher_page in _teacher_nav.values() else "dashboard"
+        _teacher_default_label = next(k for k,v in _teacher_nav.items() if v == _teacher_default)
+        try:
+            _teacher_choice = st.pills("", list(_teacher_nav.keys()), default=_teacher_default_label, key="teacher_top_nav", label_visibility="collapsed")
+        except AttributeError:
+            _teacher_choice = st.radio("", list(_teacher_nav.keys()), index=list(_teacher_nav.keys()).index(_teacher_default_label), horizontal=True, key="teacher_top_nav_fallback", label_visibility="collapsed")
+        if _teacher_choice and _teacher_nav[_teacher_choice] != st.session_state.teacher_page:
+            st.session_state.teacher_page = _teacher_nav[_teacher_choice]
+            st.rerun()
+    else:
+        st.markdown('<div class="top-navigation-collapsed"><span class="top-navigation-subtitle">شريط التنقل مخفي — اضغط ☰ لإظهاره</span></div>', unsafe_allow_html=True)
 
 t_page = st.session_state.teacher_page
 
