@@ -236,9 +236,13 @@ def render_ai_studio(save_callback=None):
    x["title"]=st.text_input("عنوان الواجب",x.get("title","واجب AI"),key="aih_title")
    for i,q in enumerate(x.get("questions",[])):
     with st.expander(f"السؤال {i+1}"):q["question"]=st.text_area("نص السؤال",q.get("question",""),key=f"aih_q{i}")
-   g,s,*_hw_notes=st.session_state.ai_hw_meta;h=paper(x["title"],g,s,x["questions"]);z=pdf(h)
-   if z:st.download_button("📄 طباعة / تحميل الواجب PDF",z,"واجب_AI.pdf","application/pdf",key="aih_pdf")
-   else:st.download_button("🖨️ طباعة الواجب",h.encode(),"واجب_AI.html","text/html",key="aih_html")
+   g,s,*_hw_notes=st.session_state.ai_hw_meta;h=paper(x["title"],g,s,x["questions"]);k=paper(x["title"],g,s,x["questions"],True);z=pdf(h);ak=pdf(k)
+   c1,c2=st.columns(2)
+   with c1:
+    if z:st.download_button("📄 الواجب PDF",z,"واجب_AI.pdf","application/pdf",key="aih_pdf")
+    else:st.download_button("🖨️ طباعة الواجب",h.encode(),"واجب_AI.html","text/html",key="aih_html")
+   with c2:
+    if ak:st.download_button("🗝️ نموذج إجابة الواجب PDF",ak,"نموذج_إجابة_واجب_AI.pdf","application/pdf",key="aih_key_pdf")
    if st.button("💾 حفظ الواجب في بنك المنصة",key="aih_save"):
     if save_q("واجب AI",x["title"],{"grade":g,"subject":s,"notes":notes_h,"questions":x["questions"]},save_callback):st.success("تم حفظ الواجب في بنك المنصة.")
    if st.button("🗑️ مسح الواجب الحالي",key="aih_clear"):
