@@ -81,7 +81,16 @@ def render_ai_studio(save_callback=None):
     try:
      p=f"""أنشئ اختبار رياضيات عربي للصف {g}، المادة {s}، صعوبة {d}، عدد {int(n)}، الأنواع {typ}. اعتمد على المصدر المرفق أو النص. أعد JSON فقط: {{\"title\":\"\",\"description\":\"\",\"questions\":[{{\"type\":\"\",\"question\":\"\",\"options\":[\"\"],\"answer\":\"\",\"explanation\":\"\",\"points\":1}}]}}. النص: {src[:12000]}"""
      with st.spinner("جاري إنشاء الاختبار..."):st.session_state.ai_exam=call(p,fs);st.session_state.ai_exam_meta=(g,s)
-    except Exception as e:st.error(f"تعذر الإنشاء: {e}")
+    except Exception as e:
+     msg=str(e)
+     if "503" in msg or "UNAVAILABLE" in msg or "high demand" in msg:
+      st.info("الخدمة مشغولة حاليًا. اضغط زر الإنشاء مرة أخرى بعد لحظات.")
+     elif "429" in msg:
+      st.info("تم الوصول للحد المؤقت للطلبات. جرّب مرة أخرى بعد لحظات.")
+     elif "AI_KEY_MISSING" in msg:
+      st.warning("ميزة الذكاء الاصطناعي غير مفعلة حاليًا.")
+     else:
+      st.warning("تعذر إنشاء المحتوى حاليًا. جرّب مرة أخرى.")
   x=st.session_state.get("ai_exam")
   if x:
    x["title"]=st.text_input("عنوان الاختبار",x.get("title","اختبار AI"),key="ai_etitle")
@@ -110,7 +119,16 @@ def render_ai_studio(save_callback=None):
     try:
      p=f"""أنشئ واجب رياضيات عربي للصف {g}، المادة {s}، صعوبة {d}، عدد {int(n)}، الأنواع {typ}. اعتمد على المصدر. أعد JSON فقط: {{\"title\":\"\",\"questions\":[{{\"type\":\"\",\"question\":\"\",\"options\":[\"\"],\"answer\":\"\",\"explanation\":\"\",\"points\":1}}]}}. النص: {src[:12000]}"""
      with st.spinner("جاري إنشاء الواجب..."):st.session_state.ai_hw=call(p,fs);st.session_state.ai_hw_meta=(g,s)
-    except Exception as e:st.error(f"تعذر الإنشاء: {e}")
+    except Exception as e:
+     msg=str(e)
+     if "503" in msg or "UNAVAILABLE" in msg or "high demand" in msg:
+      st.info("الخدمة مشغولة حاليًا. اضغط زر الإنشاء مرة أخرى بعد لحظات.")
+     elif "429" in msg:
+      st.info("تم الوصول للحد المؤقت للطلبات. جرّب مرة أخرى بعد لحظات.")
+     elif "AI_KEY_MISSING" in msg:
+      st.warning("ميزة الذكاء الاصطناعي غير مفعلة حاليًا.")
+     else:
+      st.warning("تعذر إنشاء المحتوى حاليًا. جرّب مرة أخرى.")
   x=st.session_state.get("ai_hw")
   if x:
    x["title"]=st.text_input("عنوان الواجب",x.get("title","واجب AI"),key="aih_title")
@@ -129,7 +147,16 @@ def render_ai_studio(save_callback=None):
     try:
      p=f"""حوّل المصدر إلى خريطة ذهنية عربية للصف {g} في {s}. أعد JSON فقط: {{\"title\":\"\",\"summary\":\"\",\"branches\":[{{\"name\":\"\",\"items\":[\"\"]}}]}}. النص: {src[:12000]}"""
      with st.spinner("جاري بناء الخريطة..."):st.session_state.ai_mm=call(p,fs);st.session_state.ai_mm_meta=(g,s)
-    except Exception as e:st.error(f"تعذر الإنشاء: {e}")
+    except Exception as e:
+     msg=str(e)
+     if "503" in msg or "UNAVAILABLE" in msg or "high demand" in msg:
+      st.info("الخدمة مشغولة حاليًا. اضغط زر الإنشاء مرة أخرى بعد لحظات.")
+     elif "429" in msg:
+      st.info("تم الوصول للحد المؤقت للطلبات. جرّب مرة أخرى بعد لحظات.")
+     elif "AI_KEY_MISSING" in msg:
+      st.warning("ميزة الذكاء الاصطناعي غير مفعلة حاليًا.")
+     else:
+      st.warning("تعذر إنشاء المحتوى حاليًا. جرّب مرة أخرى.")
   x=st.session_state.get("ai_mm")
   if x:
    x["title"]=st.text_input("عنوان الخريطة",x.get("title","خريطة ذهنية"),key="aim_title");x["summary"]=st.text_area("الملخص",x.get("summary",""),key="aim_summary")
