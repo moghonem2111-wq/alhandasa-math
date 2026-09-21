@@ -2296,7 +2296,7 @@ if is_student_mode:
     with _pills_col:
         if _nav_open:
             if st.session_state.logged_student:
-                _student_nav = [("⌂ الرئيسية","dashboard"), ("▣ المقررات","videos"), ("▤ الواجبات","hw_grades"), ("◫ الجدول","attendance"), ("▥ النتائج","exam_grades"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__"), ("↪ خروج","__logout__")]
+                _student_nav = [("⌂ الرئيسية","dashboard"), ("🤖 اسأل حمصا","hamza"), ("▣ المقررات","videos"), ("▤ الواجبات","hw_grades"), ("◫ الجدول","attendance"), ("▥ النتائج","exam_grades"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__"), ("↪ خروج","__logout__")]
                 _student_current = st.session_state.student_sub_page
             else:
                 _student_nav = [("⌂ الرئيسية","__home__"), ("👤 دخول","__login__"), ("✨ حساب جديد","__register__"), ("👥 ضيف","__guest__"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__")]
@@ -2582,6 +2582,14 @@ if is_student_mode:
                 st.query_params["role"] = "student"
                 st.rerun()
 
+        # ===== زر حمصا الجانبي للطالب =====
+        _hamza_side_cols = st.columns([1.2, 8.8, 1.2])
+        with _hamza_side_cols[0]:
+            if st.button("🤖\nاسأل حمصا", key="student_hamza_side_btn", use_container_width=True, type="primary"):
+                st.session_state.student_sub_page = "hamza"
+                st.rerun()
+        st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+
         # ===== لوحة الطالب المسجل: نفس الهوية البصرية مع إبقاء كل الأقسام القديمة =====
         st.markdown(f"""
             <div class="modern-hero">
@@ -2767,6 +2775,9 @@ if is_student_mode:
 
         st.markdown("<div class='vertical-section-header'>🗂️ لوحة خدمات الطالب التفاعلية</div>", unsafe_allow_html=True)
         
+        if st.button("🤖 اسأل حمصا — حل مسائل بالصور والكتابة", use_container_width=True, type="primary"):
+            st.session_state.student_sub_page = "hamza"
+            st.rerun()
         if st.button("🎥 الفيديوهات والشروحات التعليمية", use_container_width=True):
             st.session_state.student_sub_page = "videos"
             st.rerun()
@@ -2798,6 +2809,65 @@ if is_student_mode:
                 st.session_state.student_sub_page = "dashboard"
                 st.rerun()
         st.write("---")
+
+        # --- حمصا: حل المسائل بالتصوير/رفع الصور/PDF أو الكتابة ---
+        if sub_page == "hamza":
+            st.markdown(f"<h3 style='color:{text_color};font-size:25px;'>🤖 اسأل حمصا</h3>", unsafe_allow_html=True)
+            st.info("📷 صوّر المسألة من الموبايل مباشرة، أو ارفع صورة/PDF، أو اكتب السؤال. حمصا سيحلها خطوة بخطوة.")
+            if "hamza_history" not in st.session_state: st.session_state.hamza_history = []
+            if "hamza_last" not in st.session_state: st.session_state.hamza_last = None
+            with st.container(border=True):
+                cam = st.camera_input("📷 صوّر المسألة من داخل الموقع", key="hamza_camera")
+                up = st.file_uploader("🖼️ ارفع صورة أو 📄 PDF من الكتاب", type=["png","jpg","jpeg","webp","pdf"], key="hamza_upload")
+                hamza_text = st.text_area("✍️ أو اكتب المسألة هنا", height=140, placeholder="مثال: أوجد قيمة س إذا كان 2س + 5 = 17")
+                if cam is not None: st.image(cam, caption="الصورة التي التقطتها", use_container_width=True)
+                elif up is not None and str(up.type).startswith("image/"): st.image(up, caption="الصورة المرفوعة", use_container_width=True)
+                h1,h2=st.columns(2)
+                with h1: solve_btn=st.button("🧠 حل المسألة مع حمصا", use_container_width=True, type="primary", key="hamza_solve_btn")
+                with h2: clear_btn=st.button("🗑️ مسح السؤال والمحادثة", use_container_width=True, key="hamza_clear_btn")
+                if clear_btn:
+                    st.session_state.hamza_history=[]; st.session_state.hamza_last=None; st.rerun()
+                if solve_btn:
+                    media=[]; source=cam if cam is not None else up
+                    if source is not None:
+                        try:
+                            raw=source.getvalue(); mime=str(getattr(source,"type","") or "image/jpeg")
+                            media=[{"mime":mime,"data":base64.b64encode(raw).decode("ascii")}]
+                        except Exception: media=[]
+                    if not hamza_text.strip() and not media:
+                        st.warning("اكتب المسألة أو صوّرها/ارفعها أولاً.")
+                    else:
+                        try:
+                            with st.spinner("🤖 حمصا يقرأ المسألة ويحلها..."):
+                                result=_hamza_ai_call(hamza_text, media, st.session_state.hamza_history)
+                            answer=str(result.get("answer","")).strip(); final_answer=str(result.get("final_answer","")).strip(); topic=str(result.get("topic","رياضيات")).strip()
+                            st.session_state.hamza_last={"question":hamza_text.strip() or "المسألة المرفقة","answer":answer,"final_answer":final_answer,"topic":topic}
+                            st.session_state.hamza_history.append({"student":hamza_text.strip() or "حل المسألة من الصورة المرفقة","assistant":answer})
+                        except Exception as exc:
+                            code=str(exc)
+                            if "AI_KEY_MISSING" in code: st.error("⚠️ ميزة حمصا غير مفعلة حالياً. تأكد من وجود GEMINI_API_KEY في Streamlit Secrets.")
+                            elif "AI_RATE_LIMIT" in code: st.warning("⏳ حمصا مشغول حالياً بسبب حد الاستخدام. حاول مرة أخرى بعد قليل.")
+                            elif "AI_BUSY" in code: st.warning("🔄 حمصا مشغول حالياً. اضغط حل المسألة مرة أخرى بعد لحظات.")
+                            else: st.error("❌ تعذر حل المسألة حالياً. حاول بصورة أوضح أو أعد المحاولة.")
+            last=st.session_state.get("hamza_last")
+            if last:
+                st.markdown("### 🧠 حل حمصا")
+                st.markdown(f"<div style='background:{card_bg};border:1px solid {card_border};border-right:5px solid #1677ff;border-radius:16px;padding:20px;line-height:2;direction:rtl;'>{html.escape(last.get('answer','')).replace(chr(10),'<br>')}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:15px;margin-top:12px;direction:rtl;'><b>✅ الإجابة النهائية:</b><br>{html.escape(last.get('final_answer','')).replace(chr(10),'<br>')}</div>", unsafe_allow_html=True)
+                phtml=_hamza_pdf_html(last.get("question",""),last.get("answer",""),last.get("final_answer",""),str(st_user.get("اسم الطالب","طالب"))); ppdf=html_to_pdf_bytes(phtml)
+                if ppdf: st.download_button("🖨️ طباعة / تحميل حل المسألة PDF",ppdf,file_name="حل_المسألة_حمصا.pdf",mime="application/pdf",use_container_width=True,key="hamza_pdf")
+                else: st.download_button("🖨️ طباعة الحل",phtml.encode("utf-8"),file_name="حل_المسألة_حمصا.html",mime="text/html",use_container_width=True,key="hamza_html")
+                follow=st.text_input("💬 عندك سؤال على خطوة معينة؟",key="hamza_followup")
+                if st.button("↩️ اسأل حمصا عن الخطوة دي",use_container_width=True,key="hamza_follow_btn") and follow.strip():
+                    try:
+                        with st.spinner("🤖 حمصا يشرح لك أكثر..."):
+                            result=_hamza_ai_call(follow,[],st.session_state.hamza_history)
+                        answer=str(result.get("answer","")).strip(); final_answer=str(result.get("final_answer","")).strip()
+                        st.session_state.hamza_last["answer"] += "\n\n— متابعة الطالب —\n"+answer
+                        if final_answer: st.session_state.hamza_last["final_answer"]=final_answer
+                        st.session_state.hamza_history.append({"student":follow.strip(),"assistant":answer}); st.rerun()
+                    except Exception: st.error("تعذر إرسال المتابعة حالياً. حاول مرة أخرى.")
+                st.caption(f"📚 الموضوع: {last.get('topic','رياضيات')}")
 
         # --- قسم اختبارات عبقري مع فلترة مرنة ومطابقة شاملة ---
         if sub_page == "abqary":
