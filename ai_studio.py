@@ -117,7 +117,7 @@ def math_html(value):
     else:v=""
     flush();out.append(f"<{tag}>{render(v)}</{tag}>");continue
    if t[i]=="\\" and i+1<len(t):
-    m=re.match(r"\([A-Za-z]+)",t[i:])
+    m=re.match(r"\\([A-Za-z]+)",t[i:])
     if m:
      mp={"pi":"π","theta":"θ","alpha":"α","beta":"β","gamma":"γ","delta":"δ","lambda":"λ","mu":"μ","sigma":"σ","omega":"ω","infty":"∞","times":"×","cdot":"·","pm":"±","mp":"∓","leq":"≤","geq":"≥","neq":"≠","approx":"≈","to":"→","sum":"Σ","int":"∫","angle":"∠"};tok=m.group(1);buf.append(mp.get(tok,tok));i+=len(tok)+1;continue
    buf.append(t[i]);i+=1
