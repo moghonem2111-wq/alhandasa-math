@@ -918,8 +918,9 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
 3) حل المسألة خطوة بخطوة وبترتيب واضح.
 4) اكتب الإجابة النهائية بوضوح.
 5) إذا كان في السؤال رسم أو جدول أو صورة، اقرأه بعناية ولا تخمّن القيم غير الواضحة؛ اطلب من الطالب صورة أوضح إذا لزم.
-6) استخدم LaTeX عند الحاجة مثل \\frac{{1}}{{2}} و \\sqrt{{x}} و x^2.
-7) لا تعطِ إجابة مختصرة فقط؛ الهدف أن يتعلم الطالب طريقة الحل.
+6) استخدم LaTeX عند الحاجة، ولف المعادلات بين $...$ للمعادلة داخل السطر أو $...$ للمعادلة في سطر مستقل، مثل $\\frac{1}{2}$ و $\\sqrt{x}$ و $x^2$ و $2x+5=17$.
+7) لا تستخدم علامة $ كعملة؛ استخدمها فقط كمحدد لـ LaTeX.
+8) لا تعطِ إجابة مختصرة فقط؛ الهدف أن يتعلم الطالب طريقة الحل.
 إذا كان السؤال غير رياضي، أخبر الطالب بلطف أن حمصا متخصص أساساً في الرياضيات والإحصاء.
 
 المحادثة السابقة:
@@ -977,11 +978,7 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
                         data = json.loads(text[s:e+1])
                     else:
                         data = {"answer":text,"final_answer":"","topic":"رياضيات"}
-                # تنظيف رموز الرياضيات التي قد تظهر كعلامة دولار بجوار الأرقام في واجهة حمصا.
-                # حمصا لا يستخدم العملات في حلول الرياضيات، لذلك نحذف محددات $ من النص النهائي.
-                for _field in ("answer", "final_answer", "topic"):
-                    if isinstance(data.get(_field), str):
-                        data[_field] = data[_field].replace("$", "")
+                # نحتفظ بعلامات $ لأنها جزء من LaTeX المستخدم لعرض المعادلات الرياضية.
                 return data
 
             except urllib.error.HTTPError as ex:
@@ -2567,8 +2564,10 @@ if is_student_mode:
             last=st.session_state.get("hamza_public_last")
             if last:
                 st.markdown("### 🧠 حل حمصا")
-                st.markdown(f"<div style='background:{card_bg};border:1px solid {card_border};border-right:5px solid #1677ff;border-radius:16px;padding:20px;line-height:2;direction:rtl;'>{html.escape(last.get('answer','')).replace(chr(10),'<br>')}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:15px;margin-top:12px;direction:rtl;'><b>✅ الإجابة النهائية:</b><br>{html.escape(last.get('final_answer','')).replace(chr(10),'<br>')}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background:{card_bg};border:1px solid {card_border};border-right:5px solid #1677ff;border-radius:16px;padding:20px;line-height:2;direction:rtl;'><b>🧠 الحل خطوة بخطوة</b></div>", unsafe_allow_html=True)
+                st.markdown(str(last.get('answer','')).strip())
+                st.markdown("<div style='background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:15px;margin-top:12px;direction:rtl;'><b>✅ الإجابة النهائية</b></div>", unsafe_allow_html=True)
+                st.markdown(str(last.get('final_answer','')).strip())
                 phtml=_hamza_pdf_html(last.get("question",""),last.get("answer",""),last.get("final_answer",""),"طالب")
                 ppdf=html_to_pdf_bytes(phtml)
                 if ppdf:
@@ -3042,8 +3041,10 @@ if is_student_mode:
             last=st.session_state.get("hamza_last")
             if last:
                 st.markdown("### 🧠 حل حمصا")
-                st.markdown(f"<div style='background:{card_bg};border:1px solid {card_border};border-right:5px solid #1677ff;border-radius:16px;padding:20px;line-height:2;direction:rtl;'>{html.escape(last.get('answer','')).replace(chr(10),'<br>')}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:15px;margin-top:12px;direction:rtl;'><b>✅ الإجابة النهائية:</b><br>{html.escape(last.get('final_answer','')).replace(chr(10),'<br>')}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background:{card_bg};border:1px solid {card_border};border-right:5px solid #1677ff;border-radius:16px;padding:20px;line-height:2;direction:rtl;'><b>🧠 الحل خطوة بخطوة</b></div>", unsafe_allow_html=True)
+                st.markdown(str(last.get('answer','')).strip())
+                st.markdown("<div style='background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:15px;margin-top:12px;direction:rtl;'><b>✅ الإجابة النهائية</b></div>", unsafe_allow_html=True)
+                st.markdown(str(last.get('final_answer','')).strip())
                 phtml=_hamza_pdf_html(last.get("question",""),last.get("answer",""),last.get("final_answer",""),str(st_user.get("اسم الطالب","طالب"))); ppdf=html_to_pdf_bytes(phtml)
                 if ppdf: st.download_button("🖨️ طباعة / تحميل حل المسألة PDF",ppdf,file_name="حل_المسألة_حمصا.pdf",mime="application/pdf",use_container_width=True,key="hamza_pdf")
                 else: st.download_button("🖨️ طباعة الحل",phtml.encode("utf-8"),file_name="حل_المسألة_حمصا.html",mime="text/html",use_container_width=True,key="hamza_html")
