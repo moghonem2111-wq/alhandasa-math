@@ -1111,7 +1111,7 @@ def _hamza_math_html(value):
     out = []
     for line in lines:
         stripped = re.sub(r"<[^>]+>", "", line).strip()
-        if re.search(r"[A-Za-z0-9=+\\-*/^√×÷≤≥≠≈]", stripped):
+        if re.search(r"[A-Za-z0-9]", stripped) or any(op in stripped for op in ("=", "+", "-", "*", "/", "^", "√", "×", "÷", "≤", "≥", "≠", "≈")):
             out.append("<div dir='ltr' class='math-line'>" + line.strip() + "</div>")
         else:
             out.append("<div dir='rtl' class='text-line'>" + line.strip() + "</div>")
