@@ -1,0 +1,93 @@
+name: Daily Teacher Schedule Notification
+
+on:
+  schedule:
+    # 07:00 صباحًا بتوقيت القاهرة = 05:00 UTC في فترة التوقيت الصيفي/08:00 UTC في الشتاء.
+    # نستخدم 05:00 UTC كتنبيه صباحي مبكر؛ الرسالة نفسها تعتمد على توقيت Africa/Cairo.
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send today's schedule to Telegram
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python - <<'PY'
+          import os, requests
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+
+          supabase = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+          supabase_key = os.environ.get("SUPABASE_KEY", "").strip()
+          bot = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+          chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+
+          missing = [k for k,v in {
+              "SUPABASE_URL": supabase,
+              "SUPABASE_KEY": supabase_key,
+              "TELEGRAM_BOT_TOKEN": bot,
+              "TELEGRAM_CHAT_ID": chat_id,
+          }.items() if not v]
+          if missing:
+              raise SystemExit("Missing GitHub Secrets: " + ", ".join(missing))
+
+          headers = {"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"}
+          rows = requests.get(
+              f"{supabase}/rest/v1/weekly_schedule",
+              headers=headers,
+              params={"select":"اسم الطالب,المجموعة/الصف,اليوم,الموعد,اسم الأكاديمية,حالة الموعد",
+                      "حالة الموعد":"neq.متوقف"},
+              timeout=30,
+          )
+          rows.raise_for_status()
+          data = rows.json()
+
+          now = datetime.now(ZoneInfo("Africa/Cairo"))
+          day_names = ["الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت","الأحد"]
+          today = day_names[now.weekday()]
+          today_rows = [r for r in data if str(r.get("اليوم","")).strip() == today]
+          def key(r):
+              try:
+                  return datetime.strptime(str(r.get("الموعد",""))[:5], "%H:%M")
+              except Exception:
+                  return datetime.max
+          today_rows.sort(key=key)
+
+          if not today_rows:
+              text = f"🔔 <b>جدول اليوم — {today}</b>\nلا توجد حصص مسجلة اليوم."
+          else:
+              lines = [f"🔔 <b>صباح الخير يا بشمهندس 👋</b>",
+                       f"📅 <b>حصص اليوم — {today}</b>", ""]
+              for r in today_rows:
+                  tm = str(r.get("الموعد",""))[:5]
+                  try:
+                      tm = datetime.strptime(tm, "%H:%M").strftime("%I:%M %p").lstrip("0")
+                  except Exception:
+                      pass
+                  student = str(r.get("اسم الطالب","")).strip()
+                  grade = str(r.get("المجموعة/الصف","")).strip()
+                  academy = str(r.get("اسم الأكاديمية","")).strip()
+                  line = f"🕐 <b>{tm}</b> — {student}"
+                  if grade and grade.lower() != "nan":
+                      line += f" — {grade}"
+                  if academy and academy.lower() != "nan":
+                      line += f" — {academy}"
+                  lines.append(line)
+              lines += ["", f"📌 إجمالي حصص اليوم: <b>{len(today_rows)}</b>"]
+              text = "\n".join(lines)
+
+          resp = requests.post(
+              f"https://api.telegram.org/bot{bot}/sendMessage",
+              data={"chat_id": chat_id, "text": text, "parse_mode": "HTML",
+                    "disable_web_page_preview": "true"},
+              timeout=30,
+          )
+          resp.raise_for_status()
+          print("Daily schedule notification sent successfully.")
+          PY
