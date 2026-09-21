@@ -2299,7 +2299,7 @@ if is_student_mode:
                 _student_nav = [("⌂ الرئيسية","dashboard"), ("🤖 اسأل حمصا","hamza"), ("▣ المقررات","videos"), ("▤ الواجبات","hw_grades"), ("◫ الجدول","attendance"), ("▥ النتائج","exam_grades"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__"), ("↪ خروج","__logout__")]
                 _student_current = st.session_state.student_sub_page
             else:
-                _student_nav = [("⌂ الرئيسية","__home__"), ("👤 دخول","__login__"), ("✨ حساب جديد","__register__"), ("👥 ضيف","__guest__"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__")]
+                _student_nav = [("⌂ الرئيسية","__home__"), ("🤖 اسأل حمصا","__hamza_public__"), ("👤 دخول","__login__"), ("✨ حساب جديد","__register__"), ("👥 ضيف","__guest__"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__")]
                 _student_current = st.session_state.page_view
 
             # أزرار حقيقية بدل st.pills لضمان استجابة النقر على جميع إصدارات Streamlit Cloud.
@@ -2313,6 +2313,7 @@ if is_student_mode:
                         elif _target == "__logout__":
                             st.session_state.logged_student=None; st.session_state.page_view="home"; st.session_state.student_sub_page="dashboard"; st.query_params.clear(); st.query_params["role"]="student"
                         elif _target == "__home__": st.session_state.page_view="home"
+                        elif _target == "__hamza_public__": st.session_state.page_view="hamza_public"
                         elif _target == "__login__": st.session_state.page_view="login"
                         elif _target == "__register__": st.session_state.page_view="register"
                         elif _target == "__guest__": st.session_state.page_view="guest_reg"
@@ -2408,7 +2409,103 @@ if is_student_mode:
                     st.rerun()
 
     elif not st.session_state.logged_student:
-        if st.session_state.page_view == "home":
+        if st.session_state.page_view == "hamza_public":
+            st.markdown("""
+            <div style="background:linear-gradient(135deg,#062b63,#1677ff);color:#fff;border-radius:24px;padding:28px 24px;margin-bottom:18px;direction:rtl;text-align:right;box-shadow:0 14px 35px rgba(6,43,99,.18);">
+                <div style="font-size:13px;opacity:.9;">البشمهندس x الرياضه</div>
+                <h1 style="margin:5px 0;font-size:30px;color:#fff;">🤖 اسأل حمصا</h1>
+                <p style="margin:0;color:#dbeafe;font-size:15px;">حل مسألتك بالتصوير أو الكتابة أو رفع صفحة من الكتاب — بدون تسجيل دخول.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("⬅️ رجوع للواجهة الرئيسية", key="hamza_public_back", use_container_width=True):
+                st.session_state.page_view="home"
+                st.rerun()
+
+            if "hamza_public_history" not in st.session_state:
+                st.session_state.hamza_public_history=[]
+            if "hamza_public_last" not in st.session_state:
+                st.session_state.hamza_public_last=None
+
+            with st.container(border=True):
+                st.markdown("### 📷 صوّر المسألة من داخل الموقع")
+                cam=st.camera_input("افتح الكاميرا وصوّر المسألة", key="hamza_public_camera")
+                st.markdown("### 🖼️ أو ارفع صورة / 📄 PDF")
+                up=st.file_uploader("ارفع المسألة أو صفحة من الكتاب", type=["png","jpg","jpeg","webp","pdf"], key="hamza_public_upload")
+                qtext=st.text_area("✍️ أو اكتب المسألة هنا", height=150, placeholder="مثال: أوجد قيمة س إذا كان 2س + 5 = 17", key="hamza_public_text")
+                if cam is not None:
+                    st.image(cam, caption="الصورة التي التقطتها", use_container_width=True)
+                elif up is not None and str(up.type).startswith("image/"):
+                    st.image(up, caption="الصورة المرفوعة", use_container_width=True)
+
+                p1,p2=st.columns(2)
+                with p1:
+                    solve=st.button("🧠 حل المسألة مع حمصا", use_container_width=True, type="primary", key="hamza_public_solve")
+                with p2:
+                    clear=st.button("🗑️ مسح", use_container_width=True, key="hamza_public_clear")
+
+                if clear:
+                    st.session_state.hamza_public_history=[]
+                    st.session_state.hamza_public_last=None
+                    st.rerun()
+
+                if solve:
+                    media=[]
+                    source=cam if cam is not None else up
+                    if source is not None:
+                        try:
+                            raw=source.getvalue()
+                            mime=str(getattr(source,"type","") or "image/jpeg")
+                            media=[{"mime":mime,"data":base64.b64encode(raw).decode("ascii")}]
+                        except Exception:
+                            media=[]
+                    if not qtext.strip() and not media:
+                        st.warning("اكتب المسألة أو صوّرها/ارفعها أولاً.")
+                    else:
+                        try:
+                            with st.spinner("🤖 حمصا يقرأ المسألة ويحلها..."):
+                                result=_hamza_ai_call(qtext,media,st.session_state.hamza_public_history)
+                            answer=str(result.get("answer","")).strip()
+                            final_answer=str(result.get("final_answer","")).strip()
+                            topic=str(result.get("topic","رياضيات")).strip()
+                            st.session_state.hamza_public_last={"question":qtext.strip() or "المسألة المرفقة","answer":answer,"final_answer":final_answer,"topic":topic}
+                            st.session_state.hamza_public_history.append({"student":qtext.strip() or "حل المسألة من الصورة المرفقة","assistant":answer})
+                        except Exception as exc:
+                            code=str(exc)
+                            if "AI_KEY_MISSING" in code:
+                                st.error("⚠️ حمصا غير مفعّل حالياً.")
+                            elif "AI_RATE_LIMIT" in code:
+                                st.warning("⏳ حمصا مشغول حالياً بسبب حد الاستخدام. حاول مرة أخرى بعد قليل.")
+                            elif "AI_BUSY" in code:
+                                st.warning("🔄 حمصا مشغول حالياً. اضغط مرة أخرى بعد لحظات.")
+                            else:
+                                st.error("❌ تعذر حل المسألة حالياً. جرّب صورة أوضح أو أعد المحاولة.")
+
+            last=st.session_state.get("hamza_public_last")
+            if last:
+                st.markdown("### 🧠 حل حمصا")
+                st.markdown(f"<div style='background:{card_bg};border:1px solid {card_border};border-right:5px solid #1677ff;border-radius:16px;padding:20px;line-height:2;direction:rtl;'>{html.escape(last.get('answer','')).replace(chr(10),'<br>')}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:15px;margin-top:12px;direction:rtl;'><b>✅ الإجابة النهائية:</b><br>{html.escape(last.get('final_answer','')).replace(chr(10),'<br>')}</div>", unsafe_allow_html=True)
+                phtml=_hamza_pdf_html(last.get("question",""),last.get("answer",""),last.get("final_answer",""),"طالب")
+                ppdf=html_to_pdf_bytes(phtml)
+                if ppdf:
+                    st.download_button("🖨️ طباعة / تحميل الحل PDF",ppdf,file_name="حل_المسألة_حمصا.pdf",mime="application/pdf",use_container_width=True,key="hamza_public_pdf")
+                else:
+                    st.download_button("🖨️ طباعة الحل",phtml.encode("utf-8"),file_name="حل_المسألة_حمصا.html",mime="text/html",use_container_width=True,key="hamza_public_html")
+                follow=st.text_input("💬 عندك سؤال عن خطوة معينة؟",key="hamza_public_follow")
+                if st.button("↩️ اسأل حمصا عن الخطوة دي",use_container_width=True,key="hamza_public_follow_btn") and follow.strip():
+                    try:
+                        with st.spinner("🤖 حمصا يشرح لك أكثر..."):
+                            result=_hamza_ai_call(follow,[],st.session_state.hamza_public_history)
+                        ans=str(result.get("answer","")).strip()
+                        fa=str(result.get("final_answer","")).strip()
+                        st.session_state.hamza_public_last["answer"] += "\n\n— متابعة الطالب —\n"+ans
+                        if fa: st.session_state.hamza_public_last["final_answer"]=fa
+                        st.session_state.hamza_public_history.append({"student":follow.strip(),"assistant":ans})
+                        st.rerun()
+                    except Exception:
+                        st.error("تعذر إرسال المتابعة حالياً. حاول مرة أخرى.")
+
+        elif st.session_state.page_view == "home":
             _ui_df = st.session_state.get("student_interface_df", pd.DataFrame())
             si = _ui_df.iloc[0].to_dict() if not _ui_df.empty else {}
             ui_title = str(si.get("عنوان_الواجهة", "أهلاً بيكم منورين المنصة! 🚀"))
@@ -2469,6 +2566,15 @@ if is_student_mode:
                 if st.button("👥 الدخول كضيف", key="landing_guest_btn", use_container_width=True):
                     st.session_state.page_view="guest_reg"
                     st.rerun()
+            st.markdown("""
+            <div style="background:linear-gradient(135deg,#062b63,#1677ff);border-radius:20px;padding:20px 24px;margin:18px 0;color:#fff;direction:rtl;box-shadow:0 12px 30px rgba(6,43,99,.16);">
+                <div style="font-size:28px;font-weight:900;">🤖 اسأل حمصا</div>
+                <div style="font-size:14px;opacity:.92;margin-top:5px;">حل مسألتك بالتصوير 📷 أو بالكتابة ✍️ — بدون تسجيل دخول</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("🚀 ابدأ مع حمصا الآن", key="public_hamza_landing_btn", use_container_width=True, type="primary"):
+                st.session_state.page_view="hamza_public"
+                st.rerun()
             render_student_ads()
             st.markdown("### 📚 ماذا ستجد داخل المنصة؟")
             cc1,cc2,cc3,cc4=st.columns(4)
