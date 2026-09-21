@@ -916,8 +916,8 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
 3) حل المسألة خطوة بخطوة وبترتيب واضح.
 4) اكتب الإجابة النهائية بوضوح.
 5) إذا كان في السؤال رسم أو جدول أو صورة، اقرأه بعناية ولا تخمّن القيم غير الواضحة؛ اطلب من الطالب صورة أوضح إذا لزم.
-6) استخدم LaTeX عند الحاجة، ولف المعادلات بين $...$ للمعادلة داخل السطر أو $...$ للمعادلة في سطر مستقل، مثل $\\frac{1}{2}$ و $\\sqrt{x}$ و $x^2$ و $2x+5=17$.
-7) لا تستخدم علامة $ كعملة؛ استخدمها فقط كمحدد لـ LaTeX.
+6) استخدم LaTeX عند الحاجة. ضع كل معادلة رئيسية في سطر مستقل بين $...$، واستخدم $...$ فقط للمعادلات القصيرة داخل الجملة.، مثل $\\frac{1}{2}$ و $\\sqrt{x}$ و $x^2$ و $2x+5=17$.
+7) اكتب الشرح العربي باتجاه RTL، وإذا كان السؤال أو الجزء الرياضي بالإنجليزية فاجعل الجملة والمعادلة LTR. لا تخلط اتجاه المعادلة مع اتجاه النص العربي.
 8) لا تعطِ إجابة مختصرة فقط؛ الهدف أن يتعلم الطالب طريقة الحل.
 إذا كان السؤال غير رياضي، أخبر الطالب بلطف أن حمصا متخصص أساساً في الرياضيات والإحصاء.
 
@@ -1023,10 +1023,57 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
         raise RuntimeError("AI_KEY_MISSING")
     raise RuntimeError("AI_ERROR")
 
+def _hamza_render_solution(text):
+    """عرض حل حمصا بتنسيق واضح مع جعل المعادلات في اتجاه LTR."""
+    raw = str(text or "").strip()
+    if not raw:
+        return
+    parts = re.split(r"(\\\\\[.*?\\\\\]|\\$\\$.*?\\$\\$)", raw, flags=re.S)
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        if (part.startswith("$") and part.endswith("$")) or (part.startswith(r"\\[") and part.endswith(r"\\]")):
+            expr = part[2:-2].strip() if part.startswith("$") else part[2:-2].strip()
+            st.latex(expr)
+            continue
+        for line in part.splitlines():
+            line = line.strip()
+            if not line:
+                st.write("")
+                continue
+            has_ar = bool(re.search(r"[\\u0600-\\u06FF]", line))
+            has_math = "$" in line or r"\\frac" in line or r"\\sqrt" in line
+            if has_math:
+                st.markdown(line)
+            else:
+                direction = "rtl" if has_ar else "ltr"
+                st.markdown(
+                    f"<div dir='{direction}' style='text-align:{'right' if direction == 'rtl' else 'left'};line-height:1.9'>{html.escape(line)}</div>",
+                    unsafe_allow_html=True
+                )
+
+def _hamza_math_html(text):
+    """تحويل أهم أوامر LaTeX إلى HTML مناسب للطباعة بدون ظهور frac/sqrt كنص."""
+    s = html.escape(str(text or "").strip()).replace("\n", "<br>")
+    s = s.replace("$", "").replace("$", "")
+    s = s.replace(r"\\dfrac", r"\\frac").replace(r"\\tfrac", r"\\frac")
+    for _ in range(4):
+        s = re.sub(r"\\frac\{([^{}]+)\}\{([^{}]+)\}", r"<span class='frac'><span class='num'>\\1</span><span class='den'>\\2</span></span>", s)
+    for _ in range(2):
+        s = re.sub(r"\\sqrt\{([^{}]+)\}", r"<span class='sqrt'>√<span class='radicand'>\\1</span></span>", s)
+    s = re.sub(r"([A-Za-z0-9)\\u0600-\\u06FF]+)\^\{([^{}]+)\}", r"\\1<sup>\\2</sup>", s)
+    s = re.sub(r"([A-Za-z0-9)\\u0600-\\u06FF]+)\^([A-Za-z0-9]+)", r"\\1<sup>\\2</sup>", s)
+    s = re.sub(r"([A-Za-z0-9)\\u0600-\\u06FF]+)_\{([^{}]+)\}", r"\\1<sub>\\2</sub>", s)
+    s = s.replace(r"\\times", "×").replace(r"\\cdot", "·").replace(r"\\pm", "±")
+    s = s.replace(r"\\leq", "≤").replace(r"\\geq", "≥").replace(r"\\neq", "≠").replace(r"\\pi", "π")
+    s = s.replace(r"\\infty", "∞").replace(r"\\theta", "θ").replace(r"\\alpha", "α").replace(r"\\beta", "β")
+    return s
+
 def _hamza_pdf_html(question, answer, final_answer, student_name):
-    q=html.escape(str(question or "").strip()).replace("\n","<br>")
-    a=html.escape(str(answer or "").strip()).replace("\n","<br>")
-    fa=html.escape(str(final_answer or "").strip()).replace("\n","<br>")
+    q=_hamza_math_html(question)
+    a=_hamza_math_html(answer)
+    fa=_hamza_math_html(final_answer)
     teacher_name, _, teacher_phone = _get_print_profile()
     return f"""<!DOCTYPE html>
 <html dir='rtl' lang='ar'>
@@ -2557,9 +2604,9 @@ if is_student_mode:
             if last:
                 st.markdown("### 🧠 حل حمصا")
                 st.markdown(f"<div style='background:{card_bg};border:1px solid {card_border};border-right:5px solid #1677ff;border-radius:16px;padding:20px;line-height:2;direction:rtl;'><b>🧠 الحل خطوة بخطوة</b></div>", unsafe_allow_html=True)
-                st.markdown(str(last.get('answer','')).strip())
+                _hamza_render_solution(last.get('answer',''))
                 st.markdown("<div style='background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:15px;margin-top:12px;direction:rtl;'><b>✅ الإجابة النهائية</b></div>", unsafe_allow_html=True)
-                st.markdown(str(last.get('final_answer','')).strip())
+                _hamza_render_solution(last.get('final_answer',''))
                 phtml=_hamza_pdf_html(last.get("question",""),last.get("answer",""),last.get("final_answer",""),"طالب")
                 ppdf=html_to_pdf_bytes(phtml)
                 if ppdf:
