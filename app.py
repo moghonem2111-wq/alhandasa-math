@@ -939,6 +939,7 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
     body = {
         "contents":[{"role":"user","parts":parts}],
         "generationConfig":{
+            "responseMimeType":"application/json",
             "maxOutputTokens":4096
         }
     }
@@ -1024,50 +1025,64 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
     raise RuntimeError("AI_ERROR")
 
 def _hamza_render_solution(text):
-    """عرض حل حمصا بتنسيق واضح مع جعل المعادلات في اتجاه LTR."""
+    """عرض حل حمصا بتنسيق واضح مع اتجاه صحيح للمعادلات."""
     raw = str(text or "").strip()
     if not raw:
         return
-    parts = re.split(r"(\\\\\[.*?\\\\\]|\\$\\$.*?\\$\\$)", raw, flags=re.S)
+    parts = re.split(r"(\$\$.*?\$\$|\\\[.*?\\\])", raw, flags=re.S)
     for part in parts:
         part = part.strip()
         if not part:
             continue
-        if (part.startswith("$") and part.endswith("$")) or (part.startswith(r"\\[") and part.endswith(r"\\]")):
-            expr = part[2:-2].strip() if part.startswith("$") else part[2:-2].strip()
-            st.latex(expr)
+        if (part.startswith("$$") and part.endswith("$$")) or (part.startswith(r"\[") and part.endswith(r"\]")):
+            st.latex(part[2:-2].strip())
             continue
         for line in part.splitlines():
             line = line.strip()
             if not line:
                 st.write("")
                 continue
-            has_ar = bool(re.search(r"[\\u0600-\\u06FF]", line))
-            has_math = "$" in line or r"\\frac" in line or r"\\sqrt" in line
+            has_ar = bool(re.search(r"[\u0600-\u06FF]", line))
+            has_math = bool(re.search(r"\$[^$]+\$|\\frac|\\sqrt|\\sum|\\int|\\leq|\\geq|\\neq", line))
             if has_math:
                 st.markdown(line)
             else:
                 direction = "rtl" if has_ar else "ltr"
+                align = "right" if has_ar else "left"
                 st.markdown(
-                    f"<div dir='{direction}' style='text-align:{'right' if direction == 'rtl' else 'left'};line-height:1.9'>{html.escape(line)}</div>",
+                    f"<div dir='{direction}' style='text-align:{align};line-height:1.9'>{html.escape(line)}</div>",
                     unsafe_allow_html=True
                 )
 
 def _hamza_math_html(text):
-    """تحويل أهم أوامر LaTeX إلى HTML مناسب للطباعة بدون ظهور frac/sqrt كنص."""
+    """تحويل LaTeX الأساسي إلى HTML مناسب للطباعة، خصوصاً الكسور والجذور والأسس."""
     s = html.escape(str(text or "").strip()).replace("\n", "<br>")
-    s = s.replace("$", "").replace("$", "")
-    s = s.replace(r"\\dfrac", r"\\frac").replace(r"\\tfrac", r"\\frac")
+    s = s.replace("$$", "").replace("$", "")
+    s = s.replace(r"\dfrac", r"\frac").replace(r"\tfrac", r"\frac")
+    for _ in range(6):
+        new_s = re.sub(r"\\frac\{([^{}]+)\}\{([^{}]+)\}",
+                       r"<span class='frac'><span class='num'>\1</span><span class='den'>\2</span></span>", s)
+        if new_s == s:
+            break
+        s = new_s
     for _ in range(4):
-        s = re.sub(r"\\frac\{([^{}]+)\}\{([^{}]+)\}", r"<span class='frac'><span class='num'>\\1</span><span class='den'>\\2</span></span>", s)
-    for _ in range(2):
-        s = re.sub(r"\\sqrt\{([^{}]+)\}", r"<span class='sqrt'>√<span class='radicand'>\\1</span></span>", s)
-    s = re.sub(r"([A-Za-z0-9)\\u0600-\\u06FF]+)\^\{([^{}]+)\}", r"\\1<sup>\\2</sup>", s)
-    s = re.sub(r"([A-Za-z0-9)\\u0600-\\u06FF]+)\^([A-Za-z0-9]+)", r"\\1<sup>\\2</sup>", s)
-    s = re.sub(r"([A-Za-z0-9)\\u0600-\\u06FF]+)_\{([^{}]+)\}", r"\\1<sub>\\2</sub>", s)
-    s = s.replace(r"\\times", "×").replace(r"\\cdot", "·").replace(r"\\pm", "±")
-    s = s.replace(r"\\leq", "≤").replace(r"\\geq", "≥").replace(r"\\neq", "≠").replace(r"\\pi", "π")
-    s = s.replace(r"\\infty", "∞").replace(r"\\theta", "θ").replace(r"\\alpha", "α").replace(r"\\beta", "β")
+        new_s = re.sub(r"\\sqrt(?:\[([^\]]+)\])?\{([^{}]+)\}",
+                       r"<span class='sqrt'>√<span class='radicand'>\2</span></span>", s)
+        if new_s == s:
+            break
+        s = new_s
+    s = re.sub(r"([A-Za-z0-9)\u0600-\u06FF]+)\^\{([^{}]+)\}", r"\1<sup>\2</sup>", s)
+    s = re.sub(r"([A-Za-z0-9)\u0600-\u06FF]+)\^([A-Za-z0-9]+)", r"\1<sup>\2</sup>", s)
+    s = re.sub(r"([A-Za-z0-9)\u0600-\u06FF]+)_\{([^{}]+)\}", r"\1<sub>\2</sub>", s)
+    symbols = {
+        r"\times":"×", r"\cdot":"·", r"\pm":"±", r"\mp":"∓",
+        r"\leq":"≤", r"\geq":"≥", r"\neq":"≠", r"\approx":"≈",
+        r"\pi":"π", r"\theta":"θ", r"\alpha":"α", r"\beta":"β",
+        r"\gamma":"γ", r"\delta":"δ", r"\lambda":"λ", r"\mu":"μ",
+        r"\sigma":"σ", r"\omega":"ω", r"\infty":"∞", r"\rightarrow":"→"
+    }
+    for src, dst in symbols.items():
+        s = s.replace(src, dst)
     return s
 
 def _hamza_pdf_html(question, answer, final_answer, student_name):
@@ -1087,7 +1102,7 @@ body{{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#102a52;background:#fff;
 .card{{border:1px solid #dbe7f5;border-radius:16px;padding:18px 20px;margin:12px 0;background:#fff}}
 .title{{font-size:18px;color:#126be6;font-weight:900;margin-bottom:8px}}
 .answer{{background:#f3f8ff;border-right:5px solid #1677ff}}
-.final{{background:#ecfdf5;border-right:5px solid #10b981;font-size:18px}}
+.final{{background:#ecfdf5;border-right:5px solid #10b981;font-size:18px}}.frac{{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;margin:0 3px}}.frac .num{{border-bottom:1.5px solid #102a52;padding:0 4px}}.frac .den{{padding:0 4px}}.sqrt{{display:inline-flex;align-items:flex-start;font-size:1.08em}}.sqrt .radicand{{border-top:1.5px solid #102a52;padding:0 3px;margin-top:2px}}
 .footer{{margin-top:22px;border-top:1px solid #dbe7f5;padding-top:10px;text-align:center;color:#64748b;font-size:11px}}
 </style></head>
 <body>
