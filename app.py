@@ -914,8 +914,10 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
 - استخدم $...$ للمعادلة داخل السطر و $$...$$ للمعادلة المستقلة.
 - الكسور: $\\frac{{3}}{{4}}$، الجذور: $\\sqrt{{25}}$، الأسس: $x^2$.
 - لا تضع علامة $ خارج LaTeX.
-- إذا كانت المعادلة باللغة الإنجليزية أو تحتوي أرقاماً ورموزاً لاتينية، حافظ على اتجاهها الرياضي من اليسار إلى اليمين.
-- الشرح العربي يكون من اليمين إلى اليسار، والمعادلات تبقى LTR.
+- إذا كان السؤال أو السطر باللغة الإنجليزية فاجعل اتجاهه تلقائياً من اليسار إلى اليمين LTR.
+- إذا كان الشرح بالعربية فاجعل اتجاه النص من اليمين إلى اليسار RTL.
+- إذا اختلط العربي مع معادلة أو تعبير إنجليزي في نفس السطر، اجعل النص العربي RTL والمعادلة نفسها LTR ولا تقلب ترتيبها.
+- اكتب كل خطوة في سطر مستقل، واجعل المعادلات واضحة ومنفصلة بصرياً عن الشرح عند الحاجة.
 - لا تطلب صورة أوضح إذا كانت المسألة مقروءة.
 - في النهاية اكتب "الإجابة النهائية".
 - أرجع الحل كنص منسق فقط، وليس JSON.
@@ -1144,11 +1146,22 @@ def _hamza_math_html(value):
         has_arabic = bool(re.search(r"[ء-ي]", plain))
         has_math = bool(re.search(r"[A-Za-z0-9=<>≤≥≠≈±×÷√πθαλβγδλμσω∞+\-*/^_()\[\]]", plain))
 
-        if has_math:
-            # أي سطر يحتوي معادلة يُعرض من اليسار لليمين.
-            out.append(f"<div dir='ltr' class='math-line'>{line}</div>")
+        if has_arabic and has_math:
+            # سطر عربي يحتوي على معادلة: العربي RTL والمعادلة/الإنجليزي LTR داخل نفس السطر.
+            parts = re.split(r"(<[^>]+>)", line)
+            mixed = []
+            math_token = re.compile(r"(?<![A-Za-z0-9])([A-Za-z0-9πθαλβγδλμσω∞√]+(?:[\s]*[=<>≤≥≠≈±×÷+\-*/^_()[\]{}][\s]*[A-Za-z0-9πθαλβγδλμσω∞√]+)+|[A-Za-z][A-Za-z0-9]*(?:\([^)]*\))?)")
+            for part in parts:
+                if part.startswith("<") and part.endswith(">"):
+                    mixed.append(part)
+                else:
+                    mixed.append(math_token.sub(r"<bdi dir='ltr' class='mixed-math'>\1</bdi>", part))
+            out.append(f"<div dir='rtl' class='mixed-line'>{''.join(mixed)}</div>")
         elif has_arabic:
             out.append(f"<div dir='rtl' class='text-line'>{line}</div>")
+        elif has_math:
+            # السؤال/الحل الإنجليزي أو الرياضي بالكامل: LTR.
+            out.append(f"<div dir='ltr' class='math-line'>{line}</div>")
         else:
             out.append(f"<div dir='ltr' class='text-line'>{line}</div>")
 
@@ -1173,7 +1186,9 @@ body{{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#102a52;background:#fff;
 .title{{font-size:19px;color:#126be6;font-weight:900;margin-bottom:10px}}
 .step-title{{margin:14px 0 7px;padding:9px 13px;border-right:5px solid #1677ff;background:#eef6ff;border-radius:10px;color:#0b5ed7;font-size:16px;font-weight:900;direction:rtl;text-align:right}}
 .step-title span{{display:inline-block;min-width:24px}}
-.math-line{{direction:ltr;text-align:left;unicode-bidi:embed;margin:6px 0;font-family:'Cairo',Tahoma,Arial,sans-serif;font-weight:700}}
+.math-line{{direction:ltr;text-align:left;unicode-bidi:isolate;margin:6px 0;font-family:'Cairo',Tahoma,Arial,sans-serif;font-weight:700}}
+.mixed-line{{direction:rtl;text-align:right;unicode-bidi:plaintext;margin:6px 0}}
+.mixed-math{{direction:ltr;unicode-bidi:isolate;display:inline-block;white-space:nowrap;font-family:'Cairo',Tahoma,Arial,sans-serif}}
 .text-line{{direction:rtl;text-align:right;margin:4px 0}}
 .answer{{background:#f3f8ff;border-right:5px solid #1677ff;direction:rtl;text-align:right}}
 .final{{background:#ecfdf5;border-right:5px solid #10b981;font-size:18px;direction:rtl;text-align:right}}.frac{{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;margin:0 3px}}.frac .num{{border-bottom:1.5px solid #102a52;padding:0 4px}}.frac .den{{padding:0 4px}}.sqrt{{display:inline-flex;align-items:flex-start;font-size:1.08em}}.sqrt .radicand{{border-top:1.5px solid #102a52;padding:0 3px;margin-top:2px}}
