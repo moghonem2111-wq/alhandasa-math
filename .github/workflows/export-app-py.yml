@@ -1,0 +1,22 @@
+name: Validate and Export app.py
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  validate-export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Python syntax
+        run: python -m py_compile app.py
+
+      - name: Export corrected app.py
+        uses: actions/upload-artifact@v4
+        with:
+          name: corrected-app-py
+          path: app.py
+          retention-days: 3
