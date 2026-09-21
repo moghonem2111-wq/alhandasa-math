@@ -941,6 +941,15 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
         "contents":[{"role":"user","parts":parts}],
         "generationConfig":{
             "responseMimeType":"application/json",
+            "responseSchema":{
+                "type":"OBJECT",
+                "properties":{
+                    "answer":{"type":"STRING"},
+                    "final_answer":{"type":"STRING"},
+                    "topic":{"type":"STRING"}
+                },
+                "required":["answer","final_answer","topic"]
+            },
             "maxOutputTokens":4096
         }
     }
