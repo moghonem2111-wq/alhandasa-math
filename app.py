@@ -898,8 +898,8 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
     # نستخدم نماذج Gemini الحالية فقط، مع انتقال تلقائي إذا كان أحدها غير متاح للحساب.
     # لا نستخدم أي اسم قديم مثل gemini-2.5-flash-lite.
     preferred = _hamza_secret("GEMINI_MODEL").strip()
-    # لو كان السر يحتوي اسم نموذج قديم أو غير متاح نتجاهله ونستخدم القائمة الحالية.
-    models = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
+    # حمصا يعتمد على نموذج Gemini يدعم الصور. إذا كان Secret يحتوي نموذجاً قديماً أو غير متاح نتجاهله.
+    models = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash"]
     if preferred in models:
         models.remove(preferred)
         models.insert(0, preferred)
