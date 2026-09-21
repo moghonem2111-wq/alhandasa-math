@@ -3096,9 +3096,9 @@ if is_student_mode:
             if last:
                 st.markdown("### 🧠 حل حمصا")
                 st.markdown(f"<div style='background:{card_bg};border:1px solid {card_border};border-right:5px solid #1677ff;border-radius:16px;padding:20px;line-height:2;direction:rtl;'><b>🧠 الحل خطوة بخطوة</b></div>", unsafe_allow_html=True)
-                st.markdown(str(last.get('answer','')).strip())
+                _hamza_render_solution(last.get('answer',''))
                 st.markdown("<div style='background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:15px;margin-top:12px;direction:rtl;'><b>✅ الإجابة النهائية</b></div>", unsafe_allow_html=True)
-                st.markdown(str(last.get('final_answer','')).strip())
+                _hamza_render_solution(last.get('final_answer',''))
                 phtml=_hamza_pdf_html(last.get("question",""),last.get("answer",""),last.get("final_answer",""),str(st_user.get("اسم الطالب","طالب"))); ppdf=html_to_pdf_bytes(phtml)
                 if ppdf: st.download_button("🖨️ طباعة / تحميل حل المسألة PDF",ppdf,file_name="حل_المسألة_حمصا.pdf",mime="application/pdf",use_container_width=True,key="hamza_pdf")
                 else: st.download_button("🖨️ طباعة الحل",phtml.encode("utf-8"),file_name="حل_المسألة_حمصا.html",mime="text/html",use_container_width=True,key="hamza_html")
