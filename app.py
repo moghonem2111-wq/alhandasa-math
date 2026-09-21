@@ -895,10 +895,21 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
     if not key:
         raise RuntimeError("AI_KEY_MISSING")
 
-    preferred = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
+    preferred = _hamza_secret("GEMINI_MODEL").strip()
+    # تجاهل أي موديل قديم محفوظ في Secrets مثل gemini-2.5-flash-lite.
+    allowed_models = [
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+    ]
     models = []
-    for candidate in ["gemini-3.5-flash-lite", "gemini-3.8-flash", preferred, "gemini-3.5-flash"]:
-        if candidate and candidate not in models:
+    if preferred in allowed_models:
+        models.append(preferred)
+    for candidate in allowed_models:
+        if candidate not in models:
             models.append(candidate)
 
     context = ""
