@@ -5329,27 +5329,32 @@ elif t_page == "parent_report":
 
         st.markdown(f"**إجمالي المستحق:** {total_due:,.0f} جنيه &nbsp; | &nbsp; **المدفوع:** {total_paid:,.0f} جنيه &nbsp; | &nbsp; **المتبقي:** {balance:,.0f} جنيه")
 
+        teacher_name, teacher_photo_b64, teacher_phone = _get_print_profile()
+        teacher_photo_html = ""
+        if teacher_photo_b64:
+            teacher_photo_html = f"<img class='teacher-photo' src='data:image/png;base64,{teacher_photo_b64}' alt='صورة المعلم'>"
+
         sess_rows = "".join(
-            f"<tr><td>{html.escape(str(r.get('التاريخ','')))}</td><td>{html.escape(str(r.get('الحالة','')))}</td><td>{html.escape(str(r.get('سعر الحصة','')))}</td><td>{html.escape(str(r.get('مستوى الطالب','')))}</td><td>{html.escape(str(r.get('ملاحظات','')))}</td></tr>"
+            f"<tr><td>{html.escape(str(r.get('التاريخ','')))}</td><td>{html.escape(str(r.get('الحالة','')))}</td><td>{html.escape(str(r.get('مستوى الطالب','')))}</td><td>{html.escape(str(r.get('ملاحظات','')))}</td></tr>"
             for _, r in pr_sessions.iterrows()
-        ) or "<tr><td colspan='5'>لا توجد حصص في الفترة المحددة</td></tr>"
+        ) or "<tr><td colspan='4'>لا توجد حصص في الفترة المحددة</td></tr>"
+
         ass_rows = "".join(
             f"<tr><td>{html.escape(str(r.get('التاريخ','')))}</td><td>{html.escape(str(r.get('النوع','')))}</td><td>{html.escape(str(r.get('عنوان التكليف','')))}</td><td>{html.escape(str(r.get('الدرجة المحصلة','')))} / {html.escape(str(r.get('الدرجة العظمى','')))}</td><td>{html.escape(str(r.get('حالة التسليم','')))}</td><td>{html.escape(str(r.get('ملاحظات وتوجيهات','')))}</td></tr>"
             for _, r in pr_assessments.iterrows()
         ) or "<tr><td colspan='6'>لا توجد تقييمات في الفترة المحددة</td></tr>"
-        pay_rows = "".join(
-            f"<tr><td>{html.escape(str(r.get('التاريخ','')))}</td><td>{html.escape(str(r.get('الشهر','')))}</td><td>{html.escape(str(r.get('المبلغ','')))}</td><td>{html.escape(str(r.get('طريقة الدفع','')))}</td><td>{html.escape(str(r.get('حالة الدفع','')))}</td><td>{html.escape(str(r.get('ملاحظات','')))}</td></tr>"
-            for _, r in pr_payments.iterrows()
-        ) or "<tr><td colspan='6'>لا توجد مدفوعات في الفترة المحددة</td></tr>"
 
         pr_html = f"""<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head><meta charset="utf-8"><title>تقرير ولي الأمر - {html.escape(student_key)}</title>
 <style>
 @page{{size:A4;margin:12mm}}
-body{{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#102a52;font-weight:700;line-height:1.7}}
-.header{{background:linear-gradient(135deg,#06295f,#1677ff);color:#fff;border-radius:18px;padding:20px 24px;margin-bottom:16px}}
-.header h1{{margin:0;font-size:25px;font-weight:900}} .header div{{margin-top:5px}}
+*{{box-sizing:border-box}}
+body{{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#102a52;font-weight:700;line-height:1.7;background:#fff}}
+.header{{background:linear-gradient(135deg,#06295f,#1677ff);color:#fff;border-radius:18px;padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:18px}}
+.header h1{{margin:0;font-size:25px;font-weight:900}} .header div{{margin-top:4px}}
+.teacher-photo{{width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,.18);flex:0 0 auto}}
+.header-text{{flex:1}}
 .card{{border:1px solid #dbe7f5;border-radius:14px;padding:14px;margin:12px 0}}
 .title{{color:#126be6;font-size:17px;font-weight:900;margin-bottom:7px}}
 table{{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}}
@@ -5358,12 +5363,19 @@ th{{background:#eaf4ff;color:#12345f;font-weight:900}} th,td{{border:1px solid #
 .footer{{margin-top:18px;border-top:1px solid #dbe7f5;padding-top:8px;text-align:center;font-size:10px;color:#64748b}}
 </style></head>
 <body>
-<div class="header"><h1>👨‍👩‍👦 تقرير ولي الأمر</h1><div>{html.escape(student_key)} • {html.escape(parent_name or "-")}</div><div>الفترة: {pr_start.strftime("%d/%m/%Y")} — {pr_end.strftime("%d/%m/%Y")}</div></div>
-<div class="card summary"><div class="title">بيانات الطالب</div><div>المرحلة: {html.escape(grade or "-")} &nbsp; | &nbsp; المنهج: {html.escape(curriculum or "-")} &nbsp; | &nbsp; هاتف ولي الأمر: {html.escape(parent_phone or "-")}</div><div style="margin-top:6px">المستحق: {total_due:,.0f} جنيه &nbsp; | &nbsp; المدفوع: {total_paid:,.0f} جنيه &nbsp; | &nbsp; المتبقي: {balance:,.0f} جنيه</div></div>
-<div class="card"><div class="title">📚 الحصص والحضور</div><table><tr><th>التاريخ</th><th>الحالة</th><th>السعر</th><th>المستوى</th><th>ملاحظات</th></tr>{sess_rows}</table></div>
+<div class="header">
+{teacher_photo_html}
+<div class="header-text">
+<h1>👨‍👩‍👦 تقرير ولي الأمر</h1>
+<div>{html.escape(student_key)} • {html.escape(parent_name or "-")}</div>
+<div>الفترة: {pr_start.strftime("%d/%m/%Y")} — {pr_end.strftime("%d/%m/%Y")}</div>
+<div style="font-size:11px;color:#dbeafe">إعداد ومتابعة: {html.escape(teacher_name)} • 📞 {html.escape(teacher_phone)}</div>
+</div>
+</div>
+<div class="card summary"><div class="title">بيانات الطالب</div><div>المرحلة: {html.escape(grade or "-")} &nbsp; | &nbsp; المنهج: {html.escape(curriculum or "-")} &nbsp; | &nbsp; هاتف ولي الأمر: {html.escape(parent_phone or "-")}</div></div>
+<div class="card"><div class="title">📚 الحصص والحضور</div><table><tr><th>التاريخ</th><th>الحالة</th><th>المستوى</th><th>ملاحظات</th></tr>{sess_rows}</table></div>
 <div class="card"><div class="title">📝 الاختبارات والواجبات</div><table><tr><th>التاريخ</th><th>النوع</th><th>العنوان</th><th>الدرجة</th><th>الحالة</th><th>ملاحظات</th></tr>{ass_rows}</table></div>
-<div class="card"><div class="title">💳 المدفوعات</div><table><tr><th>التاريخ</th><th>الشهر</th><th>المبلغ</th><th>طريقة الدفع</th><th>حالة الدفع</th><th>ملاحظات</th></tr>{pay_rows}</table></div>
-<div class="footer">إعداد ومتابعة: م/ محمد غنيم • البشمهندس x الرياضه</div>
+<div class="footer">البشمهندس x الرياضه • تقرير تعليمي لمتابعة الطالب</div>
 </body></html>"""
 
         pdf_bytes = html_to_pdf_bytes(pr_html)
