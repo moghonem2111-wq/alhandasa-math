@@ -895,17 +895,9 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
     if not key:
         raise RuntimeError("AI_KEY_MISSING")
 
-    # نستخدم نماذج Gemini الحالية المستقرة فقط.
-    # نتجاهل أي اسم قديم محفوظ في GEMINI_MODEL إذا كان غير متاح للحساب.
-    models = []
-    for candidate in [
-        "gemini-3.5-flash",
-        "gemini-3.5-flash-lite",
-        "gemini-3.6-flash",
-        "gemini-2.5-flash",
-    ]:
-        if candidate not in models:
-            models.append(candidate)
+    # نستخدم النموذج الذي يؤكده حساب المستخدم حالياً فقط.
+    # الخطأ السابق كان بسبب fallback إلى نماذج غير متاحة مثل gemini-2.5-flash-lite.
+    models = ["gemini-3.5-flash"]
 
     parts = []
     context = ""
