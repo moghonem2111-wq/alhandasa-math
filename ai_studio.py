@@ -136,18 +136,18 @@ def math_html(value):
  def bidi_runs(markup):
   parts=re.split(r"(<[^>]+>)",markup)
   out=[]
-  math_chars=r"A-Za-z0-9∫Σ√πθαγβδλμσω∞×·±∓≤≥≠≈→=+\\-*/^_()\\[\\]{},.:<>"
+  math_chars=r"A-Za-z0-9∫Σ√πθαγβδλμσω∞×·±∓≤≥≠≈→=+\-*/^_()\[\]{},.:<>"
   for part in parts:
    if not part:
     continue
    if part.startswith("<"):
     out.append(part)
     continue
-   chunks=re.split(r"(\\s+)",part)
+   chunks=re.split(r"(\s+)",part)
    for chunk in chunks:
     if not chunk:
      continue
-    if re.search(r"[\\u0600-\\u06ff]",chunk):
+    if re.search(r"[\u0600-\u06ff]",chunk):
      out.append(chunk)
     elif re.search(r"["+math_chars+r"]",chunk):
      out.append(f"<span class='ltr-token' dir='ltr'>{chunk}</span>")
