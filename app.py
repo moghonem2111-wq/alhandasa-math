@@ -4995,7 +4995,8 @@ elif t_page == "online_backup":
                         st.session_state['_last_autosave_signature']=_autosave_signature()
                         st.success(f"✅ تم استرجاع {total} سجل من Excel Online داخل المنصة. راجع البيانات ثم احفظها.")
                 except Exception as exc: st.error(str(exc))
-        st.markdown("### 🔐 ضع هذه القيم في Streamlit Secrets")        st.code('''MS_TENANT_ID = "Tenant ID"
+        st.markdown("### 🔐 ضع هذه القيم في Streamlit Secrets")
+        st.code('''MS_TENANT_ID = "Tenant ID"
 MS_CLIENT_ID = "App Registration Client ID"
 MS_CLIENT_SECRET = "Client Secret"
 MS_ONEDRIVE_USER = "حساب Microsoft/OneDrive"
@@ -5098,4 +5099,3 @@ elif t_page == "ads":
                     st.caption("📎 يوجد حاليًا ملف صورة/فيديو مرتبط بهذا الإعلان.")
 
                 edit_file = None
-                if edit_type in ["صورة + بوست", "فيديو"]:
