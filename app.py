@@ -966,7 +966,7 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
         # لو تعذر ListModels نستخدم موديلات معروفة كاحتياطي.
         models = []
         preferred = _hamza_secret("GEMINI_MODEL").strip()
-        for candidate in [preferred, "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.8-flash"]:
+        for candidate in ["gemini-3.8-flash", preferred, "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"]:
             if candidate and candidate not in models:
                 models.append(candidate)
 
