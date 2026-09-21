@@ -977,6 +977,11 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
                         data = json.loads(text[s:e+1])
                     else:
                         data = {"answer":text,"final_answer":"","topic":"رياضيات"}
+                # تنظيف رموز الرياضيات التي قد تظهر كعلامة دولار بجوار الأرقام في واجهة حمصا.
+                # حمصا لا يستخدم العملات في حلول الرياضيات، لذلك نحذف محددات $ من النص النهائي.
+                for _field in ("answer", "final_answer", "topic"):
+                    if isinstance(data.get(_field), str):
+                        data[_field] = data[_field].replace("$", "")
                 return data
 
             except urllib.error.HTTPError as ex:
