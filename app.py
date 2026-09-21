@@ -890,16 +890,10 @@ def _hamza_secret(name):
         return ""
 
 def _hamza_ai_call(user_text, media_items=None, history=None):
-    """حمصا: حل رياضيات بالصور والكتابة عبر Google Gemini، مع إخراج منظم يدعم LaTeX."""
+    """حمصا: حل مسائل الرياضيات بالصور/النص باستخدام Google Gemini، مع اكتشاف الموديلات المتاحة تلقائياً."""
     key = _hamza_secret("GEMINI_API_KEY")
     if not key:
         raise RuntimeError("AI_KEY_MISSING")
-
-    preferred = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
-    models = []
-    for candidate in [preferred, "gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]:
-        if candidate and candidate not in models:
-            models.append(candidate)
 
     history_text = ""
     if history:
@@ -910,24 +904,24 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
 
     prompt = f"""
 أنت حمصا، مدرس رياضيات وإحصاء داخل منصة تعليمية.
-حل المسألة التي يرسلها الطالب بدقة شديدة، سواء كانت نصاً أو صورة.
-اقرأ الصورة بنفسك واستخرج الأرقام والرموز والجداول والرسومات قبل الحل.
+حل المسألة التي يرسلها الطالب بدقة شديدة، سواء كانت نصاً أو صورة أو PDF.
+اقرأ الصورة/الملف بنفسك واستخرج الأرقام والرموز والجداول والرسومات قبل الحل.
 
 قواعد الإجابة:
-- اكتب بالعربية المصرية البسيطة.
-- اعرض الحل على خطوات مرقمة وواضحة.
-- اكتب كل معادلة رياضية بصيغة LaTeX صحيحة.
-- استخدم $...$ للمعادلة داخل السطر و $$...$$ للمعادلة في سطر مستقل.
-- الكسور يجب أن تكون مثل $\\frac{{3}}{{4}}$، والجذور مثل $\\sqrt{{25}}$، والأسس مثل $x^2$.
-- إذا كانت المعادلة أو التعبير باللغة الإنجليزية/الأرقام اللاتينية، اجعله في اتجاه LTR ولا تقلب ترتيب الرموز.
-- إذا كان السؤال بالعربية، اكتب الشرح RTL، مع إبقاء المعادلات نفسها LTR حتى تظهر رياضياً بشكل صحيح.
-- لا تستخدم علامة الدولار كعملة؛ استخدمها فقط كعلامة LaTeX.
-- في النهاية اكتب عنواناً واضحاً: "الإجابة النهائية".
-- لا تطلب صورة أوضح إلا إذا كانت الصورة فعلاً غير مقروءة.
-- لا ترجع JSON ولا كود؛ أرجع الحل المنسق مباشرة.
+- اكتب شرحاً منظماً بالعربية المصرية.
+- استخدم عناوين وخطوات مرقمة واضحة.
+- كل معادلة رياضية يجب أن تكون LaTeX صحيحة.
+- استخدم $...$ للمعادلة داخل السطر و $$...$$ للمعادلة المستقلة.
+- الكسور: $\\frac{{3}}{{4}}$، الجذور: $\\sqrt{{25}}$، الأسس: $x^2$.
+- لا تضع علامة $ خارج LaTeX.
+- إذا كانت المعادلة باللغة الإنجليزية أو تحتوي أرقاماً ورموزاً لاتينية، حافظ على اتجاهها الرياضي من اليسار إلى اليمين.
+- الشرح العربي يكون من اليمين إلى اليسار، والمعادلات تبقى LTR.
+- لا تطلب صورة أوضح إذا كانت المسألة مقروءة.
+- في النهاية اكتب "الإجابة النهائية".
+- أرجع الحل كنص منسق فقط، وليس JSON.
 
 السؤال المكتوب:
-{str(user_text or "").strip() or "حل المسألة الموجودة في الصورة."}
+{str(user_text or "").strip() or "حل المسألة الموجودة في الملف المرفق."}
 
 المحادثة السابقة:
 {history_text or "لا توجد."}
@@ -935,17 +929,52 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
     parts = [{"text": prompt}]
     for item in (media_items or []):
         if item and item.get("data"):
-            parts.append({
-                "inline_data": {
-                    "mime_type": item.get("mime", "image/jpeg"),
-                    "data": item["data"]
-                }
-            })
+            parts.append({"inline_data": {
+                "mime_type": item.get("mime", "image/jpeg"),
+                "data": item["data"]
+            }})
 
-    body = {"contents": [{"role": "user", "parts": parts}], "generationConfig": {"maxOutputTokens": 4096}}
+    body = {
+        "contents": [{"role": "user", "parts": parts}],
+        "generationConfig": {"maxOutputTokens": 4096}
+    }
+
+    # اكتشاف الموديلات المتاحة فعلياً للمفتاح يمنع فشل 404 بسبب اسم موديل غير متاح.
+    models = []
+    try:
+        list_url = "https://generativelanguage.googleapis.com/v1beta/models"
+        list_req = urllib.request.Request(
+            list_url,
+            headers={"x-goog-api-key": key},
+            method="GET"
+        )
+        with urllib.request.urlopen(list_req, timeout=30) as resp:
+            listing = json.loads(resp.read().decode("utf-8"))
+        for m in listing.get("models", []):
+            name = str(m.get("name", "")).strip()
+            methods = m.get("supportedGenerationMethods") or []
+            if name.startswith("models/") and "generateContent" in methods:
+                short = name.split("/", 1)[1]
+                if "flash" in short.lower() and short not in models:
+                    models.append(short)
+        # نضع الموديل المحفوظ إن كان موجوداً ضمن القائمة.
+        preferred = _hamza_secret("GEMINI_MODEL").strip()
+        if preferred and preferred in models:
+            models.remove(preferred)
+            models.insert(0, preferred)
+    except Exception as ex:
+        # لو تعذر ListModels نستخدم موديلات معروفة كاحتياطي.
+        models = []
+        preferred = _hamza_secret("GEMINI_MODEL").strip()
+        for candidate in [preferred, "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.8-flash"]:
+            if candidate and candidate not in models:
+                models.append(candidate)
+
+    if not models:
+        raise RuntimeError("AI_NO_MODEL")
+
     last_error = ""
-
-    for model in models:
+    for model in models[:8]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         for attempt in range(3):
             req = urllib.request.Request(
@@ -957,53 +986,36 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
             try:
                 with urllib.request.urlopen(req, timeout=120) as resp:
                     raw = json.loads(resp.read().decode("utf-8"))
-
                 candidates = raw.get("candidates") or []
                 if not candidates:
                     raise RuntimeError("EMPTY_RESPONSE")
-
-                parts_out = (candidates[0].get("content") or {}).get("parts") or []
-                answer = "".join(
-                    str(p.get("text", "")) for p in parts_out
-                    if p.get("text") is not None
-                ).strip()
-
-                if not answer:
-                    raise RuntimeError("EMPTY_RESPONSE")
-
-                return {
-                    "answer": answer,
-                    "final_answer": "",
-                    "topic": "رياضيات"
-                }
-
+                out_parts = (candidates[0].get("content") or {}).get("parts") or []
+                answer = "".join(str(p.get("text", "")) for p in out_parts if p.get("text") is not None).strip()
+                if answer:
+                    return {"answer": answer, "final_answer": "", "topic": "رياضيات"}
+                raise RuntimeError("EMPTY_RESPONSE")
             except urllib.error.HTTPError as ex:
                 msg = ex.read().decode("utf-8", errors="ignore")
                 last_error = f"HTTP {getattr(ex, 'code', 0)}: {msg[:1200]}"
                 status = getattr(ex, "code", 0)
-
                 if status in (400, 401, 403, 404):
                     break
-
                 if status == 429 or "RESOURCE_EXHAUSTED" in msg:
                     if attempt < 2:
                         import time
                         time.sleep(2 * (attempt + 1))
                         continue
                     break
-
                 if status in (500, 502, 503, 504) or "UNAVAILABLE" in msg:
                     if attempt < 2:
                         import time
                         time.sleep(2 ** (attempt + 1))
                         continue
                     break
-
                 if attempt < 2:
                     import time
                     time.sleep(2 * (attempt + 1))
                     continue
-
             except Exception as ex:
                 last_error = f"{type(ex).__name__}: {str(ex)[:900]}"
                 if attempt < 2:
@@ -1019,6 +1031,8 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
         raise RuntimeError("AI_BUSY:" + last_error)
     if "401" in low or "403" in low or "api key" in low or "permission" in low or "unauthorized" in low:
         raise RuntimeError("AI_KEY_MISSING:" + last_error)
+    if "404" in low:
+        raise RuntimeError("AI_NO_MODEL:" + last_error)
     raise RuntimeError("AI_ERROR:" + last_error)
 
 def _hamza_pdf_html(question, answer, final_answer, student_name):
