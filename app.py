@@ -1036,54 +1036,90 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
     raise RuntimeError("AI_ERROR:" + last_error)
 
 def _hamza_render_solution(text):
-    """عرض حل حمصا بخطوات معنونة واتجاه صحيح للرياضيات."""
+    """عرض حل حمصا بتنسيق منظم واتجاه صحيح، بدون Regex معقد قد يسبب تعطل الصفحة."""
     raw = str(text or "").strip()
     if not raw:
         return
 
-    lines = [x.strip() for x in raw.replace("\\r\\n", "\\n").replace("\\n", "\\n").split("\\n")]
+    raw = raw.replace("\\r\\n", "\\n").replace("\\r", "\\n")
+    lines = [x.strip() for x in raw.split("\\n")]
+
+    def has_arabic(value):
+        return any(
+            ("\\u0600" <= ch <= "\\u06ff")
+            or ("\\u0750" <= ch <= "\\077f")
+            or ("\\u08a0" <= ch <= "\\08ff")
+            for ch in str(value)
+        )
+
+    def parse_step(value):
+        v = str(value).strip()
+        if v.startswith("الخطوة"):
+            v = v[len("الخطوة"):].strip()
+        digits = []
+        for ch in v:
+            if ch.isdigit():
+                digits.append(ch)
+            else:
+                break
+        if not digits:
+            return None
+        rest = v[len(digits):].lstrip()
+        if rest and rest[0] in ".-)_:：":
+            title = rest[1:].strip()
+            if title:
+                return "".join(digits), title
+        return None
+
+    math_tokens = (
+        "\\frac", "\\dfrac", "\\tfrac", "\\sqrt",
+        "\\sum", "\\int", "\\pi", "\\theta", "\\alpha",
+        "\\beta", "\\gamma", "\\lambda", "\\infty",
+        "=", "<", ">", "≤", "≥", "≠", "±", "×", "÷", "^", "_"
+    )
+
     for line in lines:
         if not line:
             st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
             continue
 
-        # عنوان خطوة: 1. ... / 2) ... / 3- ...
-        step = re.match(r"^(?:الخطوة\\s*)?(\\d+)\\s*[\\.\\)\\-:]\\s*(.+)$", line)
-        if step and not re.search(r"[=<>≤≥≠±×÷^]|\\\\frac|\\\\sqrt", step.group(2)):
-            title = html.escape(step.group(2))
-            st.markdown(
-                f"<div dir='rtl' style='margin-top:14px;margin-bottom:7px;"
-                f"padding:9px 13px;border-right:5px solid #1677ff;"
-                f"background:#eef6ff;border-radius:10px;color:#0b5ed7;"
-                f"font-size:17px;font-weight:900;'>{step.group(1)}. {title}</div>",
-                unsafe_allow_html=True,
-            )
-            continue
+        step = parse_step(line)
+        if step:
+            number, title = step
+            title_has_math = any(token in title for token in math_tokens)
+            if not title_has_math:
+                st.markdown(
+                    f"<div dir='rtl' style='margin-top:14px;margin-bottom:7px;"
+                    f"padding:9px 13px;border-right:5px solid #1677ff;"
+                    f"background:#eef6ff;border-radius:10px;color:#0b5ed7;"
+                    f"font-size:17px;font-weight:900;'>{number}. {html.escape(title)}</div>",
+                    unsafe_allow_html=True,
+                )
+                continue
 
-        # المعادلة المستقلة: دائماً LTR وتظهر بعرض رياضي صحيح.
         formula = line.strip()
+
+        # معادلة كاملة: نعرضها بـ LaTeX من اليسار لليمين.
         if formula.startswith("$$") and formula.endswith("$$"):
             st.latex(formula[2:-2].strip())
             continue
-        if formula.startswith("$") and formula.endswith("$"):
+        if formula.startswith("$") and formula.endswith("$") and len(formula) > 2:
             st.latex(formula[1:-1].strip())
             continue
 
-        math_like = (
-            bool(re.search(r"\\\\frac|\\\\dfrac|\\\\tfrac|\\\\sqrt|\\\\sum|\\\\int|[=<>≤≥≠±×÷^]", formula))
-            and bool(re.search(r"[0-9A-Za-z]", formula))
-        )
-        has_arabic = bool(re.search(r"[ء-ي]", formula))
+        is_math = any(token in formula for token in math_tokens)
+        contains_latin_or_digits = any(ch.isascii() and (ch.isalnum() or ch in "=<>+-*/().") for ch in formula)
 
-        if math_like and not has_arabic:
+        if is_math and contains_latin_or_digits and not has_arabic(formula):
             st.latex(formula.strip("$ "))
-        elif not has_arabic:
+        elif not has_arabic(formula):
             st.markdown(
                 f"<div dir='ltr' style='text-align:left;line-height:1.9;margin:4px 0;'>"
                 f"{html.escape(formula)}</div>",
                 unsafe_allow_html=True,
             )
         else:
+            # النص العربي يبقى RTL، وMarkdown يظل قادراً على تفسير LaTeX بين $...$.
             st.markdown(formula)
 
 def _hamza_math_html(value):
