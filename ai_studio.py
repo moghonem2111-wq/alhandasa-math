@@ -75,12 +75,11 @@ def math_html(value):
  s=str(value or "").replace("\\r"," ").replace("\\n"," ").strip()
  s=re.sub(r"\\$\\$(.*?)\\$\\$",r"\\1",s,flags=re.S)
  s=re.sub(r"\\$(.*?)\\$",r"\\1",s,flags=re.S)
- # إزالة أي علامة $ متبقية حتى لا تظهر في ملف الطباعة.
  s=s.replace("$","")
  s=s.replace("\\(","").replace("\\)","").replace("\\[","").replace("\\]","")
  s=s.replace("\\u2212","-").replace("\\u00d7","×")
  for a,b in [(r"\left",""),(r"\right",""),(r"\displaystyle",""),(r"\,"," "),(r"\;"," "),(r"\!",""),(r"\pi","π"),(r"\theta","θ"),(r"\alpha","α"),(r"\beta","β"),(r"\gamma","γ"),(r"\delta","δ"),(r"\lambda","λ"),(r"\mu","μ"),(r"\sigma","σ"),(r"\omega","ω"),(r"\infty","∞"),(r"\times","×"),(r"\cdot","·"),(r"\pm","±"),(r"\mp","∓"),(r"\leq","≤"),(r"\geq","≥"),(r"\neq","≠"),(r"\approx","≈"),(r"\to","→"),(r"\sum","Σ"),(r"\int","∫"),(r"\angle","∠")]:s=s.replace(a,b)
- s=re.sub(r"\text\{([^{}]*)\}",r"\\1",s)
+ s=re.sub(r"\text\{([^{}]*)\}",r"\1",s)
  def bal(t,p):
   if p>=len(t) or t[p]!="{":return "",p
   d=0
@@ -96,7 +95,7 @@ def math_html(value):
    if buf:out.append(html.escape("".join(buf),quote=False));buf.clear()
   while i<len(t):
    if t.startswith(r"\frac",i) or t.startswith(r"\dfrac",i) or t.startswith(r"\tfrac",i):
-    cmd=6 if t.startswith(r"\dfrac",i) else (6 if t.startswith(r"\tfrac",i) else 5);i+=cmd
+    cmd=6 if t.startswith(r"\dfrac",i) or t.startswith(r"\tfrac",i) else 5;i+=cmd
     while i<len(t) and t[i].isspace():i+=1
     if i<len(t) and t[i]=="{":
      num,j=bal(t,i);i=j
@@ -105,8 +104,7 @@ def math_html(value):
       den,j=bal(t,i);i=j;flush();out.append(f"<span class='frac'><span class='num'>{render(num)}</span><span class='den'>{render(den)}</span></span>");continue
     buf.append("/");continue
    if t.startswith(r"\sqrt",i):
-    i+=5
-    idx=""
+    i+=5;idx=""
     if i<len(t) and t[i]=="[":
      j=t.find("]",i+1);idx=t[i+1:j] if j>=0 else "";i=j+1 if j>=0 else i
     while i<len(t) and t[i].isspace():i+=1
@@ -125,39 +123,25 @@ def math_html(value):
      mp={"pi":"π","theta":"θ","alpha":"α","beta":"β","gamma":"γ","delta":"δ","lambda":"λ","mu":"μ","sigma":"σ","omega":"ω","infty":"∞","times":"×","cdot":"·","pm":"±","mp":"∓","leq":"≤","geq":"≥","neq":"≠","approx":"≈","to":"→","sum":"Σ","int":"∫","angle":"∠"};tok=m.group(1);buf.append(mp.get(tok,tok));i+=len(tok)+1;continue
    buf.append(t[i]);i+=1
   flush();return "".join(out)
- # Also recognize simple numeric/algebraic fractions written as 1/2 or (x+1)/(x-1).
  s=re.sub(r"(?<![\w])\(([^()]+)\)\s*/\s*\(([^()]+)\)",lambda m:f"\\frac{{{m.group(1)}}}{{{m.group(2)}}}",s)
  s=re.sub(r"(?<![\w])(-?\d+(?:\.\d+)?)\s*/\s*(-?\d+(?:\.\d+)?)",lambda m:f"\\frac{{{m.group(1)}}}{{{m.group(2)}}}",s)
- s=re.sub(r"(?<![\w])(-?\d+(?:\.\d+)?)\s*/\s*(-?\d+(?:\.\d+)?)",lambda m:f"\\frac{{{m.group(1)}}}{{{m.group(2)}}}",s)
- rendered=render(s)
- has_arabic=bool(re.search(r"[\\u0600-\\u06ff]", s))
 
- # عزل الأجزاء الإنجليزية والرياضية داخل النص العربي حتى لا تنعكس في PDF.
- def bidi_runs(markup):
-  parts=re.split(r"(<[^>]+>)",markup)
-  out=[]
-  math_chars=r"A-Za-z0-9∫Σ√πθαγβδλμσω∞×·±∓≤≥≠≈→=+\-*/^_()\[\]{},.:<>"
-  for part in parts:
-   if not part:
-    continue
-   if part.startswith("<"):
-    out.append(part)
-    continue
-   chunks=re.split(r"(\s+)",part)
-   for chunk in chunks:
-    if not chunk:
-     continue
-    if re.search(r"[\u0600-\u06ff]",chunk):
-     out.append(chunk)
-    elif re.search(r"["+math_chars+r"]",chunk):
-     out.append(f"<span class='ltr-token' dir='ltr'>{chunk}</span>")
-    else:
-     out.append(chunk)
-  return "".join(out)
-
- rendered=bidi_runs(rendered)
- direction_class="rtl-math" if has_arabic else "ltr-math"
- return f"<span class='{direction_class}'>{rendered}</span>"
+ # مهم للطباعة: نفصل النص العربي عن كل جزء رياضي/إنجليزي، ونضع الجزء الرياضي
+ # بالكامل داخل حاوية LTR واحدة حتى لا تقلبه خوارزمية RTL.
+ chunks=re.split(r"([\u0600-\u06ff\u0750-\u077f]+)",s)
+ rendered_parts=[]
+ for chunk in chunks:
+  if not chunk:continue
+  if re.search(r"[\u0600-\u06ff\u0750-\u077f]",chunk):
+   rendered_parts.append(f"<span class='arabic-run' dir='rtl'>{html.escape(chunk,quote=False)}</span>")
+  else:
+   rendered_chunk=render(chunk)
+   if re.search(r"[A-Za-z0-9∫Σ√πθαγβδλμσω∞×·±∓≤≥≠≈→=+\-*/^_()\[\]{}.,:<>]",chunk):
+    rendered_parts.append(f"<span class='math-run' dir='ltr'>{rendered_chunk}</span>")
+   else:
+    rendered_parts.append(rendered_chunk)
+ rendered="".join(rendered_parts)
+ return f"<span class='math-content' dir='rtl'>{rendered}</span>"
 def paper(title,grade,subject,qs,answers=False):
  teacher_name,teacher_phone=_print_teacher()
  z=[]
@@ -168,7 +152,7 @@ def paper(title,grade,subject,qs,answers=False):
   if answers:s+=f"<div class='ans'><b>الإجابة:</b> {math_html(q.get('answer',''))}<br><span>{math_html(q.get('explanation',''))}</span></div>"
   z.append(s+"</section>")
  return f"""<!doctype html><html dir='rtl' lang='ar'><meta charset='utf-8'><style>@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@800;900&display=swap');
-@page{{size:A4;margin:11mm 12mm 13mm}}*{{box-sizing:border-box}}body{{font-family:Tahoma,Arial,sans-serif;color:#172033;font-weight:700;line-height:1.9;margin:0;background:#fff}}.header{{position:relative;overflow:hidden;border-radius:18px;padding:15px 20px;margin-bottom:13px;background:linear-gradient(135deg,#0757b8 0%,#1677e8 58%,#3b82f6 100%);color:#fff;box-shadow:0 5px 16px rgba(37,99,235,.18)}}.header:after{{content:'';position:absolute;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.10);left:-35px;top:-90px}}.header:before{{content:'';position:absolute;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08);left:95px;bottom:-80px}}.headrow{{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:20px}}.brand h2{{margin:0;font-size:21px;color:#fff;font-weight:800}}.brand div{{font-size:11px;color:#eaf3ff;font-weight:600}}.brand .phone{{font-size:12px;margin-top:3px;color:#fff}}.badge{{width:58px;height:58px;border:1px solid rgba(255,255,255,.35);border-radius:16px;background:rgba(255,255,255,.13);display:flex;align-items:center;justify-content:center;font-size:29px;flex:none}}.title{{text-align:center;margin:8px 0 12px;font-size:22px;color:#0757b8;font-weight:800}}.titleline{{height:3px;width:95px;background:#1677e8;border-radius:3px;margin:-5px auto 13px}}.meta{{display:grid;grid-template-columns:1fr 1fr;gap:7px;border:1px solid #cbd8ea;border-radius:13px;padding:10px 12px;background:#f5f9ff;font-size:12px;margin-bottom:12px}}.meta div{{background:#fff;border:1px solid #e1e8f2;border-radius:8px;padding:5px 8px}}.q{{border:1px solid #d6dfeb;border-right:4px solid #1677e8;border-radius:12px;padding:11px 14px;margin:9px 0;page-break-inside:avoid;background:#fff;box-shadow:0 2px 7px rgba(15,23,42,.045)}}.qhead{{display:flex;justify-content:space-between;gap:10px;color:#0757b8;font-size:12.5px;border-bottom:1px solid #e5ebf3;padding-bottom:5px;margin-bottom:7px}}.qtext{{font-size:17px;line-height:2.05;font-weight:700;direction:rtl}}.ltr-math{{direction:ltr!important;unicode-bidi:isolate;display:inline-block;text-align:left}}.rtl-math{{direction:rtl!important;unicode-bidi:isolate;display:block;text-align:right}}.ltr-token{{direction:ltr!important;unicode-bidi:isolate;display:inline-block;white-space:nowrap;text-align:left}}.opts{{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px;font-size:14px}}.opt{{border:1px solid #dbe5f0;border-radius:8px;padding:5px 8px;background:#f8fbff}}.box{{color:#1677e8;font-size:18px;margin-left:5px}}.lines hr{{border:0;border-bottom:1px solid #d7dee8;margin:16px 0}}.ans{{background:#eef6ff;border:1px solid #9ec5f5;border-right:4px solid #1677e8;padding:8px 10px;border-radius:9px;margin-top:8px;color:#12355f}}.frac{{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;margin:0 .12em;min-width:1.4em}}.frac .num{{border-bottom:1.5px solid #172033;padding:0 .22em;display:block}}.frac .den{{padding:0 .22em;display:block}}.sqrt{{display:inline-block;position:relative;margin:0 .08em;padding-left:.72em;vertical-align:middle}}.sqrt:before{{content:'√';position:absolute;left:0;top:-.12em;font-size:1.3em;font-weight:400}}.sqrt .radicand{{display:inline-block;border-top:1.5px solid #172033;padding:0 .12em;min-width:.6em}}sup,sub{{font-size:.72em;line-height:0}}.footer{{margin-top:16px;padding:8px 0 0;border-top:2px solid #dbe5f0;text-align:center;font-size:10px;color:#526174;font-weight:700}}.footer strong{{color:#0757b8}}</style><body><div class='header'><div class='headrow'><div class='brand'><h2>{esc(teacher_name)}</h2><div>البشمهندس x الرياضه • منصة تعليمية للرياضيات والإحصاء</div><div class='phone'>📞 {esc(teacher_phone)}</div></div><div class='badge'>📐</div></div></div><div class='title'>{esc(title)}</div><div class='titleline'></div><div class='meta'><div>الطالب: __________________</div><div>التاريخ: __________</div><div>الصف: {esc(grade)}</div><div>المادة: {esc(subject)}</div></div>{''.join(z)}<div class='footer'>إعداد ومتابعة: <strong>{esc(teacher_name)}</strong> &nbsp; | &nbsp; 📞 {esc(teacher_phone)} &nbsp; | &nbsp; البشمهندس x الرياضه</div></body></html>"""
+@page{{size:A4;margin:11mm 12mm 13mm}}*{{box-sizing:border-box}}body{{font-family:Tahoma,Arial,sans-serif;color:#172033;font-weight:700;line-height:1.9;margin:0;background:#fff}}.header{{position:relative;overflow:hidden;border-radius:18px;padding:15px 20px;margin-bottom:13px;background:linear-gradient(135deg,#0757b8 0%,#1677e8 58%,#3b82f6 100%);color:#fff;box-shadow:0 5px 16px rgba(37,99,235,.18)}}.header:after{{content:'';position:absolute;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.10);left:-35px;top:-90px}}.header:before{{content:'';position:absolute;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08);left:95px;bottom:-80px}}.headrow{{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:20px}}.brand h2{{margin:0;font-size:21px;color:#fff;font-weight:800}}.brand div{{font-size:11px;color:#eaf3ff;font-weight:600}}.brand .phone{{font-size:12px;margin-top:3px;color:#fff}}.badge{{width:58px;height:58px;border:1px solid rgba(255,255,255,.35);border-radius:16px;background:rgba(255,255,255,.13);display:flex;align-items:center;justify-content:center;font-size:29px;flex:none}}.title{{text-align:center;margin:8px 0 12px;font-size:22px;color:#0757b8;font-weight:800}}.titleline{{height:3px;width:95px;background:#1677e8;border-radius:3px;margin:-5px auto 13px}}.meta{{display:grid;grid-template-columns:1fr 1fr;gap:7px;border:1px solid #cbd8ea;border-radius:13px;padding:10px 12px;background:#f5f9ff;font-size:12px;margin-bottom:12px}}.meta div{{background:#fff;border:1px solid #e1e8f2;border-radius:8px;padding:5px 8px}}.q{{border:1px solid #d6dfeb;border-right:4px solid #1677e8;border-radius:12px;padding:11px 14px;margin:9px 0;page-break-inside:avoid;background:#fff;box-shadow:0 2px 7px rgba(15,23,42,.045)}}.qhead{{display:flex;justify-content:space-between;gap:10px;color:#0757b8;font-size:12.5px;border-bottom:1px solid #e5ebf3;padding-bottom:5px;margin-bottom:7px}}.qtext{{font-size:17px;line-height:2.05;font-weight:700;direction:rtl;text-align:right}}.math-content{{direction:rtl;unicode-bidi:embed;display:inline}}.arabic-run{{direction:rtl;unicode-bidi:embed}}.math-run{{direction:ltr!important;unicode-bidi:embed;display:inline-block;text-align:left;white-space:normal}}.math-run .frac,.math-run .sqrt,.math-run sup,.math-run sub{{direction:ltr!important;unicode-bidi:embed}}.opts{{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px;font-size:14px}}.opt{{border:1px solid #dbe5f0;border-radius:8px;padding:5px 8px;background:#f8fbff}}.box{{color:#1677e8;font-size:18px;margin-left:5px}}.lines hr{{border:0;border-bottom:1px solid #d7dee8;margin:16px 0}}.ans{{background:#eef6ff;border:1px solid #9ec5f5;border-right:4px solid #1677e8;padding:8px 10px;border-radius:9px;margin-top:8px;color:#12355f}}.frac{{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;margin:0 .12em;min-width:1.4em}}.frac .num{{border-bottom:1.5px solid #172033;padding:0 .22em;display:block}}.frac .den{{padding:0 .22em;display:block}}.sqrt{{display:inline-block;position:relative;margin:0 .08em;padding-left:.72em;vertical-align:middle}}.sqrt:before{{content:'√';position:absolute;left:0;top:-.12em;font-size:1.3em;font-weight:400}}.sqrt .radicand{{display:inline-block;border-top:1.5px solid #172033;padding:0 .12em;min-width:.6em}}sup,sub{{font-size:.72em;line-height:0}}.footer{{margin-top:16px;padding:8px 0 0;border-top:2px solid #dbe5f0;text-align:center;font-size:10px;color:#526174;font-weight:700}}.footer strong{{color:#0757b8}}</style><body><div class='header'><div class='headrow'><div class='brand'><h2>{esc(teacher_name)}</h2><div>البشمهندس x الرياضه • منصة تعليمية للرياضيات والإحصاء</div><div class='phone'>📞 {esc(teacher_phone)}</div></div><div class='badge'>📐</div></div></div><div class='title'>{esc(title)}</div><div class='titleline'></div><div class='meta'><div>الطالب: __________________</div><div>التاريخ: __________</div><div>الصف: {esc(grade)}</div><div>المادة: {esc(subject)}</div></div>{''.join(z)}<div class='footer'>إعداد ومتابعة: <strong>{esc(teacher_name)}</strong> &nbsp; | &nbsp; 📞 {esc(teacher_phone)} &nbsp; | &nbsp; البشمهندس x الرياضه</div></body></html>"""
 def mind(d):
  teacher_name,teacher_phone=_print_teacher()
  cards="".join(f"<div class='card'><h3>{math_html(b.get('name',''))}</h3><ul>{''.join(f'<li>{math_html(x)}</li>' for x in b.get('items',[]))}</ul></div>" for b in d.get('branches',[]))
