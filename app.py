@@ -890,12 +890,16 @@ def _hamza_secret(name):
         return ""
 
 def _hamza_ai_call(user_text, media_items=None, history=None):
-    """حمصا باستخدام Google Gemini Interactions API: نص + صورة/ملف + شرح رياضي خطوة بخطوة."""
+    """حمصا: مدرس رياضيات بالذكاء الاصطناعي من Google Gemini، يدعم النص والصور وملفات PDF."""
     key = _hamza_secret("GEMINI_API_KEY")
     if not key:
         raise RuntimeError("AI_KEY_MISSING")
 
-    model = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
+    preferred = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
+    models = []
+    for candidate in [preferred, "gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]:
+        if candidate and candidate not in models:
+            models.append(candidate)
 
     context = ""
     if history:
@@ -905,92 +909,84 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
         )
 
     prompt = f"""
-أنت "حمصا"، مدرس رياضيات وإحصاء ودود داخل منصة تعليمية للطلاب.
-أجب بالعربية المصرية المبسطة وكن دقيقاً جداً.
-إذا كانت المسألة رياضيات أو إحصاء:
-1) افهم السؤال والصورة بدقة.
-2) اشرح القاعدة أو الفكرة المستخدمة.
-3) حل المسألة خطوة بخطوة وبترتيب واضح.
-4) اكتب الإجابة النهائية بوضوح.
-5) إذا كانت هناك صورة لمسألة، اقرأ الأرقام والرموز والرسوم منها مباشرة ولا تفترض أرقاماً غير موجودة.
-6) استخدم LaTeX عند الحاجة، مثل $\\frac{{1}}{{2}}$ و $\\sqrt{{x}}$ و $x^2$.
-7) لا تستخدم علامة $ كعملة.
-8) لا تعطِ الإجابة فقط؛ علّم الطالب طريقة الحل.
-إذا كان السؤال غير رياضي، أخبر الطالب بلطف أن حمصا متخصص أساساً في الرياضيات والإحصاء.
+أنت "حمصا"، مدرس رياضيات وإحصاء داخل منصة تعليمية.
+مهمتك حل المسألة الموجودة في رسالة الطالب أو الصورة/الملف المرفق، وليس البحث على الإنترنت.
+لا تقل للطالب "ابحث" أو "سأبحث" ولا تستخدم أدوات بحث. اقرأ الصورة بنفسك وحل المسألة.
+
+أخرج الإجابة التعليمية بهذا الترتيب:
+1. "فهم السؤال"
+2. "القانون أو الفكرة"
+3. "الحل خطوة بخطوة"
+4. "الإجابة النهائية"
+
+قواعد الرياضيات:
+- استخدم LaTeX بشكل صحيح.
+- المعادلات داخل السطر بين $...$.
+- المعادلات المستقلة في سطر كامل بين $$...$$.
+- الكسور مثل $\\frac{{a}}{{b}}$.
+- الجذور مثل $\\sqrt{{x}}$.
+- الأسس مثل $x^2$، والمؤشرات مثل $a_1$.
+- استخدم الرموز الرياضية الطبيعية: π، θ، α، β، ≤، ≥، ≠، ×، ±، ∑، ∫.
+- لا تستخدم $ كعملة.
+- لا تغيّر أرقام السؤال ولا تخمّن رقماً غير واضح؛ إذا كانت قيمة في الصورة غير مقروءة فعلاً اذكر ذلك بوضوح.
+- لا تعطِ النتيجة فقط؛ اشرح طريقة الحل بالعربية المصرية المبسطة.
 
 المحادثة السابقة:
 {context or "لا توجد محادثة سابقة."}
 
-رسالة الطالب الحالية:
+رسالة الطالب:
 {user_text.strip() or "حل المسألة الموجودة في الملف المرفق."}
 
-أعد JSON صالحاً يحتوي على:
-answer = الحل والشرح بالعربية
-final_answer = الإجابة النهائية باختصار
-topic = موضوع المسألة
+أعد JSON صالحاً فقط بهذا الشكل:
+{{"answer":"...","final_answer":"...","topic":"..."}}
 """
-
-    inputs = [{"type":"text","text":prompt}]
+    parts = [{"text": prompt}]
     for item in (media_items or []):
         if not item or not item.get("data"):
             continue
-        mime = str(item.get("mime") or "image/jpeg")
-        data = str(item["data"])
-        if mime.startswith("image/"):
-            inputs.append({"type":"image","data":data,"mime_type":mime})
-        elif mime == "application/pdf":
-            inputs.append({"type":"document","data":data,"mime_type":mime})
+        parts.append({
+            "inline_data": {
+                "mime_type": str(item.get("mime") or "image/jpeg"),
+                "data": str(item["data"])
+            }
+        })
 
     body = {
-        "model": model,
-        "input": inputs,
-        "store": False,
-        "response_format": {
-            "type":"text",
-            "mime_type":"application/json",
-            "schema":{
-                "type":"object",
-                "properties":{
-                    "answer":{"type":"string"},
-                    "final_answer":{"type":"string"},
-                    "topic":{"type":"string"}
-                },
-                "required":["answer","final_answer","topic"]
-            }
+        "contents": [{"role": "user", "parts": parts}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "maxOutputTokens": 4096
         }
     }
 
     last_error = ""
-    models = [model, "gemini-3.8-flash", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
-    models = list(dict.fromkeys(models))
-
-    for current_model in models:
-        body["model"] = current_model
+    for model in models:
         for attempt in range(3):
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             req = urllib.request.Request(
-                "https://generativelanguage.googleapis.com/v1beta/interactions",
+                url,
                 data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-                headers={"Content-Type":"application/json","x-goog-api-key":key},
+                headers={"Content-Type": "application/json", "x-goog-api-key": key},
                 method="POST"
             )
             try:
                 with urllib.request.urlopen(req, timeout=120) as resp:
                     raw = json.loads(resp.read().decode("utf-8"))
 
-                steps = raw.get("steps") or []
-                texts = []
-                for step in steps:
-                    if step.get("type") == "model_output":
-                        for block in (step.get("content") or []):
-                            if block.get("type") == "text" and block.get("text"):
-                                texts.append(str(block["text"]))
-                text = "\n".join(texts).strip()
-                if not text:
-                    text = str(raw.get("output_text") or "").strip()
+                candidates = raw.get("candidates") or []
+                if not candidates:
+                    raise RuntimeError("EMPTY_RESPONSE")
+                content = candidates[0].get("content") or {}
+                text_parts = content.get("parts") or []
+                text = "".join(
+                    str(p.get("text", ""))
+                    for p in text_parts
+                    if p.get("text") is not None
+                ).strip()
                 if not text:
                     raise RuntimeError("EMPTY_RESPONSE")
 
-                text = text.replace(chr(96)*3+"json","").replace(chr(96)*3,"").strip()
+                text = text.replace(chr(96)*3 + "json", "").replace(chr(96)*3, "").strip()
                 try:
                     data = json.loads(text)
                 except Exception:
@@ -999,25 +995,36 @@ topic = موضوع المسألة
                     if a >= 0 and b > a:
                         data = json.loads(text[a:b+1])
                     else:
-                        data = {"answer":text,"final_answer":"","topic":"رياضيات"}
+                        data = {
+                            "answer": text,
+                            "final_answer": "",
+                            "topic": "رياضيات"
+                        }
+
+                if not isinstance(data, dict):
+                    data = {"answer": str(data), "final_answer": "", "topic": "رياضيات"}
+                data.setdefault("answer", "")
+                data.setdefault("final_answer", "")
+                data.setdefault("topic", "رياضيات")
                 return data
 
             except urllib.error.HTTPError as ex:
                 msg = ex.read().decode("utf-8", errors="ignore")
-                last_error = f"HTTP {getattr(ex,'code',0)}: {msg[:900]}"
+                last_error = f"HTTP {getattr(ex,'code',0)}: {msg[:700]}"
                 status = getattr(ex, "code", 0)
-                if status in (429,500,502,503,504):
+                if status in (429, 500, 502, 503, 504):
                     import time
                     if attempt < 2:
                         time.sleep(2 ** (attempt + 1))
                         continue
                     break
-                if status in (400,401,403,404):
+                if status in (400, 401, 403, 404):
                     break
                 if attempt < 2:
                     import time
                     time.sleep(2 ** (attempt + 1))
                     continue
+
             except (urllib.error.URLError, TimeoutError, RuntimeError, ValueError, KeyError) as ex:
                 last_error = str(ex)
                 if attempt < 2:
@@ -1037,6 +1044,7 @@ topic = موضوع المسألة
     if "api key" in low or "permission" in low or "unauthorized" in low:
         raise RuntimeError("AI_KEY_MISSING")
     raise RuntimeError("AI_ERROR:" + str(last_error or "unknown")[:700])
+
 
 def _hamza_pdf_html(question, answer, final_answer, student_name):
     q=html.escape(str(question or "").strip()).replace("\n","<br>")
