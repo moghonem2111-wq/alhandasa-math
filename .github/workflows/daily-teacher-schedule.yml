@@ -2,9 +2,8 @@ name: Daily Teacher Schedule Notification
 
 on:
   schedule:
-    # 07:00 صباحًا بتوقيت القاهرة = 05:00 UTC في فترة التوقيت الصيفي/08:00 UTC في الشتاء.
-    # نستخدم 05:00 UTC كتنبيه صباحي مبكر؛ الرسالة نفسها تعتمد على توقيت Africa/Cairo.
-    - cron: "0 5 * * *"
+    - cron: "*/5 * * * *"
+      timezone: "Africa/Cairo"
   workflow_dispatch:
 
 jobs:
@@ -19,75 +18,117 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python - <<'PY'
-          import os, requests
+          import os, re, requests
           from datetime import datetime
           from zoneinfo import ZoneInfo
+          from html import escape
 
-          supabase = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
-          supabase_key = os.environ.get("SUPABASE_KEY", "").strip()
-          bot = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-          chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+          TZ = ZoneInfo("Africa/Cairo")
+          DEFAULT_ZOOM = "https://us05web.zoom.us/j/83526892910?pwd=2jWRgATgBRPbXttdnm0QpLwBApsZL4.1"
+          supabase = os.environ["SUPABASE_URL"].strip().rstrip("/")
+          key = os.environ["SUPABASE_KEY"].strip()
+          bot = os.environ["TELEGRAM_BOT_TOKEN"].strip()
+          chat = os.environ["TELEGRAM_CHAT_ID"].strip()
+          headers = {"apikey": key, "Authorization": "Bearer " + key}
 
-          missing = [k for k,v in {
-              "SUPABASE_URL": supabase,
-              "SUPABASE_KEY": supabase_key,
-              "TELEGRAM_BOT_TOKEN": bot,
-              "TELEGRAM_CHAT_ID": chat_id,
-          }.items() if not v]
-          if missing:
-              raise SystemExit("Missing GitHub Secrets: " + ", ".join(missing))
+          def clean(v):
+              s = str(v or "").strip()
+              return "" if s.lower() in ("nan","none","null") else s
 
-          headers = {"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"}
-          rows = requests.get(
-              f"{supabase}/rest/v1/weekly_schedule",
-              headers=headers,
-              params={"select":"اسم الطالب,المجموعة/الصف,اليوم,الموعد,اسم الأكاديمية,حالة الموعد",
-                      "حالة الموعد":"neq.متوقف"},
-              timeout=30,
-          )
-          rows.raise_for_status()
-          data = rows.json()
+          def parse_time(v):
+              s = clean(v).replace("٫", ":").replace("：", ":")
+              for fmt in ("%H:%M","%H.%M","%H:%M:%S"):
+                  try: return datetime.strptime(s[:8], fmt).time()
+                  except: pass
+              s = (s.upper().replace("صباحًا","AM").replace("صباحا","AM").replace("ص","AM")
+                     .replace("مساءً","PM").replace("مساء","PM").replace("م","PM"))
+              for fmt in ("%I:%M %p","%I.%M %p","%I %p"):
+                  try: return datetime.strptime(s, fmt).time()
+                  except: pass
+              return None
 
-          now = datetime.now(ZoneInfo("Africa/Cairo"))
-          day_names = ["الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت","الأحد"]
-          today = day_names[now.weekday()]
-          today_rows = [r for r in data if str(r.get("اليوم","")).strip() == today]
-          def key(r):
-              try:
-                  return datetime.strptime(str(r.get("الموعد",""))[:5], "%H:%M")
-              except Exception:
-                  return datetime.max
-          today_rows.sort(key=key)
+          def first(row, keys):
+              for k in keys:
+                  v = clean(row.get(k, ""))
+                  if v: return v
+              return ""
 
-          if not today_rows:
-              text = f"🔔 <b>جدول اليوم — {today}</b>\nلا توجد حصص مسجلة اليوم."
-          else:
-              lines = [f"🔔 <b>صباح الخير يا بشمهندس 👋</b>",
-                       f"📅 <b>حصص اليوم — {today}</b>", ""]
-              for r in today_rows:
-                  tm = str(r.get("الموعد",""))[:5]
-                  try:
-                      tm = datetime.strptime(tm, "%H:%M").strftime("%I:%M %p").lstrip("0")
-                  except Exception:
-                      pass
-                  student = str(r.get("اسم الطالب","")).strip()
-                  grade = str(r.get("المجموعة/الصف","")).strip()
-                  academy = str(r.get("اسم الأكاديمية","")).strip()
-                  line = f"🕐 <b>{tm}</b> — {student}"
-                  if grade and grade.lower() != "nan":
-                      line += f" — {grade}"
-                  if academy and academy.lower() != "nan":
-                      line += f" — {academy}"
-                  lines.append(line)
-              lines += ["", f"📌 إجمالي حصص اليوم: <b>{len(today_rows)}</b>"]
-              text = "\n".join(lines)
+          def send(msg):
+              r = requests.post(
+                  "https://api.telegram.org/bot" + bot + "/sendMessage",
+                  data={"chat_id": chat, "text": msg, "parse_mode": "HTML",
+                        "disable_web_page_preview": False},
+                  timeout=30)
+              r.raise_for_status()
 
-          resp = requests.post(
-              f"https://api.telegram.org/bot{bot}/sendMessage",
-              data={"chat_id": chat_id, "text": text, "parse_mode": "HTML",
-                    "disable_web_page_preview": "true"},
-              timeout=30,
-          )
-          resp.raise_for_status()
-          print("Daily schedule notification sent successfully.")
+          data = requests.get(
+              supabase + "/rest/v1/weekly_schedule",
+              headers=headers, params={"select":"*","limit":"1000"}, timeout=30).json()
+
+          now = datetime.now(TZ).replace(second=0, microsecond=0)
+          days = ["الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت","الأحد"]
+          today = days[now.weekday()]
+          rows = []
+
+          for row in data:
+              if clean(row.get("اليوم")) != today:
+                  continue
+              if clean(row.get("حالة الموعد")) in ("متوقف","ملغي","ملغاة","موقوف"):
+                  continue
+              t = parse_time(row.get("الموعد"))
+              if not t:
+                  continue
+              row["_dt"] = datetime(now.year, now.month, now.day, t.hour, t.minute, tzinfo=TZ)
+              rows.append(row)
+
+          rows.sort(key=lambda x: x["_dt"])
+
+          # 07:00 صباحًا: ملخص اليوم
+          if now.hour == 7 and now.minute < 5:
+              if not rows:
+                  send("🌅 <b>صباح الخير يا بشمهندس 👋</b>\n📅 <b>" + escape(today) +
+                       "</b>\n\nلا توجد حصص مسجلة اليوم.")
+              else:
+                  lines = ["🌅 <b>صباح الخير يا بشمهندس 👋</b>",
+                           "📅 <b>حصص اليوم — " + escape(today) + "</b>", ""]
+                  for row in rows:
+                      tm = row["_dt"].strftime("%I:%M %p").lstrip("0")
+                      student = escape(clean(row.get("اسم الطالب")) or "غير محدد")
+                      grade = escape(clean(row.get("المجموعة/الصف")))
+                      academy = escape(clean(row.get("اسم الأكاديمية")))
+                      line = "🕐 <b>" + tm + "</b> — 👤 " + student
+                      if grade: line += " — 🎓 " + grade
+                      if academy: line += " — 🏫 " + academy
+                      lines.append(line)
+                  lines += ["", "📌 إجمالي حصص اليوم: <b>" + str(len(rows)) + "</b>"]
+                  send("\n".join(lines))
+
+          # قبل الحصة بـ10 دقائق، وعند بداية الحصة
+          for row in rows:
+              delta = (row["_dt"] - now).total_seconds() / 60
+              student = escape(clean(row.get("اسم الطالب")) or "غير محدد")
+              grade = escape(clean(row.get("المجموعة/الصف")) or "غير محدد")
+              academy = escape(clean(row.get("اسم الأكاديمية")) or "غير محددة")
+              tm = row["_dt"].strftime("%I:%M %p").lstrip("0")
+              zoom = first(row, ["رابط زووم","رابط Zoom","Zoom","zoom_link","zoom","لينك زووم","رابط الحصة"]) or DEFAULT_ZOOM
+              link = escape(zoom, quote=True)
+
+              if 5 <= delta <= 10:
+                  send("⏳ <b>استعد للحصة بعد 10 دقائق</b>\n\n"
+                       "👤 <b>الطالب:</b> " + student + "\n"
+                       "🎓 <b>الصف:</b> " + grade + "\n"
+                       "🏫 <b>الأكاديمية:</b> " + academy + "\n"
+                       "🕐 <b>الموعد:</b> " + tm + "\n\n"
+                       "🔗 <a href=\"" + link + "\">دخول حصة Zoom</a>\n<code>" +
+                       escape(zoom) + "</code>")
+              elif -1 <= delta < 5:
+                  send("🚨 <b>حان الآن موعد الحصة</b> 🔔\n\n"
+                       "👤 <b>الطالب:</b> " + student + "\n"
+                       "🎓 <b>الصف:</b> " + grade + "\n"
+                       "🏫 <b>الأكاديمية:</b> " + academy + "\n"
+                       "🕐 <b>الموعد:</b> " + tm + "\n\n"
+                       "🔗 <a href=\"" + link + "\">دخول حصة Zoom الآن</a>\n<code>" +
+                       escape(zoom) + "</code>")
+
+          print("Notification check completed:", now.isoformat())
           PY
