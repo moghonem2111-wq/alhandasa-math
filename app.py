@@ -4627,7 +4627,8 @@ elif t_page == "add_hw":
     with st.form("assessment_form", clear_on_submit=True):
         col_a1, col_a2 = st.columns(2)
         with col_a1:
-            if all_registered_names:                prefill_hw = str(st.session_state.get("prefill_student", ""))
+            if all_registered_names:
+                prefill_hw = str(st.session_state.get("prefill_student", ""))
                 hw_index = all_registered_names.index(prefill_hw) if prefill_hw in all_registered_names else 0
                 ass_student = st.selectbox("اختر الطالب:", all_registered_names, index=hw_index)
             else:
@@ -5098,4 +5099,3 @@ elif t_page == "ads":
 
                 edit_file = None
                 if edit_type in ["صورة + بوست", "فيديو"]:
-                    edit_file = st.file_uploader(
