@@ -5297,6 +5297,11 @@ elif t_page == "parent_report":
         parent_phone = str(urow.get("رقم ولي الأمر", ""))
 
         total_due = _money_sum(pr_sessions.get("سعر الحصة", pd.Series(dtype=float)))
+        # إحصائيات مختصرة لتقرير ولي الأمر
+        attended_count = int((pr_sessions.get("الحالة", pd.Series(dtype=str)).astype(str).str.strip() == "حاضر").sum()) if not pr_sessions.empty else 0
+        homework_count = int((pr_assessments.get("النوع", pd.Series(dtype=str)).astype(str).str.contains("واجب", case=False, na=False)).sum()) if not pr_assessments.empty else 0
+        exam_count = int((pr_assessments.get("النوع", pd.Series(dtype=str)).astype(str).str.contains("اختبار|امتحان|كويز", case=False, na=False, regex=True)).sum()) if not pr_assessments.empty else 0
+        total_assessments_count = len(pr_assessments)
         total_paid = _money_sum(pr_payments.get("المبلغ", pd.Series(dtype=float)))
         balance = max(total_due - total_paid, 0)
 
@@ -5360,6 +5365,9 @@ body{{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#102a52;font-weight:700;
 table{{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}}
 th{{background:#eaf4ff;color:#12345f;font-weight:900}} th,td{{border:1px solid #cbd8e8;padding:7px;text-align:center;vertical-align:middle}}
 .summary{{background:#f3f8ff;border-right:5px solid #1677ff}}
+.stats-table{{font-size:14px;margin-top:4px}}
+.stats-table th{{background:#dbeafe;color:#0b3b78;font-size:13px}}
+.stats-table td{{font-size:18px;font-weight:900;color:#0b5fe7}}
 .footer{{margin-top:18px;border-top:1px solid #dbe7f5;padding-top:8px;text-align:center;font-size:10px;color:#64748b}}
 </style></head>
 <body>
@@ -5373,6 +5381,13 @@ th{{background:#eaf4ff;color:#12345f;font-weight:900}} th,td{{border:1px solid #
 </div>
 </div>
 <div class="card summary"><div class="title">بيانات الطالب</div><div>المرحلة: {html.escape(grade or "-")} &nbsp; | &nbsp; المنهج: {html.escape(curriculum or "-")} &nbsp; | &nbsp; هاتف ولي الأمر: {html.escape(parent_phone or "-")}</div></div>
+<div class="card">
+<div class="title">📊 ملخص أداء الطالب</div>
+<table class="stats-table">
+<tr><th>الحصص التي حضرها</th><th>الواجبات</th><th>الاختبارات</th><th>إجمالي التقييمات</th></tr>
+<tr><td>{attended_count}</td><td>{homework_count}</td><td>{exam_count}</td><td>{total_assessments_count}</td></tr>
+</table>
+</div>
 <div class="card"><div class="title">📚 الحصص والحضور</div><table><tr><th>التاريخ</th><th>الحالة</th><th>المستوى</th><th>ملاحظات</th></tr>{sess_rows}</table></div>
 <div class="card"><div class="title">📝 الاختبارات والواجبات</div><table><tr><th>التاريخ</th><th>النوع</th><th>العنوان</th><th>الدرجة</th><th>الحالة</th><th>ملاحظات</th></tr>{ass_rows}</table></div>
 <div class="footer">البشمهندس x الرياضه • تقرير تعليمي لمتابعة الطالب</div>
