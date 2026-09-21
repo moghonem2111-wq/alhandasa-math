@@ -97,7 +97,7 @@ jobs:
 
           # 07:00 صباحًا: ملخص اليوم.
           # نستخدم نافذة أوسع لأن GitHub قد يؤخر scheduled workflows وقت الضغط.
-          if now.hour == 7 and now.minute < 30 and os.environ.get("SUMMARY_ALREADY_SENT") != "true":
+          if now.hour == 7 and now.minute < 60 and os.environ.get("SUMMARY_ALREADY_SENT") != "true":
               if not rows:
                   send("🌅 <b>صباح الخير يا بشمهندس 👋</b>\n📅 <b>" + escape(today) +
                        "</b>\n\nلا توجد حصص مسجلة اليوم.")
