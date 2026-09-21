@@ -10,12 +10,24 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
+      - name: Get Cairo date
+        id: cairo_date
+        run: echo "day=$(TZ=Africa/Cairo date +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore daily notification marker
+        id: daily_marker
+        uses: actions/cache@v4
+        with:
+          path: .notify_state
+          key: teacher-schedule-summary-${{ steps.cairo_date.outputs.day }}
+
       - name: Send today's schedule to Telegram
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SUMMARY_ALREADY_SENT: ${{ steps.daily_marker.outputs.cache-hit }}
         run: |
           python - <<'PY'
           import os, re, requests
@@ -85,7 +97,7 @@ jobs:
 
           # 07:00 صباحًا: ملخص اليوم.
           # نستخدم نافذة أوسع لأن GitHub قد يؤخر scheduled workflows وقت الضغط.
-          if now.hour == 7 and now.minute < 30 and os.environ.get("SUMMARY_ALREADY_SENT") != "1":
+          if now.hour == 7 and now.minute < 30 and os.environ.get("SUMMARY_ALREADY_SENT") != "true":
               if not rows:
                   send("🌅 <b>صباح الخير يا بشمهندس 👋</b>\n📅 <b>" + escape(today) +
                        "</b>\n\nلا توجد حصص مسجلة اليوم.")
@@ -103,6 +115,7 @@ jobs:
                       lines.append(line)
                   lines += ["", "📌 إجمالي حصص اليوم: <b>" + str(len(rows)) + "</b>"]
                   send("\n".join(lines))
+              open(".notify_state", "w").write(today + " " + now.strftime("%Y-%m-%d"))
 
           # قبل الحصة بـ10 دقائق، وعند بداية الحصة
           for row in rows:
