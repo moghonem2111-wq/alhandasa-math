@@ -1047,7 +1047,7 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
 
 
 def _hamza_math_html(text):
-    """تحويل LaTeX البسيط في إجابات حمصا إلى HTML مناسب للطباعة عبر WeasyPrint."""
+    """تحويل LaTeX إلى HTML للطباعة مع دعم الكسور والجذور والأسس والاتجاهين RTL/LTR."""
     s = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
     token = "___HAMZA_MATH_{}___"
     blocks = []
@@ -1057,40 +1057,49 @@ def _hamza_math_html(text):
         blocks.append((expr, display))
         return token.format(idx)
 
-    # نخفي محددات LaTeX أولاً حتى لا تظهر علامات $ في النسخة المطبوعة.
-    s = re.sub(r"\$\$(.+?)\$\$", lambda m: stash(m.group(1).strip(), True), s, flags=re.S)
-    s = re.sub(r"\$(.+?)\$", lambda m: stash(m.group(1).strip(), False), s, flags=re.S)
-
+    s = re.sub(r"\$\$(.*?)\$\$", lambda m: stash(m.group(1).strip(), True), s, flags=re.S)
+    s = re.sub(r"\$(.*?)\$", lambda m: stash(m.group(1).strip(), False), s, flags=re.S)
+    s = re.sub(r"(?m)^\s*(?:#{1,6}\s*)?(فهم السؤال|القانون أو الفكرة|الحل خطوة بخطوة|الإجابة النهائية)\s*:?\s*$", r"<div class='section-title'>\1</div>", s)
     s = html.escape(s).replace("\n", "<br>")
-    symbols = {
-        r"\\pi": "π", r"\\theta": "θ", r"\\alpha": "α", r"\\beta": "β",
-        r"\\gamma": "γ", r"\\delta": "δ", r"\\lambda": "λ", r"\\mu": "μ",
-        r"\\sigma": "σ", r"\\omega": "ω", r"\\infty": "∞", r"\\times": "×",
-        r"\\cdot": "·", r"\\pm": "±", r"\\mp": "∓", r"\\leq": "≤",
-        r"\\geq": "≥", r"\\neq": "≠", r"\\approx": "≈", r"\\rightarrow": "→",
-        r"\\sum": "Σ", r"\\int": "∫", r"\\angle": "∠"
-    }
+    symbols = {r"\\pi":"π",r"\\theta":"θ",r"\\alpha":"α",r"\\beta":"β",r"\\gamma":"γ",r"\\delta":"δ",r"\\lambda":"λ",r"\\mu":"μ",r"\\sigma":"σ",r"\\omega":"ω",r"\\infty":"∞",r"\\times":"×",r"\\cdot":"·",r"\\pm":"±",r"\\mp":"∓",r"\\leq":"≤",r"\\geq":"≥",r"\\neq":"≠",r"\\approx":"≈",r"\\rightarrow":"→",r"\\sum":"Σ",r"\\int":"∫",r"\\angle":"∠"}
 
-    def render_math(expr, display=False):
+    def balanced_brace(x, start):
+        depth = 0
+        for k in range(start, len(x)):
+            if x[k] == "{": depth += 1
+            elif x[k] == "}":
+                depth -= 1
+                if depth == 0: return x[start+1:k], k+1
+        return None, start
+
+    def render_expr(expr):
         x = html.escape(str(expr or "").strip())
-        for pat, val in symbols.items():
-            x = re.sub(pat, val, x)
-        x = re.sub(r"\\(?:dfrac|tfrac|frac)\{([^{}]*)\}\{([^{}]*)\}",
-                   r"<span class='frac'><span class='num'>\1</span><span class='den'>\2</span></span>", x)
-        x = re.sub(r"\\sqrt\{([^{}]*)\}",
-                   r"<span class='sqrt'>√<span class='radicand'>\1</span></span>", x)
-        x = re.sub(r"\^\{([^{}]*)\}", r"<sup>\1</sup>", x)
-        x = re.sub(r"_\{([^{}]*)\}", r"<sub>\1</sub>", x)
-        x = re.sub(r"\^([A-Za-z0-9]+)", r"<sup>\1</sup>", x)
-        x = re.sub(r"_([A-Za-z0-9]+)", r"<sub>\1</sub>", x)
-        cls = "math-display" if display else "math-inline"
-        return f"<span class='{cls}' dir='ltr'>{x}</span>"
+        for pat,val in symbols.items(): x = re.sub(pat,val,x)
+        for _ in range(8):
+            m = re.search(r"\\(?:dfrac|tfrac|frac)\{", x)
+            if not m: break
+            num,p = balanced_brace(x,m.end()-1)
+            if num is None: break
+            den_start=x.find("{",p)
+            if den_start<0: break
+            den,q=balanced_brace(x,den_start)
+            if den is None: break
+            frac_html="<span class='frac'><span class='num'>"+num+"</span><span class='den'>"+den+"</span></span>"
+            x=x[:m.start()]+frac_html+x[q:]
+        x=re.sub(r"(?<![\w>])\(([^()]+)\)\s*/\s*\(([^()]+)\)",r"<span class='frac'><span class='num'>\1</span><span class='den'>\2</span></span>",x)
+        x=re.sub(r"(?<![\w>])([0-9]+)\s*/\s*([0-9]+)(?![\w<])",r"<span class='frac'><span class='num'>\1</span><span class='den'>\2</span></span>",x)
+        x=re.sub(r"\\sqrt\{([^{}]*)\}",r"<span class='sqrt'>√<span class='radicand'>\1</span></span>",x)
+        x=re.sub(r"\^\{([^{}]*)\}",r"<sup>\1</sup>",x)
+        x=re.sub(r"_\{([^{}]*)\}",r"<sub>\1</sub>",x)
+        x=re.sub(r"\^([A-Za-z0-9]+)",r"<sup>\1</sup>",x)
+        x=re.sub(r"_([A-Za-z0-9]+)",r"<sub>\1</sub>",x)
+        return x
 
-    for idx, (expr, display) in enumerate(blocks):
-        s = s.replace(html.escape(token.format(idx)), render_math(expr, display))
+    for idx,(expr,display) in enumerate(blocks):
+        rendered=render_expr(expr)
+        cls="math-display" if display else "math-inline"
+        s=s.replace(html.escape(token.format(idx)),"<span class='"+cls+"' dir='ltr'>"+rendered+"</span>")
     return s
-
-
 def _hamza_pdf_html(question, answer, final_answer, student_name):
     q=_hamza_math_html(question)
     a=_hamza_math_html(answer)
