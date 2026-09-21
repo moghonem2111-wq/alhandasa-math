@@ -897,7 +897,7 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
 
     preferred = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
     models = []
-    for candidate in [preferred, "gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]:
+    for candidate in [preferred, "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"]:
         if candidate and candidate not in models:
             models.append(candidate)
 
