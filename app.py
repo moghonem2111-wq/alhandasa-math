@@ -1068,32 +1068,41 @@ def _hamza_render_solution(text):
         st.markdown(block)
 
 def _hamza_math_html(value):
-    """تنسيق رياضيات حمصا للطباعة: الكسور والجذور والأسس والرموز مع اتجاه صحيح."""
+    """تنسيق رياضيات حمصا للطباعة: كسور وجذور وأسُس ورموز واتجاه نص صحيح."""
     text = html.escape(str(value or ""), quote=False)
     text = text.replace("\\r\\n", "\n").replace("\\n", "\n")
     text = text.replace("$$", "").replace("$", "")
 
-    # الكسور: \\frac{a}{b} و\\dfrac و\\tfrac.
+    # الكسور المكتوبة بصيغة LaTeX.
     text = re.sub(
-        r"\\(?:dfrac|tfrac|frac)\\{([^{}]*)\\}\\s*\\{([^{}]*)\\}",
-        r"<span class='frac'><span class='num'>\\1</span><span class='den'>\\2</span></span>",
-        text
+        r"\\(?:dfrac|tfrac|frac)\{([^{}]*)\}\s*\{([^{}]*)\}",
+        r"<span class='frac'><span class='num'>\1</span><span class='den'>\2</span></span>",
+        text,
     )
-    # الكسور المكتوبة مباشرة.
+
+    # الكسور المكتوبة كـ (a)/(b) أو 1/2.
     text = re.sub(
-        r"\\(([^()]+)\\)\\s*/\\s*\\(([^()]+)\\)",
-        r"<span class='frac'><span class='num'>\\1</span><span class='den'>\\2</span></span>",
-        text
+        r"\(([^()]+)\)\s*/\s*\(([^()]+)\)",
+        r"<span class='frac'><span class='num'>\1</span><span class='den'>\2</span></span>",
+        text,
     )
     text = re.sub(
-        r"(?<![A-Za-z0-9])([0-9]+)\\s*/\\s*([0-9]+)(?![A-Za-z0-9])",
-        r"<span class='frac'><span class='num'>\\1</span><span class='den'>\\2</span></span>",
-        text
+        r"(?<![A-Za-z0-9])([0-9]+)\s*/\s*([0-9]+)(?![A-Za-z0-9])",
+        r"<span class='frac'><span class='num'>\1</span><span class='den'>\2</span></span>",
+        text,
     )
 
     # الجذور.
-    text = re.sub(r"\\sqrt\\{([^{}]*)\\}", r"<span class='sqrt'>√<span class='radicand'>\\1</span></span>", text)
-    text = re.sub(r"\\sqrt\\s*([A-Za-z0-9]+)", r"<span class='sqrt'>√<span class='radicand'>\\1</span></span>", text)
+    text = re.sub(
+        r"\\sqrt\{([^{}]*)\}",
+        r"<span class='sqrt'>√<span class='radicand'>\1</span></span>",
+        text,
+    )
+    text = re.sub(
+        r"\\sqrt\s*([A-Za-z0-9]+)",
+        r"<span class='sqrt'>√<span class='radicand'>\1</span></span>",
+        text,
+    )
 
     # الرموز الرياضية الشائعة.
     symbols = {
@@ -1103,30 +1112,55 @@ def _hamza_math_html(value):
         r"\\cdot":"·", r"\\pm":"±", r"\\mp":"∓", r"\\leq":"≤",
         r"\\le":"≤", r"\\geq":"≥", r"\\ge":"≥", r"\\neq":"≠",
         r"\\approx":"≈", r"\\rightarrow":"→", r"\\to":"→", r"\\div":"÷",
-        r"\\degree":"°"
+        r"\\degree":"°",
     }
     for pat, repl in symbols.items():
         text = re.sub(pat, repl, text)
-    text = re.sub(r"\\left|\\right", "", text)
-    text = re.sub(r"\\text\\{([^{}]*)\\}", r"\\1", text)
 
-    # الأسس والـsubscript.
-    text = re.sub(r"([A-Za-zΑ-Ωα-ω0-9\\)\\]])\\^\\{([^{}]+)\\}", r"<span class='math-inline'>\\1<sup>\\2</sup></span>", text)
-    text = re.sub(r"([A-Za-zΑ-Ωα-ω0-9\\)\\]])\\^([A-Za-z0-9+\\-]+)", r"<span class='math-inline'>\\1<sup>\\2</sup></span>", text)
-    text = re.sub(r"([A-Za-zΑ-Ωα-ω0-9\\)\\]])_\\{([^{}]+)\\}", r"<span class='math-inline'>\\1<sub>\\2</sub></span>", text)
-    text = re.sub(r"([A-Za-zΑ-Ωα-ω0-9\\)\\]])_([A-Za-z0-9]+)", r"<span class='math-inline'>\\1<sub>\\2</sub></span>", text)
+    text = re.sub(r"\\left|\\right", "", text)
+    text = re.sub(r"\\text\{([^{}]*)\}", r"\1", text)
+
+    # الأسس والـ subscript.
+    text = re.sub(
+        r"([A-Za-zΑ-Ωα-ω0-9\)\]])\^\{([^{}]+)\}",
+        r"<span class='math-inline'>\1<sup>\2</sup></span>",
+        text,
+    )
+    text = re.sub(
+        r"([A-Za-zΑ-Ωα-ω0-9\)\]])\^([A-Za-z0-9+\-]+)",
+        r"<span class='math-inline'>\1<sup>\2</sup></span>",
+        text,
+    )
+    text = re.sub(
+        r"([A-Za-zΑ-Ωα-ω0-9\)\]])_\{([^{}]+)\}",
+        r"<span class='math-inline'>\1<sub>\2</sub></span>",
+        text,
+    )
+    text = re.sub(
+        r"([A-Za-zΑ-Ωα-ω0-9\)\]])_([A-Za-z0-9]+)",
+        r"<span class='math-inline'>\1<sub>\2</sub></span>",
+        text,
+    )
 
     out = []
     for line in text.split("\n"):
         line = line.strip()
         if not line:
             continue
+
         plain = re.sub(r"<[^>]+>", "", line).strip()
-        math_like = bool(re.search(r"[A-Za-z0-9=<>≤≥≠≈±×÷√πθαλβγδλμσω∞+\\-*/^_()]", plain))
-        if math_like:
-            out.append("<div dir='ltr' class='math-line'>" + line + "</div>")
+        has_arabic = bool(re.search(r"[ء-ي]", plain))
+        has_math = bool(re.search(r"[A-Za-z0-9=<>≤≥≠≈±×÷√πθαλβγδλμσω∞+\-*/^_()]", plain))
+
+        if has_math:
+            # المعادلة الإنجليزية/اللاتينية LTR، والأسطر العربية RTL.
+            direction = "rtl" if has_arabic else "ltr"
+            out.append(
+                f"<div dir='{direction}' class='math-line'>{line}</div>"
+            )
         else:
-            out.append("<div dir='rtl' class='text-line'>" + line + "</div>")
+            out.append(f"<div dir='rtl' class='text-line'>{line}</div>")
+
     return "".join(out)
 
 def _hamza_pdf_html(question, answer, final_answer, student_name):
