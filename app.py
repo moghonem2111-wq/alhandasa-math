@@ -497,8 +497,7 @@ def teacher_image_data_uri(b64_str):
         xs, ys = [], []
         for y in range(im.height):
             for x in range(im.width):
-                r, g, b, a = pix[x, y]                if a > 18 and not (r > 245 and g > 245 and b > 245):
-                    xs.append(x)
+                r, g, b, a = pix[x, y]                if a > 18 and not (r > 245 and g > 245 and b > 245):                    xs.append(x)
                     ys.append(y)
         if xs and ys:
             left, top, right, bottom = min(xs), min(ys), max(xs) + 1, max(ys) + 1
@@ -980,7 +979,7 @@ def build_weekly_schedule_print_html(df, title="الجدول الأسبوعي ل
                         f"<div class='student-name'>👤 {student}</div>"
                         f"<div class='student-meta'>{grade}</div>"
                         f"<div class='student-meta'>{academy}</div>"
-                        f"{('<div class=\'student-phone\'>📞 ' + phone + '</div>') if phone and phone.lower() != 'nan' else ''}"
+                        (f"<div class='student-phone'>📞 {phone}</div>" if phone and phone.lower() != "nan" else "")
                         f"</div>"
                     )
                 cells.append("<td class='day-cell'>" + ("".join(cards) if cards else "<span class='dash'>—</span>") + "</td>")
@@ -997,8 +996,7 @@ def build_weekly_schedule_print_html(df, title="الجدول الأسبوعي ل
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="utf-8">
-<title>{html.escape(title)}</title>
-<style>
+<title>{html.escape(title)}</title><style>
 @page {{ size:A4 landscape; margin:9mm; }}
 * {{ box-sizing:border-box; }}
 body {{ margin:0; background:#fff; color:#102a52; font-family:'Cairo','Tahoma','Arial',sans-serif; font-weight:700; }}
@@ -1497,8 +1495,7 @@ def save_all_data(users_df, sessions_df, assessments_df, messages_df, exams_df, 
         # بيانات الإعلان النصية/الوصفية في Ads، بينما الوسائط الكبيرة تُخزن على أجزاء داخل AdsMedia
         # حتى لا تتجاوز الصورة الأصلية حد Excel للخلية ولا يتم قصها أو فقدان جودتها.
         ads_meta = ads_df.copy()
-        if "الوسائط_base64" in ads_meta.columns:
-            ads_meta["الوسائط_base64"] = ""
+        if "الوسائط_base64" in ads_meta.columns:            ads_meta["الوسائط_base64"] = ""
         ads_meta.to_excel(writer, sheet_name="Ads", index=False)
         media_rows = []
         chunk_size = 30000
@@ -1997,8 +1994,7 @@ st.markdown(f"""
         display: flex; gap: 12px; align-items: center; margin-top: 10px; justify-content: center;
     }}
     .social-btn-top {{
-        display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; text-decoration: none !important; box-shadow: 0 3px 8px rgba(0,0,0,0.25); transition: transform 0.2s ease;
-    }}
+        display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; text-decoration: none !important; box-shadow: 0 3px 8px rgba(0,0,0,0.25); transition: transform 0.2s ease;    }}
     .social-btn-top:hover {{ transform: scale(1.12); }}
     .social-btn-top svg {{ width: 20px; height: 20px; fill: #ffffff; }}
 
@@ -2497,8 +2493,7 @@ if is_student_mode:
                 <div class="hero-art">📚🎓</div>
             </div>
         """,unsafe_allow_html=True)
-        _student_key_for_stats=str(st_user.get("اسم الطالب", "")).strip().lower()
-        _my_hw=len(st.session_state.assessments_df[st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip().str.lower()==_student_key_for_stats]) if "اسم الطالب" in st.session_state.assessments_df.columns else 0
+        _student_key_for_stats=str(st_user.get("اسم الطالب", "")).strip().lower()        _my_hw=len(st.session_state.assessments_df[st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip().str.lower()==_student_key_for_stats]) if "اسم الطالب" in st.session_state.assessments_df.columns else 0
         _my_exams=len(st.session_state.exams_df)
         _my_sched=len(st.session_state.online_schedule_df[st.session_state.online_schedule_df["اسم الطالب"].astype(str).str.strip().str.lower()==_student_key_for_stats]) if "اسم الطالب" in st.session_state.online_schedule_df.columns else 0
         st.markdown(f"""
@@ -2997,8 +2992,7 @@ if is_student_mode:
     st.stop()
 
 
-# ==============================================================================
-# 2. لوحة تحكم المعلم (الشاملة بجميع الأقسام وزوم الأونلاين والتقارير المالية)
+# ==============================================================================# 2. لوحة تحكم المعلم (الشاملة بجميع الأقسام وزوم الأونلاين والتقارير المالية)
 # ==============================================================================
 total_exams_count = len(st.session_state.exams_df)
 total_students_count = len(st.session_state.users_df)
@@ -3497,8 +3491,7 @@ elif t_page == "weekly_schedule":
                         "رقم مشرف الأكاديمية": ws_sup.strip(),
                         "سعر الحصة": ws_price,
                         "اليوم": ws_day,
-                        "الموعد": ws_time.strftime("%H:%M"),
-                        "اللون": color_map.get(student_clean, palette[len(color_map) % len(palette)]),
+                        "الموعد": ws_time.strftime("%H:%M"),                        "اللون": color_map.get(student_clean, palette[len(color_map) % len(palette)]),
                         "حالة الموعد": "نشط"
                     }
                     # ربط الموعد بسجل الطالب الرئيسي حتى يظهر تلقائياً في كشف المسجلين والبطاقات والسجلات والتقارير والواجبات
@@ -3997,7 +3990,6 @@ elif t_page == "question_bank":
 
         st.write("---")
         qb_points = st.number_input("درجة السؤال:", min_value=0.5, max_value=10.0, value=1.0, step=0.5, key="qbc_pts")
-
         if st.form_submit_button("💾 حفظ وإدراج السؤال في بنك الأسئلة"):
             if not qb_text.strip() and not st.session_state.qb_q_img:
                 st.error("يرجى كتابة نص السؤال أو رفع صورة السؤال على الأقل.")
@@ -4497,8 +4489,7 @@ elif t_page == "students":
                         <table border="1" style="width:100%; border-collapse:collapse; text-align:center; margin-top:15px;">
                             <tr style="background:#f1f5f9;">
                                 <th style="padding:8px;">التاريخ</th>
-                                <th style="padding:8px;">الحالة</th>
-                                <th style="padding:8px;">سعر الحصة</th>
+                                <th style="padding:8px;">الحالة</th>                                <th style="padding:8px;">سعر الحصة</th>
                                 <th style="padding:8px;">المستوى</th>
                                 <th style="padding:8px;">ملاحظات</th>
                             </tr>
@@ -4997,8 +4988,7 @@ elif t_page == "online_backup":
                         st.session_state['_last_autosave_signature']=_autosave_signature()
                         st.success(f"✅ تم استرجاع {total} سجل من Excel Online داخل المنصة. راجع البيانات ثم احفظها.")
                 except Exception as exc: st.error(str(exc))
-        st.markdown("### 🔐 ضع هذه القيم في Streamlit Secrets")
-        st.code('''MS_TENANT_ID = "Tenant ID"
+        st.markdown("### 🔐 ضع هذه القيم في Streamlit Secrets")        st.code('''MS_TENANT_ID = "Tenant ID"
 MS_CLIENT_ID = "App Registration Client ID"
 MS_CLIENT_SECRET = "Client Secret"
 MS_ONEDRIVE_USER = "حساب Microsoft/OneDrive"
@@ -5498,118 +5488,3 @@ elif t_page == "parent_report":
                     st.download_button(
                         label=f"📄 تحميل PDF لـ ({target_name})",
                         data=_parent_pdf_bytes,
-                        file_name=f"تقرير_ولي_الأمر_{target_name}.pdf",
-                        mime="application/pdf",
-                        key="parent_report_pdf_download"
-                    )
-                else:
-                    st.info("لطباعة PDF: حمّل التقرير وافتحه ثم اختر طباعة → حفظ كـ PDF.")
-
-# ============================================================================== 
-# الحفظ التلقائي الدائم
-# ------------------------------------------------------------------------------
-# أي تغيير في بيانات المنصة يتم التقاطه في نهاية تشغيل الصفحة ورفعه إلى
-# Supabase تلقائياً. لا يحتاج المعلم للضغط على زر حفظ بعد كل تعديل.
-# يتم الحفظ فقط عند اكتشاف تغيير فعلي حتى لا نرسل نفس البيانات في كل rerun.
-# ============================================================================== 
-def _autosave_dataframe_signature(df):
-    try:
-        if df is None:
-            return "<none>"
-        work = df.copy()
-        # ثبّت ترتيب الأعمدة، وحوّل القيم إلى تمثيل ثابت قدر الإمكان.
-        work = work.copy()
-        work.columns = [str(c) for c in work.columns]
-        for col in work.columns:
-            try:
-                work[col] = work[col].map(lambda x: "" if pd.isna(x) else str(x))
-            except Exception:
-                pass
-        raw = pd.util.hash_pandas_object(work, index=True).values.tobytes()
-        return hashlib.sha256(("|".join(work.columns) + "|" + str(len(work)) + "|").encode("utf-8") + raw).hexdigest()
-    except Exception:
-        try:
-            return hashlib.sha256(repr(df.to_dict(orient="records")).encode("utf-8")).hexdigest()
-        except Exception:
-            return repr(df)
-
-
-def _autosave_signature():
-    keys = [
-        "users_df", "sessions_df", "assessments_df", "messages_df", "exams_df",
-        "essays_df", "bookings_df", "bank_requests_df", "question_bank_df",
-        "videos_df", "video_comments_df", "abqary_df", "online_schedule_df",
-        "weekly_schedule_df", "payment_records_df", "student_interface_df",
-        "teacher_profile_df", "ads_df",
-    ]
-    parts = []
-    for key in keys:
-        parts.append(key + ":" + _autosave_dataframe_signature(st.session_state.get(key)))
-    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
-
-
-def _autosave_all_changes():
-    # لا تبدأ الحفظ قبل اكتمال جداول البيانات الأساسية.
-    required = [
-        "users_df", "sessions_df", "assessments_df", "messages_df", "exams_df",
-        "essays_df", "bookings_df", "bank_requests_df", "question_bank_df",
-        "videos_df", "video_comments_df", "abqary_df", "online_schedule_df",
-    ]
-    if not all(k in st.session_state for k in required):
-        return
-
-    # لا تحفظ قبل التأكد أن عملية التحميل اكتملت بنجاح.
-    if not st.session_state.get("_data_load_verified", False):
-        return
-
-    # ممنوع تمامًا أن يحول autosave جلسة فارغة إلى نسخة سحابية فارغة.
-    _core_now = sum(len(st.session_state.get(k, pd.DataFrame())) for k in [
-        "users_df", "sessions_df", "assessments_df", "weekly_schedule_df", "payment_records_df"
-    ])
-    if _core_now == 0:
-        st.session_state["_autosave_last_status"] = "تم إيقاف الحفظ التلقائي لحماية البيانات من المسح."
-        return
-
-    current_sig = _autosave_signature()
-    previous_sig = st.session_state.get("_last_autosave_signature")
-
-    # أول تشغيل: اعتبر البيانات الحالية نقطة البداية فقط، ولا ترفعها.
-    # هذا يمنع أي إعادة تشغيل من اعتبار حالة التحميل تغييرًا جديدًا.
-    if previous_sig is None:
-        st.session_state._last_autosave_signature = current_sig
-        st.session_state._autosave_last_status = "تمت تهيئة الحفظ الآمن بدون الكتابة على Supabase"
-        return
-    if previous_sig == current_sig:
-        return
-
-    try:
-        cloud_saved = save_all_data(
-            st.session_state.users_df,
-            st.session_state.sessions_df,
-            st.session_state.assessments_df,
-            st.session_state.messages_df,
-            st.session_state.exams_df,
-            st.session_state.essays_df,
-            st.session_state.bookings_df,
-            st.session_state.bank_requests_df,
-            st.session_state.question_bank_df,
-            st.session_state.videos_df,
-            st.session_state.video_comments_df,
-            st.session_state.abqary_df,
-            st.session_state.online_schedule_df,
-            st.session_state.get("weekly_schedule_df"),
-            st.session_state.get("payment_records_df"),
-        )
-        if cloud_saved:
-            st.session_state._last_autosave_signature = current_sig
-            st.session_state._autosave_last_status = "تم الحفظ التلقائي في Supabase"
-            st.session_state._autosave_last_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        else:
-            # لا نغيّر البصمة حتى يعاد المحاولة تلقائياً في التشغيل التالي.
-            st.session_state._autosave_last_status = "تعذر الحفظ السحابي - ستتم إعادة المحاولة تلقائياً"
-    except Exception as _autosave_error:
-        st.session_state._autosave_last_status = f"تعذر الحفظ التلقائي: {_autosave_error}"
-
-
-# تشغيل الحفظ التلقائي في نهاية كل rerun.
-_autosave_all_changes()
