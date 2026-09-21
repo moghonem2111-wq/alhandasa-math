@@ -1039,7 +1039,6 @@ def _hamza_render_solution(text):
     """عرض حل حمصا بتنسيق منظم مع دعم LaTeX واتجاه المعادلات."""
     raw = str(text or "").strip()
     if not raw:
-        st.info("لا يوجد شرح متاح.")
         return
 
     blocks = [b.strip() for b in re.split(r"\n\s*\n", raw) if b.strip()]
@@ -1174,13 +1173,13 @@ def _hamza_pdf_html(question, answer, final_answer, student_name):
 <style>
 @page{{size:A4;margin:14mm}}
 *{{box-sizing:border-box}}
-body{{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#102a52;background:#fff;font-weight:700;line-height:1.9}}
+body{{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#102a52;background:#fff;font-weight:700;line-height:2.05;font-size:15px}}
 .header{{background:linear-gradient(135deg,#06295f,#1677ff);color:#fff;border-radius:20px;padding:22px 26px;margin-bottom:18px}}
 .header h1{{margin:0;font-size:27px;font-weight:900}} .header p{{margin:5px 0 0;color:#dbeafe}}
 .card{{border:1px solid #dbe7f5;border-radius:16px;padding:18px 20px;margin:12px 0;background:#fff}}
-.title{{font-size:18px;color:#126be6;font-weight:900;margin-bottom:8px}}
-.answer{{background:#f3f8ff;border-right:5px solid #1677ff}}
-.final{{background:#ecfdf5;border-right:5px solid #10b981;font-size:18px}}.frac{{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;margin:0 3px}}.frac .num{{border-bottom:1.5px solid #102a52;padding:0 4px}}.frac .den{{padding:0 4px}}.sqrt{{display:inline-flex;align-items:flex-start;font-size:1.08em}}.sqrt .radicand{{border-top:1.5px solid #102a52;padding:0 3px;margin-top:2px}}
+.title{{font-size:19px;color:#126be6;font-weight:900;margin-bottom:10px}}
+.answer{{background:#f3f8ff;border-right:5px solid #1677ff;direction:rtl;text-align:right}}
+.final{{background:#ecfdf5;border-right:5px solid #10b981;font-size:18px;direction:rtl;text-align:right}}.frac{{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;margin:0 3px}}.frac .num{{border-bottom:1.5px solid #102a52;padding:0 4px}}.frac .den{{padding:0 4px}}.sqrt{{display:inline-flex;align-items:flex-start;font-size:1.08em}}.sqrt .radicand{{border-top:1.5px solid #102a52;padding:0 3px;margin-top:2px}}
 .footer{{margin-top:22px;border-top:1px solid #dbe7f5;padding-top:10px;text-align:center;color:#64748b;font-size:11px}}
 </style></head>
 <body>
