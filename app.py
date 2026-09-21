@@ -976,14 +976,15 @@ def build_weekly_schedule_print_html(df, title="الجدول الأسبوعي ل
                     color = str(r.get("اللون", "#1677ff"))
                     if not re.match(r"^#[0-9A-Fa-f]{6}$", color):
                         color = "#1677ff"
-                    cards.append(
+                    card_html = (
                         f"<div class='student-card' style='--student-color:{color}'>"
                         f"<div class='student-name'>👤 {student}</div>"
                         f"<div class='student-meta'>{grade}</div>"
                         f"<div class='student-meta'>{academy}</div>"
                         + (f"<div class='student-phone'>📞 {phone}</div>" if phone and phone.lower() != "nan" else "")
-                        f"</div>"
+                        + "</div>"
                     )
+                    cards.append(card_html)
                 cells.append("<td class='day-cell'>" + ("".join(cards) if cards else "<span class='dash'>—</span>") + "</td>")
             body_rows.append("<tr>" + "".join(cells) + "</tr>")
         rows = "".join(body_rows) if body_rows else "<tr><td colspan='8' class='empty'>لا توجد مواعيد نشطة.</td></tr>"
