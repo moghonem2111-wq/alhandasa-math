@@ -1046,10 +1046,55 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
     raise RuntimeError("AI_ERROR:" + str(last_error or "unknown")[:700])
 
 
+def _hamza_math_html(text):
+    """تحويل LaTeX البسيط في إجابات حمصا إلى HTML مناسب للطباعة عبر WeasyPrint."""
+    s = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    token = "___HAMZA_MATH_{}___"
+    blocks = []
+
+    def stash(expr, display=False):
+        idx = len(blocks)
+        blocks.append((expr, display))
+        return token.format(idx)
+
+    # نخفي محددات LaTeX أولاً حتى لا تظهر علامات $ في النسخة المطبوعة.
+    s = re.sub(r"\$\$(.+?)\$\$", lambda m: stash(m.group(1).strip(), True), s, flags=re.S)
+    s = re.sub(r"\$(.+?)\$", lambda m: stash(m.group(1).strip(), False), s, flags=re.S)
+
+    s = html.escape(s).replace("\n", "<br>")
+    symbols = {
+        r"\\pi": "π", r"\\theta": "θ", r"\\alpha": "α", r"\\beta": "β",
+        r"\\gamma": "γ", r"\\delta": "δ", r"\\lambda": "λ", r"\\mu": "μ",
+        r"\\sigma": "σ", r"\\omega": "ω", r"\\infty": "∞", r"\\times": "×",
+        r"\\cdot": "·", r"\\pm": "±", r"\\mp": "∓", r"\\leq": "≤",
+        r"\\geq": "≥", r"\\neq": "≠", r"\\approx": "≈", r"\\rightarrow": "→",
+        r"\\sum": "Σ", r"\\int": "∫", r"\\angle": "∠"
+    }
+
+    def render_math(expr, display=False):
+        x = html.escape(str(expr or "").strip())
+        for pat, val in symbols.items():
+            x = re.sub(pat, val, x)
+        x = re.sub(r"\\(?:dfrac|tfrac|frac)\{([^{}]*)\}\{([^{}]*)\}",
+                   r"<span class='frac'><span class='num'>\1</span><span class='den'>\2</span></span>", x)
+        x = re.sub(r"\\sqrt\{([^{}]*)\}",
+                   r"<span class='sqrt'>√<span class='radicand'>\1</span></span>", x)
+        x = re.sub(r"\^\{([^{}]*)\}", r"<sup>\1</sup>", x)
+        x = re.sub(r"_\{([^{}]*)\}", r"<sub>\1</sub>", x)
+        x = re.sub(r"\^([A-Za-z0-9]+)", r"<sup>\1</sup>", x)
+        x = re.sub(r"_([A-Za-z0-9]+)", r"<sub>\1</sub>", x)
+        cls = "math-display" if display else "math-inline"
+        return f"<span class='{cls}' dir='ltr'>{x}</span>"
+
+    for idx, (expr, display) in enumerate(blocks):
+        s = s.replace(html.escape(token.format(idx)), render_math(expr, display))
+    return s
+
+
 def _hamza_pdf_html(question, answer, final_answer, student_name):
-    q=html.escape(str(question or "").strip()).replace("\n","<br>")
-    a=html.escape(str(answer or "").strip()).replace("\n","<br>")
-    fa=html.escape(str(final_answer or "").strip()).replace("\n","<br>")
+    q=_hamza_math_html(question)
+    a=_hamza_math_html(answer)
+    fa=_hamza_math_html(final_answer)
     teacher_name, _, teacher_phone = _get_print_profile()
     return f"""<!DOCTYPE html>
 <html dir='rtl' lang='ar'>
@@ -1064,6 +1109,15 @@ body{{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#102a52;background:#fff;
 .title{{font-size:18px;color:#126be6;font-weight:900;margin-bottom:8px}}
 .answer{{background:#f3f8ff;border-right:5px solid #1677ff}}
 .final{{background:#ecfdf5;border-right:5px solid #10b981;font-size:18px}}
+.math-inline{{display:inline-block;direction:ltr;unicode-bidi:isolate;font-family:'Cambria Math','STIX Two Math','DejaVu Serif',serif;font-weight:700;white-space:nowrap}}
+.math-display{{display:block;direction:ltr;unicode-bidi:isolate;text-align:center;margin:10px 0;font-family:'Cambria Math','STIX Two Math','DejaVu Serif',serif;font-size:18px;font-weight:700}}
+.frac{{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;min-width:24px;margin:0 3px}}
+.frac .num{{display:block;border-bottom:1.5px solid #102a52;padding:0 5px 2px}}
+.frac .den{{display:block;padding:2px 5px 0}}
+.sqrt{{display:inline-flex;align-items:flex-start;line-height:1}}
+.radicand{{border-top:1.5px solid #102a52;padding:0 3px;margin-top:2px}}
+.math-inline sup,.math-display sup{{font-size:.7em;line-height:0;vertical-align:super}}
+.math-inline sub,.math-display sub{{font-size:.7em;line-height:0;vertical-align:sub}}
 .footer{{margin-top:22px;border-top:1px solid #dbe7f5;padding-top:10px;text-align:center;color:#64748b;font-size:11px}}
 </style></head>
 <body>
