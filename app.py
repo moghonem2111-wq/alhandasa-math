@@ -497,7 +497,9 @@ def teacher_image_data_uri(b64_str):
         xs, ys = [], []
         for y in range(im.height):
             for x in range(im.width):
-                r, g, b, a = pix[x, y]                if a > 18 and not (r > 245 and g > 245 and b > 245):                    xs.append(x)
+                r, g, b, a = pix[x, y]
+                if a > 18 and not (r > 245 and g > 245 and b > 245):
+                    xs.append(x)
                     ys.append(y)
         if xs and ys:
             left, top, right, bottom = min(xs), min(ys), max(xs) + 1, max(ys) + 1
