@@ -890,18 +890,13 @@ def _hamza_secret(name):
         return ""
 
 def _hamza_ai_call(user_text, media_items=None, history=None):
-    """حمصا: مساعد رياضيات متعدد الوسائط باستخدام Gemini REST مع إعادة محاولة وانتقال تلقائي بين النماذج."""
+    """حمصا باستخدام Google Gemini Interactions API: نص + صورة/ملف + شرح رياضي خطوة بخطوة."""
     key = _hamza_secret("GEMINI_API_KEY")
     if not key:
         raise RuntimeError("AI_KEY_MISSING")
 
-    preferred = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
-    models = []
-    for candidate in [preferred, "gemini-2.5-flash", "gemini-2.5-flash-lite"]:
-        if candidate and candidate not in models:
-            models.append(candidate)
+    model = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
 
-    parts = []
     context = ""
     if history:
         context = "\n\n".join(
@@ -911,16 +906,16 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
 
     prompt = f"""
 أنت "حمصا"، مدرس رياضيات وإحصاء ودود داخل منصة تعليمية للطلاب.
-أجب بالعربية المصرية المبسطة، وكن دقيقاً جداً.
+أجب بالعربية المصرية المبسطة وكن دقيقاً جداً.
 إذا كانت المسألة رياضيات أو إحصاء:
-1) اكتب فهمك للسؤال.
+1) افهم السؤال والصورة بدقة.
 2) اشرح القاعدة أو الفكرة المستخدمة.
 3) حل المسألة خطوة بخطوة وبترتيب واضح.
 4) اكتب الإجابة النهائية بوضوح.
-5) إذا كان في السؤال رسم أو جدول أو صورة، اقرأه بعناية ولا تخمّن القيم غير الواضحة؛ اطلب من الطالب صورة أوضح إذا لزم.
-6) استخدم LaTeX عند الحاجة، ولف المعادلات بين $...$ للمعادلة داخل السطر أو $...$ للمعادلة في سطر مستقل، مثل $\\frac{1}{2}$ و $\\sqrt{x}$ و $x^2$ و $2x+5=17$.
-7) لا تستخدم علامة $ كعملة؛ استخدمها فقط كمحدد لـ LaTeX.
-8) لا تعطِ إجابة مختصرة فقط؛ الهدف أن يتعلم الطالب طريقة الحل.
+5) إذا كانت هناك صورة لمسألة، اقرأ الأرقام والرموز والرسوم منها مباشرة ولا تفترض أرقاماً غير موجودة.
+6) استخدم LaTeX عند الحاجة، مثل $\\frac{{1}}{{2}}$ و $\\sqrt{{x}}$ و $x^2$.
+7) لا تستخدم علامة $ كعملة.
+8) لا تعطِ الإجابة فقط؛ علّم الطالب طريقة الحل.
 إذا كان السؤال غير رياضي، أخبر الطالب بلطف أن حمصا متخصص أساساً في الرياضيات والإحصاء.
 
 المحادثة السابقة:
@@ -929,41 +924,69 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
 رسالة الطالب الحالية:
 {user_text.strip() or "حل المسألة الموجودة في الملف المرفق."}
 
-أعد JSON صالحاً فقط بهذا الشكل:
-{{"answer":"الحل والشرح بالعربية","final_answer":"الإجابة النهائية باختصار","topic":"موضوع المسألة"}}
+أعد JSON صالحاً يحتوي على:
+answer = الحل والشرح بالعربية
+final_answer = الإجابة النهائية باختصار
+topic = موضوع المسألة
 """
-    parts.append({"text": prompt})
+
+    inputs = [{"type":"text","text":prompt}]
     for item in (media_items or []):
-        if item and item.get("data"):
-            parts.append({"inline_data":{"mime_type":item.get("mime","application/octet-stream"),"data":item["data"]}})
+        if not item or not item.get("data"):
+            continue
+        mime = str(item.get("mime") or "image/jpeg")
+        data = str(item["data"])
+        if mime.startswith("image/"):
+            inputs.append({"type":"image","data":data,"mime_type":mime})
+        elif mime == "application/pdf":
+            inputs.append({"type":"document","data":data,"mime_type":mime})
 
     body = {
-        "contents":[{"role":"user","parts":parts}],
-        "generationConfig":{
-            "maxOutputTokens":4096
+        "model": model,
+        "input": inputs,
+        "store": False,
+        "response_format": {
+            "type":"text",
+            "mime_type":"application/json",
+            "schema":{
+                "type":"object",
+                "properties":{
+                    "answer":{"type":"string"},
+                    "final_answer":{"type":"string"},
+                    "topic":{"type":"string"}
+                },
+                "required":["answer","final_answer","topic"]
+            }
         }
     }
 
     last_error = ""
-    for model in models:
+    models = [model, "gemini-3.8-flash", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
+    models = list(dict.fromkeys(models))
+
+    for current_model in models:
+        body["model"] = current_model
         for attempt in range(3):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             req = urllib.request.Request(
-                url,
+                "https://generativelanguage.googleapis.com/v1beta/interactions",
                 data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
                 headers={"Content-Type":"application/json","x-goog-api-key":key},
                 method="POST"
             )
             try:
-                with urllib.request.urlopen(req, timeout=90) as resp:
+                with urllib.request.urlopen(req, timeout=120) as resp:
                     raw = json.loads(resp.read().decode("utf-8"))
 
-                candidates = raw.get("candidates") or []
-                if not candidates:
-                    raise RuntimeError("EMPTY_RESPONSE")
-                content = candidates[0].get("content") or {}
-                text_parts = content.get("parts") or []
-                text = "".join(str(p.get("text","")) for p in text_parts if p.get("text") is not None).strip()
+                steps = raw.get("steps") or []
+                texts = []
+                for step in steps:
+                    if step.get("type") == "model_output":
+                        for block in (step.get("content") or []):
+                            if block.get("type") == "text" and block.get("text"):
+                                texts.append(str(block["text"]))
+                text = "\n".join(texts).strip()
+                if not text:
+                    text = str(raw.get("output_text") or "").strip()
                 if not text:
                     raise RuntimeError("EMPTY_RESPONSE")
 
@@ -971,52 +994,35 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
                 try:
                     data = json.loads(text)
                 except Exception:
-                    s = text.find("{")
-                    e = text.rfind("}")
-                    if s >= 0 and e > s:
-                        data = json.loads(text[s:e+1])
+                    a = text.find("{")
+                    b = text.rfind("}")
+                    if a >= 0 and b > a:
+                        data = json.loads(text[a:b+1])
                     else:
                         data = {"answer":text,"final_answer":"","topic":"رياضيات"}
-                # نحتفظ بعلامات $ لأنها جزء من LaTeX المستخدم لعرض المعادلات الرياضية.
                 return data
 
             except urllib.error.HTTPError as ex:
                 msg = ex.read().decode("utf-8", errors="ignore")
-                last_error = msg or str(ex)
+                last_error = f"HTTP {getattr(ex,'code',0)}: {msg[:900]}"
                 status = getattr(ex, "code", 0)
-
-                # 503/UNAVAILABLE: نعيد المحاولة ثم ننتقل تلقائياً لموديل احتياطي.
-                if status in (500, 502, 503, 504) or "UNAVAILABLE" in msg:
+                if status in (429,500,502,503,504):
+                    import time
                     if attempt < 2:
-                        import time
                         time.sleep(2 ** (attempt + 1))
                         continue
                     break
-
-                # 429: إعادة محاولة قصيرة، ثم موديل احتياطي إذا استمر الحد.
-                if status == 429 or "RESOURCE_EXHAUSTED" in msg or "rateLimitExceeded" in msg:
-                    if attempt < 2:
-                        import time
-                        time.sleep(3 * (attempt + 1))
-                        continue
+                if status in (400,401,403,404):
                     break
-
-                # قد يرفض موديل معيّن JSON المهيكل أو يكون غير متاح للحساب؛
-                # ننتقل مباشرة للموديل التالي بدل إظهار فشل الصورة للطالب.
-                if status in (400, 401, 403, 404):
-                    # ننتقل تلقائياً للنموذج الاحتياطي بدون تغيير الصورة أو المفتاح.
-                    break
-
                 if attempt < 2:
                     import time
-                    time.sleep(2 * (attempt + 1))
+                    time.sleep(2 ** (attempt + 1))
                     continue
-
             except (urllib.error.URLError, TimeoutError, RuntimeError, ValueError, KeyError) as ex:
                 last_error = str(ex)
                 if attempt < 2:
                     import time
-                    time.sleep(2 * (attempt + 1))
+                    time.sleep(2 ** (attempt + 1))
                     continue
                 break
             except Exception as ex:
@@ -1030,8 +1036,7 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
         raise RuntimeError("AI_BUSY")
     if "api key" in low or "permission" in low or "unauthorized" in low:
         raise RuntimeError("AI_KEY_MISSING")
-    safe_error = str(last_error or "unknown").replace(key, "[KEY]").replace("\n", " ")[:700]
-    raise RuntimeError("AI_ERROR:" + safe_error)
+    raise RuntimeError("AI_ERROR:" + str(last_error or "unknown")[:700])
 
 def _hamza_pdf_html(question, answer, final_answer, student_name):
     q=html.escape(str(question or "").strip()).replace("\n","<br>")
