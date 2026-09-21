@@ -1030,7 +1030,8 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
         raise RuntimeError("AI_BUSY")
     if "api key" in low or "permission" in low or "unauthorized" in low:
         raise RuntimeError("AI_KEY_MISSING")
-    raise RuntimeError("AI_ERROR")
+    safe_error = str(last_error or "unknown").replace(key, "[KEY]").replace("\n", " ")[:700]
+    raise RuntimeError("AI_ERROR:" + safe_error)
 
 def _hamza_pdf_html(question, answer, final_answer, student_name):
     q=html.escape(str(question or "").strip()).replace("\n","<br>")
@@ -2560,7 +2561,10 @@ if is_student_mode:
                             elif "AI_BUSY" in code:
                                 st.warning("🔄 حمصا مشغول حالياً. اضغط مرة أخرى بعد لحظات.")
                             else:
-                                st.error("❌ حمصا لم يستطع معالجة الطلب حالياً. أعد المحاولة بعد لحظات؛ وإذا استمرت المشكلة سنعرف السبب من سجل الخطأ.")
+                                detail = code.split("AI_ERROR:", 1)[1].strip() if "AI_ERROR:" in code else ""
+                                st.error("❌ حمصا لم يستطع معالجة الطلب حالياً.")
+                                if detail:
+                                    st.caption("تفاصيل تقنية للمشكلة: " + detail)
 
             last=st.session_state.get("hamza_public_last")
             if last:
