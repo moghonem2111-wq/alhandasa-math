@@ -981,7 +981,7 @@ def build_weekly_schedule_print_html(df, title="الجدول الأسبوعي ل
                         f"<div class='student-name'>👤 {student}</div>"
                         f"<div class='student-meta'>{grade}</div>"
                         f"<div class='student-meta'>{academy}</div>"
-                        (f"<div class='student-phone'>📞 {phone}</div>" if phone and phone.lower() != "nan" else "")
+                        + (f"<div class='student-phone'>📞 {phone}</div>" if phone and phone.lower() != "nan" else "")
                         f"</div>"
                     )
                 cells.append("<td class='day-cell'>" + ("".join(cards) if cards else "<span class='dash'>—</span>") + "</td>")
