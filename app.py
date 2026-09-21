@@ -1035,6 +1035,38 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
         raise RuntimeError("AI_NO_MODEL:" + last_error)
     raise RuntimeError("AI_ERROR:" + last_error)
 
+def _hamza_render_solution(text):
+    """عرض حل حمصا بتنسيق منظم مع دعم LaTeX واتجاه المعادلات."""
+    raw = str(text or "").strip()
+    if not raw:
+        st.info("لا يوجد شرح متاح.")
+        return
+
+    blocks = [b.strip() for b in re.split(r"\n\s*\n", raw) if b.strip()]
+    for block in blocks:
+        # المعادلات المحاطة بـ $ تعرض كمعادلة مستقلة من اليسار لليمين.
+        if block.startswith("$") and block.endswith("$"):
+            formula = block[2:-2].strip()
+            st.latex(formula)
+            continue
+
+        # لو السطر رياضي بوضوح، اعرضه كمعادلة مستقلة.
+        lines = [x.strip() for x in block.splitlines() if x.strip()]
+        if len(lines) == 1:
+            line = lines[0]
+            math_like = (
+                bool(re.search(r"\\frac|\\sqrt|\\sum|\\int|[=<>≤≥≠±×÷^]", line))
+                and bool(re.search(r"[0-9A-Za-z]", line))
+            )
+            if math_like and not re.search(r"[ء-ي]", line):
+                formula = line.strip("$ ")
+                st.latex(formula)
+                continue
+
+        # نترك Markdown/LaTeX الأصلي لـ Streamlit حتى تظهر الكسور والجذور والأسس بصورة صحيحة.
+        # المعادلات المختلطة داخل الشرح تبقى LTR، والنص العربي يظل RTL بطبيعته.
+        st.markdown(block)
+
 def _hamza_pdf_html(question, answer, final_answer, student_name):
     q=_hamza_math_html(question)
     a=_hamza_math_html(answer)
