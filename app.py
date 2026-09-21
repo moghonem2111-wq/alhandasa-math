@@ -890,11 +890,17 @@ def _hamza_secret(name):
         return ""
 
 def _hamza_ai_call(user_text, media_items=None, history=None):
-    """حمصا: مساعد رياضيات متعدد الوسائط باستخدام Gemini REST."""
+    """حمصا: مساعد رياضيات متعدد الوسائط باستخدام Gemini REST مع إعادة محاولة وانتقال تلقائي بين النماذج."""
     key = _hamza_secret("GEMINI_API_KEY")
     if not key:
         raise RuntimeError("AI_KEY_MISSING")
-    model = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
+
+    preferred = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
+    models = []
+    for candidate in [preferred, "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash"]:
+        if candidate and candidate not in models:
+            models.append(candidate)
+
     parts = []
     context = ""
     if history:
@@ -902,6 +908,7 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
             f"الطالب: {str(h.get('student','')).strip()}\nحمصا: {str(h.get('assistant','')).strip()}"
             for h in history[-6:]
         )
+
     prompt = f"""
 أنت "حمصا"، مدرس رياضيات وإحصاء ودود داخل منصة تعليمية للطلاب.
 أجب بالعربية المصرية المبسطة، وكن دقيقاً جداً.
@@ -928,27 +935,99 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
     for item in (media_items or []):
         if item and item.get("data"):
             parts.append({"inline_data":{"mime_type":item.get("mime","application/octet-stream"),"data":item["data"]}})
-    body={"contents":[{"role":"user","parts":parts}],
-          "generationConfig":{"responseMimeType":"application/json","temperature":0.2}}
-    url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    req=urllib.request.Request(url,data=json.dumps(body,ensure_ascii=False).encode("utf-8"),headers={"Content-Type":"application/json","x-goog-api-key":key},method="POST")
-    try:
-        with urllib.request.urlopen(req,timeout=180) as resp:
-            raw=json.loads(resp.read().decode("utf-8"))
-        text=raw["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except urllib.error.HTTPError as ex:
-        msg=ex.read().decode("utf-8",errors="ignore")
-        if "429" in msg: raise RuntimeError("AI_RATE_LIMIT")
-        if "503" in msg or "UNAVAILABLE" in msg: raise RuntimeError("AI_BUSY")
-        raise RuntimeError("AI_ERROR")
-    text=text.replace(chr(96)*3+"json","").replace(chr(96)*3,"").strip()
-    try:
-        data=json.loads(text)
-    except Exception:
-        s=text.find("{"); e=text.rfind("}")
-        if s>=0 and e>s: data=json.loads(text[s:e+1])
-        else: data={"answer":text,"final_answer":"","topic":"رياضيات"}
-    return data
+
+    body = {
+        "contents":[{"role":"user","parts":parts}],
+        "generationConfig":{
+            "responseMimeType":"application/json",
+            "maxOutputTokens":4096
+        }
+    }
+
+    last_error = ""
+    for model in models:
+        for attempt in range(3):
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+                headers={"Content-Type":"application/json","x-goog-api-key":key},
+                method="POST"
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=90) as resp:
+                    raw = json.loads(resp.read().decode("utf-8"))
+
+                candidates = raw.get("candidates") or []
+                if not candidates:
+                    raise RuntimeError("EMPTY_RESPONSE")
+                content = candidates[0].get("content") or {}
+                text_parts = content.get("parts") or []
+                text = "".join(str(p.get("text","")) for p in text_parts if p.get("text") is not None).strip()
+                if not text:
+                    raise RuntimeError("EMPTY_RESPONSE")
+
+                text = text.replace(chr(96)*3+"json","").replace(chr(96)*3,"").strip()
+                try:
+                    data = json.loads(text)
+                except Exception:
+                    s = text.find("{")
+                    e = text.rfind("}")
+                    if s >= 0 and e > s:
+                        data = json.loads(text[s:e+1])
+                    else:
+                        data = {"answer":text,"final_answer":"","topic":"رياضيات"}
+                return data
+
+            except urllib.error.HTTPError as ex:
+                msg = ex.read().decode("utf-8", errors="ignore")
+                last_error = msg or str(ex)
+                status = getattr(ex, "code", 0)
+
+                # 503/UNAVAILABLE: نعيد المحاولة ثم ننتقل تلقائياً لموديل احتياطي.
+                if status in (500, 502, 503, 504) or "UNAVAILABLE" in msg:
+                    if attempt < 2:
+                        import time
+                        time.sleep(2 ** (attempt + 1))
+                        continue
+                    break
+
+                # 429: إعادة محاولة قصيرة، ثم موديل احتياطي إذا استمر الحد.
+                if status == 429 or "RESOURCE_EXHAUSTED" in msg or "rateLimitExceeded" in msg:
+                    if attempt < 2:
+                        import time
+                        time.sleep(3 * (attempt + 1))
+                        continue
+                    break
+
+                # أخطاء المفتاح/الموديل/الطلب لا تستفيد من إعادة المحاولة على نفس الموديل.
+                if status in (400, 401, 403, 404):
+                    break
+
+                if attempt < 2:
+                    import time
+                    time.sleep(2 * (attempt + 1))
+                    continue
+
+            except (urllib.error.URLError, TimeoutError, RuntimeError, ValueError, KeyError) as ex:
+                last_error = str(ex)
+                if attempt < 2:
+                    import time
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                break
+            except Exception as ex:
+                last_error = str(ex)
+                break
+
+    low = str(last_error).lower()
+    if "429" in low or "resource_exhausted" in low or "ratelimit" in low:
+        raise RuntimeError("AI_RATE_LIMIT")
+    if "503" in low or "unavailable" in low or "high demand" in low:
+        raise RuntimeError("AI_BUSY")
+    if "api key" in low or "permission" in low or "unauthorized" in low:
+        raise RuntimeError("AI_KEY_MISSING")
+    raise RuntimeError("AI_ERROR")
 
 def _hamza_pdf_html(question, answer, final_answer, student_name):
     q=html.escape(str(question or "").strip()).replace("\n","<br>")
