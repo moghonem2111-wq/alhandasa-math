@@ -1067,6 +1067,56 @@ def _hamza_render_solution(text):
         # المعادلات المختلطة داخل الشرح تبقى LTR، والنص العربي يظل RTL بطبيعته.
         st.markdown(block)
 
+def _hamza_math_html(value):
+    """تحويل LaTeX البسيط في إجابات حمصا إلى HTML مناسب للطباعة بدون ظهور $."""
+    text = html.escape(str(value or ""), quote=False)
+    text = text.replace("\\r\\n", "\n").replace("\\n", "\n")
+    text = re.sub(r"\\\\?d?frac\\{([^{}]+)\\}\\{([^{}]+)\\}", r"<span class='frac'><span class='num'>\1</span><span class='den'>\2</span></span>", text)
+    text = re.sub(r"\\sqrt\\{([^{}]+)\\}", r"<span class='sqrt'>√<span class='radicand'>\1</span></span>", text)
+    text = re.sub(r"\\sqrt\\s*([A-Za-z0-9]+)", r"<span class='sqrt'>√<span class='radicand'>\1</span></span>", text)
+    text = re.sub(r"\\(?:pi|π)", "π", text)
+    text = re.sub(r"\\(?:theta|θ)", "θ", text)
+    text = re.sub(r"\\(?:alpha|α)", "α", text)
+    text = re.sub(r"\\(?:beta|β)", "β", text)
+    text = re.sub(r"\\(?:gamma|γ)", "γ", text)
+    text = re.sub(r"\\(?:delta|δ)", "δ", text)
+    text = re.sub(r"\\(?:lambda|λ)", "λ", text)
+    text = re.sub(r"\\(?:mu|μ)", "μ", text)
+    text = re.sub(r"\\(?:sigma|σ)", "σ", text)
+    text = re.sub(r"\\(?:omega|ω)", "ω", text)
+    text = re.sub(r"\\infty", "∞", text)
+    text = re.sub(r"\\times", "×", text)
+    text = re.sub(r"\\cdot", "·", text)
+    text = re.sub(r"\\pm", "±", text)
+    text = re.sub(r"\\mp", "∓", text)
+    text = re.sub(r"\\leq?", "≤", text)
+    text = re.sub(r"\\geq?", "≥", text)
+    text = re.sub(r"\\neq", "≠", text)
+    text = re.sub(r"\\approx", "≈", text)
+    text = re.sub(r"\\rightarrow|\\to", "→", text)
+    text = re.sub(r"\\left|\\right", "", text)
+    text = re.sub(r"\\text\\{([^{}]*)\\}", r"\1", text)
+    text = text.replace("&lt;=", "≤").replace("&gt;=", "≥")
+    # إزالة محددات LaTeX فقط، وليس محتوى المعادلة.
+    text = text.replace("$", "").replace("$", "")
+    # أسس و subscript شائعان بعد إزالة محددات LaTeX.
+    text = re.sub(r"([A-Za-zΑ-Ωα-ω0-9\)\]])\\^\\{([^{}]+)\\}", r"<span dir='ltr'>\1<sup>\2</sup></span>", text)
+    text = re.sub(r"([A-Za-zΑ-Ωα-ω0-9\)\]])\\^([A-Za-z0-9+\\-]+)", r"<span dir='ltr'>\1<sup>\2</sup></span>", text)
+    text = re.sub(r"([A-Za-zΑ-Ωα-ω0-9\)\]])_\\{([^{}]+)\\}", r"<span dir='ltr'>\1<sub>\2</sub></span>", text)
+    # كسور مكتوبة بالشكل 1/2 أو (x+1)/(x-1).
+    text = re.sub(r"\\(([^()]+)\\)\\s*/\\s*\\(([^()]+)\\)", r"<span class='frac'><span class='num'>\1</span><span class='den'>\2</span></span>", text)
+    text = re.sub(r"(?<![A-Za-z0-9])([0-9]+)\\s*/\\s*([0-9]+)(?![A-Za-z0-9])", r"<span class='frac'><span class='num'>\1</span><span class='den'>\2</span></span>", text)
+    # المعادلات والأجزاء اللاتينية تُعرض LTR حتى داخل نص عربي.
+    lines = text.split("\n")
+    out = []
+    for line in lines:
+        stripped = re.sub(r"<[^>]+>", "", line).strip()
+        if re.search(r"[A-Za-z0-9=+\\-*/^√×÷≤≥≠≈]", stripped):
+            out.append("<div dir='ltr' class='math-line'>" + line.strip() + "</div>")
+        else:
+            out.append("<div dir='rtl' class='text-line'>" + line.strip() + "</div>")
+    return "".join(out)
+
 def _hamza_pdf_html(question, answer, final_answer, student_name):
     q=_hamza_math_html(question)
     a=_hamza_math_html(answer)
