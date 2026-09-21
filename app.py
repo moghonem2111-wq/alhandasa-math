@@ -2497,7 +2497,8 @@ if is_student_mode:
                 <div class="hero-art">📚🎓</div>
             </div>
         """,unsafe_allow_html=True)
-        _student_key_for_stats=str(st_user.get("اسم الطالب", "")).strip().lower()        _my_hw=len(st.session_state.assessments_df[st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip().str.lower()==_student_key_for_stats]) if "اسم الطالب" in st.session_state.assessments_df.columns else 0
+        _student_key_for_stats=str(st_user.get("اسم الطالب", "")).strip().lower()
+        _my_hw=len(st.session_state.assessments_df[st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip().str.lower()==_student_key_for_stats]) if "اسم الطالب" in st.session_state.assessments_df.columns else 0
         _my_exams=len(st.session_state.exams_df)
         _my_sched=len(st.session_state.online_schedule_df[st.session_state.online_schedule_df["اسم الطالب"].astype(str).str.strip().str.lower()==_student_key_for_stats]) if "اسم الطالب" in st.session_state.online_schedule_df.columns else 0
         st.markdown(f"""
