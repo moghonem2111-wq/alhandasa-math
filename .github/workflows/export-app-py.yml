@@ -6,12 +6,49 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   validate-export:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Repair known accidental line merges
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("app.py")
+          s = p.read_text(encoding="utf-8")
+          replacements = [
+              ("r, g, b, a = pix[x, y]                if a > 18 and not (r > 245 and g > 245 and b > 245):",
+               "r, g, b, a = pix[x, y]\n                if a > 18 and not (r > 245 and g > 245 and b > 245):"),
+              ("    st.subheader(\"💡 إدارة امتحانات ونتائج موقع عبقري:\")    with st.form(\"upload_abqary_form\", clear_on_submit=True):",
+               "    st.subheader(\"💡 إدارة امتحانات ونتائج موقع عبقري:\")\n    with st.form(\"upload_abqary_form\", clear_on_submit=True):"),
+              ("            if all_registered_names:                prefill_hw = str(st.session_state.get(\"prefill_student\", \"\"))",
+               "            if all_registered_names:\n                prefill_hw = str(st.session_state.get(\"prefill_student\", \"\"))"),
+              ("        st.markdown(\"### 🔐 ضع هذه القيم في Streamlit Secrets\")        st.code('''MS_TENANT_ID = \"Tenant ID\"",
+               "        st.markdown(\"### 🔐 ضع هذه القيم في Streamlit Secrets\")\n        st.code('''MS_TENANT_ID = \"Tenant ID\""),
+          ]
+          for old, new in replacements:
+              s = s.replace(old, new)
+          p.write_text(s, encoding="utf-8")
+          PY
+
+      - name: Commit repairs to main
+        if: github.event_name == 'push'
+        run: |
+          if git diff --quiet; then
+            echo "No repairs needed."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app.py
+            git commit -m "Auto-fix Python syntax in app.py"
+            git push
+          fi
 
       - name: Validate Python syntax
         run: python -m py_compile app.py
