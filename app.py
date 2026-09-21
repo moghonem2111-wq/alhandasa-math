@@ -882,6 +882,102 @@ def html_to_pdf_bytes(html_text):
     except Exception:
         return None
 
+
+def _hamza_secret(name):
+    try:
+        return str(st.secrets.get(name, "")).strip()
+    except Exception:
+        return ""
+
+def _hamza_ai_call(user_text, media_items=None, history=None):
+    """حمصا: مساعد رياضيات متعدد الوسائط باستخدام Gemini REST."""
+    key = _hamza_secret("GEMINI_API_KEY")
+    if not key:
+        raise RuntimeError("AI_KEY_MISSING")
+    model = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
+    parts = []
+    context = ""
+    if history:
+        context = "\n\n".join(
+            f"الطالب: {str(h.get('student','')).strip()}\nحمصا: {str(h.get('assistant','')).strip()}"
+            for h in history[-6:]
+        )
+    prompt = f"""
+أنت "حمصا"، مدرس رياضيات وإحصاء ودود داخل منصة تعليمية للطلاب.
+أجب بالعربية المصرية المبسطة، وكن دقيقاً جداً.
+إذا كانت المسألة رياضيات أو إحصاء:
+1) اكتب فهمك للسؤال.
+2) اشرح القاعدة أو الفكرة المستخدمة.
+3) حل المسألة خطوة بخطوة وبترتيب واضح.
+4) اكتب الإجابة النهائية بوضوح.
+5) إذا كان في السؤال رسم أو جدول أو صورة، اقرأه بعناية ولا تخمّن القيم غير الواضحة؛ اطلب من الطالب صورة أوضح إذا لزم.
+6) استخدم LaTeX عند الحاجة مثل \\frac{{1}}{{2}} و \\sqrt{{x}} و x^2.
+7) لا تعطِ إجابة مختصرة فقط؛ الهدف أن يتعلم الطالب طريقة الحل.
+إذا كان السؤال غير رياضي، أخبر الطالب بلطف أن حمصا متخصص أساساً في الرياضيات والإحصاء.
+
+المحادثة السابقة:
+{context or "لا توجد محادثة سابقة."}
+
+رسالة الطالب الحالية:
+{user_text.strip() or "حل المسألة الموجودة في الملف المرفق."}
+
+أعد JSON صالحاً فقط بهذا الشكل:
+{{"answer":"الحل والشرح بالعربية","final_answer":"الإجابة النهائية باختصار","topic":"موضوع المسألة"}}
+"""
+    parts.append({"text": prompt})
+    for item in (media_items or []):
+        if item and item.get("data"):
+            parts.append({"inline_data":{"mime_type":item.get("mime","application/octet-stream"),"data":item["data"]}})
+    body={"contents":[{"role":"user","parts":parts}],
+          "generationConfig":{"responseMimeType":"application/json","temperature":0.2}}
+    url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    req=urllib.request.Request(url,data=json.dumps(body,ensure_ascii=False).encode("utf-8"),headers={"Content-Type":"application/json","x-goog-api-key":key},method="POST")
+    try:
+        with urllib.request.urlopen(req,timeout=180) as resp:
+            raw=json.loads(resp.read().decode("utf-8"))
+        text=raw["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except urllib.error.HTTPError as ex:
+        msg=ex.read().decode("utf-8",errors="ignore")
+        if "429" in msg: raise RuntimeError("AI_RATE_LIMIT")
+        if "503" in msg or "UNAVAILABLE" in msg: raise RuntimeError("AI_BUSY")
+        raise RuntimeError("AI_ERROR")
+    text=text.replace(chr(96)*3+"json","").replace(chr(96)*3,"").strip()
+    try:
+        data=json.loads(text)
+    except Exception:
+        s=text.find("{"); e=text.rfind("}")
+        if s>=0 and e>s: data=json.loads(text[s:e+1])
+        else: data={"answer":text,"final_answer":"","topic":"رياضيات"}
+    return data
+
+def _hamza_pdf_html(question, answer, final_answer, student_name):
+    q=html.escape(str(question or "").strip()).replace("\n","<br>")
+    a=html.escape(str(answer or "").strip()).replace("\n","<br>")
+    fa=html.escape(str(final_answer or "").strip()).replace("\n","<br>")
+    teacher_name, _, teacher_phone = _get_print_profile()
+    return f"""<!DOCTYPE html>
+<html dir='rtl' lang='ar'>
+<head><meta charset='utf-8'><title>حل المسألة - حمصا</title>
+<style>
+@page{{size:A4;margin:14mm}}
+*{{box-sizing:border-box}}
+body{{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#102a52;background:#fff;font-weight:700;line-height:1.9}}
+.header{{background:linear-gradient(135deg,#06295f,#1677ff);color:#fff;border-radius:20px;padding:22px 26px;margin-bottom:18px}}
+.header h1{{margin:0;font-size:27px;font-weight:900}} .header p{{margin:5px 0 0;color:#dbeafe}}
+.card{{border:1px solid #dbe7f5;border-radius:16px;padding:18px 20px;margin:12px 0;background:#fff}}
+.title{{font-size:18px;color:#126be6;font-weight:900;margin-bottom:8px}}
+.answer{{background:#f3f8ff;border-right:5px solid #1677ff}}
+.final{{background:#ecfdf5;border-right:5px solid #10b981;font-size:18px}}
+.footer{{margin-top:22px;border-top:1px solid #dbe7f5;padding-top:10px;text-align:center;color:#64748b;font-size:11px}}
+</style></head>
+<body>
+<div class='header'><h1>🤖 حمصا — حل المسألة</h1><p>{html.escape(student_name)} • البشمهندس x الرياضه</p></div>
+<div class='card'><div class='title'>📌 السؤال</div><div>{q}</div></div>
+<div class='card answer'><div class='title'>🧠 الحل خطوة بخطوة</div><div>{a}</div></div>
+<div class='card final'><div class='title'>✅ الإجابة النهائية</div><div>{fa}</div></div>
+<div class='footer'>إعداد المنصة: {html.escape(teacher_name)} • 📞 {html.escape(teacher_phone)} • حمصا المساعد الذكي</div>
+</body></html>"""
+
 def build_student_roster_html(names, title="كشف الطلاب المسجلين"):
     rows=[]
     for nm in names:
