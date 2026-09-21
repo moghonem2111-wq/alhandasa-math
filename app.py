@@ -898,11 +898,44 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
     # نستخدم نماذج Gemini الحالية فقط، مع انتقال تلقائي إذا كان أحدها غير متاح للحساب.
     # لا نستخدم أي اسم قديم مثل gemini-2.5-flash-lite.
     preferred = _hamza_secret("GEMINI_MODEL").strip()
-    # حمصا يعتمد على نموذج Gemini يدعم الصور. إذا كان Secret يحتوي نموذجاً قديماً أو غير متاح نتجاهله.
-    models = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash"]
-    if preferred in models:
-        models.remove(preferred)
-        models.insert(0, preferred)
+    # نكتشف النماذج المتاحة فعلياً لهذا المفتاح من Google بدل الاعتماد على اسم قديم أو غير متاح.
+    models = []
+    try:
+        list_url = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
+        list_req = urllib.request.Request(
+            list_url,
+            headers={"x-goog-api-key": key},
+            method="GET"
+        )
+        with urllib.request.urlopen(list_req, timeout=30) as list_resp:
+            listed = json.loads(list_resp.read().decode("utf-8"))
+        for item in listed.get("models", []):
+            name = str(item.get("name", "")).strip().split("/")[-1]
+            methods = item.get("supportedGenerationMethods") or []
+            if name and "generateContent" in methods and name not in models:
+                models.append(name)
+    except Exception:
+        models = []
+
+    # ترتيب حمصا: نفضل النموذج المحدد في Secrets، ثم نماذج Gemini Flash الحالية.
+    preferred_order = [
+        preferred,
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash"
+    ]
+    ordered = []
+    for name in preferred_order:
+        if name and name in models and name not in ordered:
+            ordered.append(name)
+    for name in models:
+        if name.startswith("gemini-") and "image" not in name and name not in ordered:
+            ordered.append(name)
+    models = ordered or [preferred or "gemini-3.5-flash"]
 
     parts = []
     context = ""
@@ -1026,7 +1059,8 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
         raise RuntimeError("AI_BUSY")
     if "api key" in low or "permission" in low or "unauthorized" in low:
         raise RuntimeError("AI_KEY_MISSING")
-    raise RuntimeError("AI_ERROR")
+    safe_error = str(last_error or "unknown").replace(key, "[KEY]").replace("\n", " ")[:700]
+    raise RuntimeError("AI_ERROR:" + safe_error)
 
 def _hamza_render_solution(text):
     """عرض حل حمصا بتنسيق واضح مع اتجاه صحيح للمعادلات."""
