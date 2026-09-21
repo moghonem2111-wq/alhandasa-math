@@ -5247,6 +5247,135 @@ elif t_page == "edit_records":
                 st.warning("⚠️ تم حذف السجل.")
                 st.rerun()
 
+elif t_page == "parent_report":
+    if st.button("⬅️ العودة للرئيسية", key="parent_report_back"):
+        st.session_state.teacher_page = "dashboard"
+        st.rerun()
+
+    st.subheader("👨‍👩‍👦 تقرير ولي الأمر")
+    st.info("اختر الطالب وتاريخ البداية، وسيتم عرض وطباعة كل بيانات التقرير المسجلة من هذا التاريخ وما بعده.")
+
+    all_names = sorted(set(
+        [str(x).strip() for x in st.session_state.users_df.get("اسم الطالب", pd.Series(dtype=str)).dropna() if str(x).strip()] +
+        [str(x).strip() for x in st.session_state.sessions_df.get("اسم الطالب", pd.Series(dtype=str)).dropna() if str(x).strip()] +
+        [str(x).strip() for x in st.session_state.assessments_df.get("اسم الطالب", pd.Series(dtype=str)).dropna() if str(x).strip()]
+    ))
+    if not all_names:
+        st.warning("لا توجد بيانات طلاب لإنشاء التقرير.")
+    else:
+        pr_c1, pr_c2 = st.columns(2)
+        with pr_c1:
+            pr_student = st.selectbox("👤 اختر الطالب:", all_names, key="parent_report_student")
+        with pr_c2:
+            pr_start = st.date_input("📅 تاريخ بداية التقرير:", value=date.today(), key="parent_report_start")
+        pr_end = st.date_input("📅 تاريخ نهاية التقرير (اختياري):", value=date.today(), key="parent_report_end")
+
+        student_key = str(pr_student).strip()
+
+        def _pr_filter(df, date_col="التاريخ"):
+            if df is None or df.empty or "اسم الطالب" not in df.columns:
+                return pd.DataFrame(columns=(df.columns if df is not None else []))
+            out = df[df["اسم الطالب"].astype(str).str.strip() == student_key].copy()
+            if date_col in out.columns:
+                dates = out[date_col].apply(_parse_parent_report_date)
+                out = out[dates.notna()].copy()
+                dates = dates.loc[out.index]
+                start_ts = pd.Timestamp(pr_start)
+                end_ts = pd.Timestamp(pr_end)
+                out = out[(dates >= start_ts) & (dates <= end_ts + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1))]
+            return out
+
+        pr_sessions = _pr_filter(st.session_state.sessions_df)
+        pr_assessments = _pr_filter(st.session_state.assessments_df)
+        pr_payments = _pr_filter(st.session_state.get("payment_records_df", pd.DataFrame()), "التاريخ")
+
+        u = st.session_state.users_df[st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == student_key]
+        urow = u.iloc[0].to_dict() if not u.empty else {}
+        grade = str(urow.get("المجموعة/الصف", ""))
+        curriculum = str(urow.get("المنهج/الدولة", ""))
+        parent_name = str(urow.get("اسم ولي الأمر", ""))
+        parent_phone = str(urow.get("رقم ولي الأمر", ""))
+
+        total_due = _money_sum(pr_sessions.get("سعر الحصة", pd.Series(dtype=float)))
+        total_paid = _money_sum(pr_payments.get("المبلغ", pd.Series(dtype=float)))
+        balance = max(total_due - total_paid, 0)
+
+        st.markdown(f"""
+        <div style="background:#eef6ff;border:1px solid #cfe3ff;border-radius:16px;padding:18px;margin:12px 0;">
+            <h3 style="margin:0;color:#0b5fe7;">👤 {html.escape(student_key)}</h3>
+            <div style="margin-top:8px;"><b>ولي الأمر:</b> {html.escape(parent_name or "-")} &nbsp; | &nbsp; <b>الهاتف:</b> {html.escape(parent_phone or "-")}</div>
+            <div><b>المرحلة:</b> {html.escape(grade or "-")} &nbsp; | &nbsp; <b>المنهج:</b> {html.escape(curriculum or "-")}</div>
+            <div><b>الفترة:</b> من {pr_start.strftime("%d/%m/%Y")} إلى {pr_end.strftime("%d/%m/%Y")}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("### 📚 الحصص والحضور")
+        if pr_sessions.empty:
+            st.info("لا توجد حصص في الفترة المحددة.")
+        else:
+            st.dataframe(pr_sessions, use_container_width=True, hide_index=True)
+
+        st.markdown("### 📝 الاختبارات والواجبات")
+        if pr_assessments.empty:
+            st.info("لا توجد تقييمات في الفترة المحددة.")
+        else:
+            st.dataframe(pr_assessments, use_container_width=True, hide_index=True)
+
+        st.markdown("### 💳 المدفوعات")
+        if pr_payments.empty:
+            st.info("لا توجد مدفوعات في الفترة المحددة.")
+        else:
+            st.dataframe(pr_payments, use_container_width=True, hide_index=True)
+
+        st.markdown(f"**إجمالي المستحق:** {total_due:,.0f} جنيه &nbsp; | &nbsp; **المدفوع:** {total_paid:,.0f} جنيه &nbsp; | &nbsp; **المتبقي:** {balance:,.0f} جنيه")
+
+        sess_rows = "".join(
+            f"<tr><td>{html.escape(str(r.get('التاريخ','')))}</td><td>{html.escape(str(r.get('الحالة','')))}</td><td>{html.escape(str(r.get('سعر الحصة','')))}</td><td>{html.escape(str(r.get('مستوى الطالب','')))}</td><td>{html.escape(str(r.get('ملاحظات','')))}</td></tr>"
+            for _, r in pr_sessions.iterrows()
+        ) or "<tr><td colspan='5'>لا توجد حصص في الفترة المحددة</td></tr>"
+        ass_rows = "".join(
+            f"<tr><td>{html.escape(str(r.get('التاريخ','')))}</td><td>{html.escape(str(r.get('النوع','')))}</td><td>{html.escape(str(r.get('عنوان التكليف','')))}</td><td>{html.escape(str(r.get('الدرجة المحصلة','')))} / {html.escape(str(r.get('الدرجة العظمى','')))}</td><td>{html.escape(str(r.get('حالة التسليم','')))}</td><td>{html.escape(str(r.get('ملاحظات وتوجيهات','')))}</td></tr>"
+            for _, r in pr_assessments.iterrows()
+        ) or "<tr><td colspan='6'>لا توجد تقييمات في الفترة المحددة</td></tr>"
+        pay_rows = "".join(
+            f"<tr><td>{html.escape(str(r.get('التاريخ','')))}</td><td>{html.escape(str(r.get('الشهر','')))}</td><td>{html.escape(str(r.get('المبلغ','')))}</td><td>{html.escape(str(r.get('طريقة الدفع','')))}</td><td>{html.escape(str(r.get('حالة الدفع','')))}</td><td>{html.escape(str(r.get('ملاحظات','')))}</td></tr>"
+            for _, r in pr_payments.iterrows()
+        ) or "<tr><td colspan='6'>لا توجد مدفوعات في الفترة المحددة</td></tr>"
+
+        pr_html = f"""<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head><meta charset="utf-8"><title>تقرير ولي الأمر - {html.escape(student_key)}</title>
+<style>
+@page{{size:A4;margin:12mm}}
+body{{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#102a52;font-weight:700;line-height:1.7}}
+.header{{background:linear-gradient(135deg,#06295f,#1677ff);color:#fff;border-radius:18px;padding:20px 24px;margin-bottom:16px}}
+.header h1{{margin:0;font-size:25px;font-weight:900}} .header div{{margin-top:5px}}
+.card{{border:1px solid #dbe7f5;border-radius:14px;padding:14px;margin:12px 0}}
+.title{{color:#126be6;font-size:17px;font-weight:900;margin-bottom:7px}}
+table{{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}}
+th{{background:#eaf4ff;color:#12345f;font-weight:900}} th,td{{border:1px solid #cbd8e8;padding:7px;text-align:center;vertical-align:middle}}
+.summary{{background:#f3f8ff;border-right:5px solid #1677ff}}
+.footer{{margin-top:18px;border-top:1px solid #dbe7f5;padding-top:8px;text-align:center;font-size:10px;color:#64748b}}
+</style></head>
+<body>
+<div class="header"><h1>👨‍👩‍👦 تقرير ولي الأمر</h1><div>{html.escape(student_key)} • {html.escape(parent_name or "-")}</div><div>الفترة: {pr_start.strftime("%d/%m/%Y")} — {pr_end.strftime("%d/%m/%Y")}</div></div>
+<div class="card summary"><div class="title">بيانات الطالب</div><div>المرحلة: {html.escape(grade or "-")} &nbsp; | &nbsp; المنهج: {html.escape(curriculum or "-")} &nbsp; | &nbsp; هاتف ولي الأمر: {html.escape(parent_phone or "-")}</div><div style="margin-top:6px">المستحق: {total_due:,.0f} جنيه &nbsp; | &nbsp; المدفوع: {total_paid:,.0f} جنيه &nbsp; | &nbsp; المتبقي: {balance:,.0f} جنيه</div></div>
+<div class="card"><div class="title">📚 الحصص والحضور</div><table><tr><th>التاريخ</th><th>الحالة</th><th>السعر</th><th>المستوى</th><th>ملاحظات</th></tr>{sess_rows}</table></div>
+<div class="card"><div class="title">📝 الاختبارات والواجبات</div><table><tr><th>التاريخ</th><th>النوع</th><th>العنوان</th><th>الدرجة</th><th>الحالة</th><th>ملاحظات</th></tr>{ass_rows}</table></div>
+<div class="card"><div class="title">💳 المدفوعات</div><table><tr><th>التاريخ</th><th>الشهر</th><th>المبلغ</th><th>طريقة الدفع</th><th>حالة الدفع</th><th>ملاحظات</th></tr>{pay_rows}</table></div>
+<div class="footer">إعداد ومتابعة: م/ محمد غنيم • البشمهندس x الرياضه</div>
+</body></html>"""
+
+        pdf_bytes = html_to_pdf_bytes(pr_html)
+        pc1, pc2 = st.columns(2)
+        with pc1:
+            if pdf_bytes:
+                st.download_button("📄 تحميل تقرير ولي الأمر PDF", pdf_bytes, f"تقرير_ولي_الأمر_{student_key}.pdf", "application/pdf", key="parent_report_pdf")
+            else:
+                st.download_button("🖨️ طباعة تقرير ولي الأمر", pr_html.encode("utf-8"), f"تقرير_ولي_الأمر_{student_key}.html", "text/html", key="parent_report_html")
+        with pc2:
+            st.download_button("📝 تحميل التقرير HTML", pr_html.encode("utf-8"), f"تقرير_ولي_الأمر_{student_key}.html", "text/html", key="parent_report_html2")
+
 elif t_page == "all_records":
     if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
     st.subheader("📊 نظرة شاملة على السجلات وإحصائيات الطلاب")
