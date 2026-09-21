@@ -1,3 +1,887 @@
+import hashlib
+import os
+import os as _os
+import io
+import json
+import base64
+import re
+import html
+import urllib.request
+import urllib.error
+import urllib.parse
+import uuid
+import zipfile
+from datetime import date, datetime, time
+import pandas as pd
+from PIL import Image
+import streamlit as st
+try:
+    from ai_studio import render_ai_studio
+except Exception:
+    render_ai_studio = None
+try:
+    from weasyprint import HTML as WeasyHTML
+except Exception:
+    WeasyHTML = None
+
+st.set_page_config(
+    page_title="البشمهندس x الرياضه | منصة تعليمية للرياضيات والإحصاء",
+    page_icon="📐",
+    layout="wide",
+)
+
+try:
+    from streamlit_paste_button import paste_image_button
+except ImportError:
+    paste_image_button = None
+
+try:
+    from streamlit_cropper import st_cropper
+except ImportError:
+    st_cropper = None
+
+FILE_NAME = "سجل_الغياب_والحصص.xlsx"
+IMG_NAME = "teacher.jpg"
+TEACHER_PHONE = "01016361440"
+
+# تخزين دائم اختياري على Supabase لمنع ضياع بيانات المنصة عند إعادة تشغيل Streamlit Cloud.
+# إذا لم يتم ضبط الأسرار، يستمر التطبيق في العمل بالطريقة المحلية القديمة.
+SUPABASE_URL = ""
+SUPABASE_KEY = ""
+try:
+    SUPABASE_URL = str(st.secrets.get("SUPABASE_URL", "")).strip()
+    SUPABASE_KEY = str(st.secrets.get("SUPABASE_KEY", "")).strip()
+except Exception:
+    pass
+SUPABASE_TABLE = "platform_storage"
+SUPABASE_INTERFACE_TABLE = "student_interface_storage"
+# سجل نسخ احتياطية مستقل: لا يتم استبداله مع السجل الرئيسي.
+SUPABASE_VERSIONS_TABLE = "platform_storage_versions"
+SUPABASE_RECORD_ID = "main"
+
+# Microsoft Excel Online / OneDrive (اختياري)
+MS_TENANT_ID = ""
+MS_CLIENT_ID = ""
+MS_CLIENT_SECRET = ""
+MS_ONEDRIVE_USER = ""
+MS_EXCEL_PATH = "سجل_الغياب_والحصص.xlsx"
+try:
+    MS_TENANT_ID = str(st.secrets.get("MS_TENANT_ID", "")).strip()
+    MS_CLIENT_ID = str(st.secrets.get("MS_CLIENT_ID", "")).strip()
+    MS_CLIENT_SECRET = str(st.secrets.get("MS_CLIENT_SECRET", "")).strip()
+    MS_ONEDRIVE_USER = str(st.secrets.get("MS_ONEDRIVE_USER", "")).strip()
+    MS_EXCEL_PATH = str(st.secrets.get("MS_EXCEL_PATH", MS_EXCEL_PATH)).strip() or MS_EXCEL_PATH
+except Exception:
+    pass
+
+def _onedrive_enabled():
+    return bool(MS_TENANT_ID and MS_CLIENT_ID and MS_CLIENT_SECRET and MS_ONEDRIVE_USER)
+
+def _graph_access_token():
+    if not _onedrive_enabled(): return None
+    try:
+        url = f"https://login.microsoftonline.com/{MS_TENANT_ID}/oauth2/v2.0/token"
+        body = urllib.parse.urlencode({"client_id":MS_CLIENT_ID,"client_secret":MS_CLIENT_SECRET,"scope":"https://graph.microsoft.com/.default","grant_type":"client_credentials"}).encode()
+        req = urllib.request.Request(url, data=body, headers={"Content-Type":"application/x-www-form-urlencoded"}, method="POST")
+        with urllib.request.urlopen(req, timeout=30) as resp: return json.loads(resp.read().decode()).get("access_token")
+    except Exception as exc:
+        st.session_state["onedrive_last_error"] = str(exc); return None
+
+def _onedrive_item_url():
+    user = urllib.parse.quote(MS_ONEDRIVE_USER, safe="")
+    path = urllib.parse.quote(str(MS_EXCEL_PATH).strip().lstrip("/"), safe="/")
+    return f"https://graph.microsoft.com/v1.0/users/{user}/drive/root:/{path}"
+
+def _onedrive_upload_excel(excel_bytes, reason="autosave"):
+    if not _onedrive_enabled(): return False
+    token = _graph_access_token()
+    if not token: return False
+    try:
+        req = urllib.request.Request(_onedrive_item_url()+":/content", data=excel_bytes, headers={"Authorization":f"Bearer {token}","Content-Type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}, method="PUT")
+        with urllib.request.urlopen(req, timeout=60) as resp: data=json.loads(resp.read().decode())
+        st.session_state["onedrive_web_url"] = str(data.get("webUrl", "")); st.session_state["onedrive_last_status"] = f"تم تحديث Excel Online ({reason})"; st.session_state["onedrive_last_error"] = ""; return True
+    except Exception as exc:
+        st.session_state["onedrive_last_error"] = str(exc); st.session_state["onedrive_last_status"] = "تعذر تحديث Excel Online"; return False
+
+def _onedrive_download_excel():
+    if not _onedrive_enabled(): return None
+    token = _graph_access_token()
+    if not token: return None
+    try:
+        req=urllib.request.Request(_onedrive_item_url()+":/content", headers={"Authorization":f"Bearer {token}"}, method="GET")
+        with urllib.request.urlopen(req, timeout=60) as resp: return resp.read()
+    except Exception as exc:
+        st.session_state["onedrive_last_error"] = str(exc); return None
+
+def _onedrive_metadata():
+    if not _onedrive_enabled(): return None
+    token=_graph_access_token()
+    if not token: return None
+    try:
+        req=urllib.request.Request(_onedrive_item_url(), headers={"Authorization":f"Bearer {token}"}, method="GET")
+        with urllib.request.urlopen(req, timeout=30) as resp: return json.loads(resp.read().decode())
+    except Exception as exc:
+        st.session_state["onedrive_last_error"] = str(exc); return None
+
+def _cloud_storage_enabled():
+    return bool(SUPABASE_URL and SUPABASE_KEY)
+
+def _supabase_headers():
+    return {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+
+def _cloud_load_excel_bytes():
+    """قراءة نسخة Excel الكاملة من التخزين الدائم، إن كانت موجودة."""
+    if not _cloud_storage_enabled():
+        return None
+    try:
+        url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{SUPABASE_TABLE}?id=eq.{SUPABASE_RECORD_ID}&select=payload"
+        req = urllib.request.Request(url, headers=_supabase_headers(), method="GET")
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        if data and data[0].get("payload"):
+            return base64.b64decode(data[0]["payload"])
+    except Exception:
+        pass
+    return None
+
+def _cloud_save_version_snapshot(excel_bytes, reason="autosave"):
+    """ينشئ نسخة احتياطية مستقلة قبل تحديث السجل الرئيسي. لا يحذف أي نسخة قديمة."""
+    if not _cloud_storage_enabled():
+        return False
+    try:
+        payload = base64.b64encode(excel_bytes).decode("ascii")
+        version_id = str(uuid.uuid4())
+        body = json.dumps({
+            "version_id": version_id,
+            "storage_id": SUPABASE_RECORD_ID,
+            "payload": payload,
+            "reason": str(reason),
+        }, ensure_ascii=False).encode("utf-8")
+        url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{SUPABASE_VERSIONS_TABLE}"
+        headers = _supabase_headers()
+        headers["Prefer"] = "return=minimal"
+        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+        return True
+    except Exception as exc:
+        try:
+            st.session_state["cloud_backup_last_error"] = str(exc)
+        except Exception:
+            pass
+        return False
+
+
+def _cloud_save_excel_bytes(excel_bytes, reason="autosave"):
+    """حفظ آمن: لا يكتب فوق main إلا بعد إنشاء نسخة مستقلة ناجحة."""
+    if not _cloud_storage_enabled():
+        return False
+    try:
+        # حماية أساسية: لا نسمح أبدًا بحفظ ملف Excel فارغ فوق نسخة سحابية موجودة.
+        try:
+            with pd.ExcelFile(io.BytesIO(excel_bytes), engine="openpyxl") as _xls_check:
+                _core_counts = {}
+                for _sheet in ["Users", "Sessions", "Assessments", "WeeklySchedule", "PaymentRecords"]:
+                    if _sheet in _xls_check.sheet_names:
+                        _core_counts[_sheet] = len(pd.read_excel(_xls_check, _sheet))
+                    else:
+                        _core_counts[_sheet] = 0
+                _new_core_total = sum(_core_counts.values())
+        except Exception as _excel_check_error:
+            st.session_state["cloud_storage_last_error"] = f"ملف Excel غير صالح: {_excel_check_error}"
+            return False
+
+        # إذا كانت البيانات الحالية كلها صفر، نرفض الحفظ السحابي تمامًا.
+        # هذا يمنع سيناريو إعادة التشغيل الذي يحمّل جداول فارغة ثم يمسح البيانات القديمة.
+        if _new_core_total == 0:
+            st.session_state["cloud_storage_last_error"] = "تم منع حفظ نسخة فارغة فوق بيانات Supabase."
+            st.session_state["cloud_empty_save_blocked"] = True
+            return False
+
+        # أولًا: نسخة احتياطية مستقلة. لو فشلت، لا نلمس main.
+        if not _cloud_save_version_snapshot(excel_bytes, reason=reason):
+            st.session_state["cloud_storage_last_error"] = "فشل إنشاء النسخة الاحتياطية؛ لم يتم تحديث البيانات الرئيسية."
+            return False
+
+        payload = base64.b64encode(excel_bytes).decode("ascii")
+        body = json.dumps({"id": SUPABASE_RECORD_ID, "payload": payload}).encode("utf-8")
+        url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{SUPABASE_TABLE}"
+        headers = _supabase_headers()
+        headers["Prefer"] = "resolution=merge-duplicates,return=minimal"
+        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+        st.session_state["cloud_empty_save_blocked"] = False
+        st.session_state["cloud_storage_last_saved"] = True
+        _onedrive_upload_excel(excel_bytes, reason=reason)
+        return True
+    except Exception as exc:
+        try:
+            st.session_state["cloud_storage_last_error"] = str(exc)
+            st.session_state["cloud_storage_last_saved"] = False
+        except Exception:
+            pass
+        return False
+
+
+def _cloud_sync_dataframe(table_name, df, label=None):
+    """مزامنة جدول DataFrame كاملًا مع جدول Supabase المقابل.
+
+    التطبيق يظل محتفظًا بنسخة Excel الرئيسية، بينما هذه الجداول تصبح نسخة منظمة
+    يمكن رؤيتها والبحث فيها من Table Editor. تتم المزامنة فقط عندما يتغير الجدول.
+    """
+    if not _cloud_storage_enabled():
+        return True
+    label = label or table_name
+    try:
+        if df is None:
+            df = pd.DataFrame()
+        work = df.copy()
+        # ثبّت الأعمدة والقيم قبل التحويل إلى JSON.
+        if not work.empty:
+            work.columns = [str(c) for c in work.columns]
+            records = json.loads(work.to_json(orient="records", force_ascii=False, date_format="iso"))
+        else:
+            records = []
+
+        # لا نكرر نفس المزامنة في كل rerun.
+        sig_source = work.copy()
+        try:
+            sig_source.columns = [str(c) for c in sig_source.columns]
+            for col in sig_source.columns:
+                sig_source[col] = sig_source[col].map(lambda x: "" if pd.isna(x) else str(x))
+            raw_sig = pd.util.hash_pandas_object(sig_source, index=True).values.tobytes()
+            signature = hashlib.sha256(
+                (table_name + "|" + "|".join(sig_source.columns) + "|" + str(len(sig_source))).encode("utf-8") + raw_sig
+            ).hexdigest()
+        except Exception:
+            signature = hashlib.sha256(repr(records).encode("utf-8")).hexdigest()
+
+        cache_key = f"_structured_sync_sig_{table_name}"
+        if st.session_state.get(cache_key) == signature:
+            return True
+
+        base_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{table_name}"
+
+        # حذف النسخة المنظمة القديمة حتى تعكس الجدول الحالي بالكامل، بما في ذلك الحذف.
+        delete_url = base_url + "?id=not.is.null"
+        delete_headers = _supabase_headers()
+        delete_headers["Prefer"] = "return=minimal"
+        req = urllib.request.Request(delete_url, headers=delete_headers, method="DELETE")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+
+        if records:
+            # أرسل دفعات صغيرة، خصوصًا للجداول التي قد تحتوي على صور/ملفات Base64.
+            batch_size = 10 if any("base64" in str(c).lower() for c in work.columns) else 50
+            for start in range(0, len(records), batch_size):
+                batch = records[start:start + batch_size]
+                body = json.dumps(batch, ensure_ascii=False, allow_nan=False).encode("utf-8")
+                headers = _supabase_headers()
+                headers["Prefer"] = "return=minimal"
+                req = urllib.request.Request(base_url, data=body, headers=headers, method="POST")
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    resp.read()
+
+        st.session_state[cache_key] = signature
+        st.session_state["structured_sync_last_error"] = ""
+        return True
+    except Exception as exc:
+        st.session_state["structured_sync_last_error"] = f"{label}: {exc}"
+        # لا نوقف عمل المنصة؛ نسخة Excel الرئيسية تظل هي النسخة الآمنة.
+        return False
+
+
+def _cloud_sync_all_structured_tables(users_df, sessions_df, assessments_df, messages_df,
+                                      exams_df, essays_df, bookings_df, bank_requests_df,
+                                      question_bank_df, videos_df, video_comments_df, abqary_df,
+                                      online_schedule_df, weekly_schedule_df, payment_records_df,
+                                      ads_df):
+    """تحديث كل القوائم المنظمة في Supabase بجانب platform_storage."""
+    tables = [
+        ("users", users_df, "الطلاب"),
+        ("sessions", sessions_df, "الحصص والحضور"),
+        ("assessments", assessments_df, "الواجبات والتقييمات"),
+        ("messages", messages_df, "الرسائل"),
+        ("exams", exams_df, "الامتحانات"),
+        ("essays", essays_df, "الحلول المقالية"),
+        ("bookings", bookings_df, "الحجوزات"),
+        ("bank_requests", bank_requests_df, "طلبات البنك"),
+        ("question_bank", question_bank_df, "بنك الأسئلة"),
+        ("videos", videos_df, "الفيديوهات"),
+        ("video_comments", video_comments_df, "تعليقات الفيديو"),
+        ("abqary", abqary_df, "عبقري"),
+        ("online_schedule", online_schedule_df, "جداول Zoom"),
+        ("weekly_schedule", weekly_schedule_df, "المواعيد الأسبوعية"),
+        ("payment_records", payment_records_df, "المدفوعات"),
+        ("ads", ads_df, "الإعلانات"),
+    ]
+    # الجداول ذات السجل الواحد: تُزامن من نفس مصدرها الحالي.
+    teacher_profile_df = st.session_state.get("teacher_profile_df", pd.DataFrame(columns=COL_TEACHER_PROFILE))
+    student_interface_df = st.session_state.get("student_interface_df", pd.DataFrame(columns=COL_STUDENT_INTERFACE))
+    tables.extend([
+        ("teacher_profile", teacher_profile_df, "بيانات المعلم"),
+        ("student_interface", student_interface_df, "واجهة الطالب"),
+    ])
+    results = []
+    for table_name, df, label in tables:
+        results.append(_cloud_sync_dataframe(table_name, df, label))
+    return all(results)
+
+
+def _cloud_load_student_interface():
+    """قراءة إعدادات واجهة الطالب وحدها من التخزين الدائم، بدون الاعتماد على ملف Excel الكبير."""
+    if not _cloud_storage_enabled():
+        return None
+    try:
+        url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{SUPABASE_INTERFACE_TABLE}?id=eq.{SUPABASE_RECORD_ID}&select=payload"
+        req = urllib.request.Request(url, headers=_supabase_headers(), method="GET")
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        if data and data[0].get("payload"):
+            return json.loads(data[0]["payload"])
+    except Exception as exc:
+        try:
+            st.session_state["cloud_interface_load_error"] = str(exc)
+        except Exception:
+            pass
+    return None
+
+def _cloud_save_student_interface(interface_df):
+    """حفظ واجهة الطالب (النصوص والصور) في سجل مستقل صغير."""
+    if not _cloud_storage_enabled():
+        return False
+    try:
+        row = interface_df.iloc[0].to_dict() if interface_df is not None and not interface_df.empty else {}
+        clean = {}
+        for key, value in row.items():
+            if pd.isna(value):
+                value = ""
+            clean[str(key)] = str(value)
+        payload = json.dumps(clean, ensure_ascii=False)
+        body = json.dumps({"id": SUPABASE_RECORD_ID, "payload": payload}, ensure_ascii=False).encode("utf-8")
+        url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{SUPABASE_INTERFACE_TABLE}"
+        headers = _supabase_headers()
+        headers["Prefer"] = "resolution=merge-duplicates,return=minimal"
+        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+        st.session_state["cloud_interface_last_saved"] = True
+        return True
+    except Exception as exc:
+        try:
+            st.session_state["cloud_interface_last_error"] = str(exc)
+            st.session_state["cloud_interface_last_saved"] = False
+        except Exception:
+            pass
+        return False
+
+def _get_excel_source():
+    """يفضل التخزين الدائم، ثم يرجع للملف المحلي القديم كخطة احتياطية."""
+    cloud_bytes = _cloud_load_excel_bytes()
+    if cloud_bytes:
+        return io.BytesIO(cloud_bytes)
+    if _os.path.exists(FILE_NAME):
+        return FILE_NAME
+    return None
+
+CURRICULUM_DATA = {
+    "المنهج المصري 🇪🇬": [
+        "الصف الأول الإعدادي", "الصف الثاني الإعدادي", "الصف الثالث الإعدادي (الشهادة الإعدادية)",
+        "الصف الأول الثانوي", "الصف الثاني الثانوي (علمي)", "الصف الثاني الثانوي (أدبي)",
+        "الصف الثالث الثانوي (علمي رياضة)", "الصف الثالث الثانوي (علمي علوم)", "الصف الثالث الثانوي (أدبي)",
+        "المرحلة الابتدائية"
+    ],
+    "المنهج القطري 🇶🇦": [
+        "الصف السابع (إعدادي)", "الصف الثامن (إعدادي)", "الصف التاسع (إعدادي)",
+        "الصف العاشر (المشترك)", "الصف الحادي عشر (المسار العلمي)", "الصف الحادي عشر (مسار الآداب والإنسانيات)",
+        "الصف الحادي عشر (المسار التكنولوجي)", "الصف الثاني عشر (المسار العلمي - متقدم)",
+        "الصف الثاني عشر (مسار الآداب - تأسيسي)", "الصف الثاني عشر (المسار التكنولوجي)",
+        "المرحلة الابتدائية"
+    ],
+    "المنهج الإماراتي 🇦🇪": [
+        "الحلقة الثانية (الصفوف 5 - 8)", "الصف التاسع (مسار عام)", "الصف التاسع (مسار متقدم)",
+        "الصف العاشر (مسار عام)", "الصف العاشر (مسار متقدم)", "الصف العاشر (مسار النخبة)",
+        "الصف الحادي عشر (مسار عام)", "الصف الحادي عشر (مسار متقدم)", "الصف الحادي عشر (مسار النخبة)",
+        "الصف الثاني عشر (مسار عام)", "الصف الثاني عشر (مسار متقدم)", "الصف الثاني عشر (مسار النخبة)"
+    ],
+    "المنهج السعودي 🇸🇦": [
+        "المرحلة المتوسطة (أول / ثاني / ثالث متوسط)", "السنة الأولى المشتركة (أول ثانوي)",
+        "السنة الثانية (المسار العام)", "السنة الثانية (مسار علوم الحاسب والهندسة)",
+        "السنة الثانية (مسار الصحة والحياة)", "السنة الثانية (مسار إدارة الأعمال / الشرعي)",
+        "السنة الثالثة (المسار العام)", "السنة الثالثة (مسار علوم الحاسب والهندسة)",
+        "السنة الثالثة (مسار الصحة والحياة)"
+    ],
+    "المنهج الكويتي 🇰🇼": [
+        "المرحلة المتوسطة (الصفوف 6 - 9)", "الصف العاشر الثانوي (مشترك)",
+        "الصف الحادي عشر (القسم العلمي)", "الصف الحادي عشر (القسم الأدبي)",
+        "الصف الثاني عشر (القسم العلمي)", "الصف الثاني عشر (القسم الأدبي)"
+    ],
+    "المنهج السوداني 🇸🇩": [
+        "المرحلة المتوسطة (أولى / ثانية / ثالثة متوسط)", "الصف الأول الثانوي",
+        "الصف الثاني الثانوي (علمي)", "الصف الثاني الثانوي (أدبي)",
+        "الصف الثالث الثانوي (علمي رياضيات - الشهادة السودانية)", "الصف الثالث الثانوي (علمي أحياء)",
+        "الصف الثالث الثانوي (أدبي)"
+    ]
+}
+
+possible_images = ["teacher.jpg", "teacher.png", "teacher.jpeg", "photo_2026-08-02_00-34-53.jpg"]
+found_img_path = None
+for img_cand in possible_images:
+    if __import__("os").path.exists(img_cand):
+        found_img_path = img_cand
+        break
+
+def get_image_base64(path):
+    if path and _os.path.exists(path):
+        try:
+            with open(path, "rb") as img_file:
+                return base64.b64encode(img_file.read()).decode()
+        except Exception:
+            return ""
+    return ""
+
+def pil_to_base64(pil_img):
+    if pil_img is None:
+        return ""
+    buf = io.BytesIO()
+    pil_img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+def optimize_uploaded_image_to_b64(uploaded_file, max_side=900, quality=78):
+    """تحويل صورة رفعها المعلم إلى JPEG خفيف وسريع."""
+    try:
+        im = Image.open(uploaded_file).convert("RGB")
+        im.thumbnail((max_side, max_side), Image.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, format="JPEG", quality=quality, optimize=True, progressive=True)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception:
+        try:
+            return base64.b64encode(uploaded_file.getvalue()).decode("utf-8")
+        except Exception:
+            return ""
+
+def base64_to_pil(b64_str):
+    if not b64_str:
+        return None
+    try:
+        img_bytes = base64.b64decode(b64_str)
+        return Image.open(io.BytesIO(img_bytes))
+    except Exception:
+        return None
+
+img_b64 = get_image_base64(found_img_path)
+
+# صورة ثابتة لواجهة الطالب: مدمجة داخل التطبيق نفسه حتى تظهر دائمًا على المنصة.
+STUDENT_FIXED_IMAGE_B64 = "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"
+STUDENT_FIXED_IMAGE_URI = f"data:image/jpeg;base64,{STUDENT_FIXED_IMAGE_B64}"
+
+
+def teacher_image_data_uri(b64_str):
+    """تحويل صورة المعلم المحفوظة Base64 إلى Data URI صحيح مع قص المساحات البيضاء الزائدة."""
+    if not b64_str or str(b64_str).strip().lower() == "nan":
+        return ""
+    try:
+        raw = base64.b64decode(str(b64_str))
+        im = Image.open(io.BytesIO(raw)).convert("RGBA")
+
+        # قص الحواف البيضاء/الشفافة الزائدة حتى لا يظهر الوجه في نصف الدائرة فقط.
+        bbox = None
+        pix = im.load()
+        xs, ys = [], []
+        for y in range(im.height):
+            for x in range(im.width):
+                r, g, b, a = pix[x, y]
+                if a > 18 and not (r > 245 and g > 245 and b > 245):
+                    xs.append(x)
+                    ys.append(y)
+        if xs and ys:
+            left, top, right, bottom = min(xs), min(ys), max(xs) + 1, max(ys) + 1
+            pad = max(8, int(max(right-left, bottom-top) * 0.10))
+            left = max(0, left-pad); top = max(0, top-pad)
+            right = min(im.width, right+pad); bottom = min(im.height, bottom+pad)
+            bbox = (left, top, right, bottom)
+        if bbox:
+            im = im.crop(bbox)
+
+        # نجعل الصورة مربعة مع الحفاظ على الوجه في المنتصف.
+        side = max(im.width, im.height)
+        canvas = Image.new("RGBA", (side, side), (255, 255, 255, 0))
+        canvas.paste(im, ((side-im.width)//2, (side-im.height)//2), im)
+        buf = io.BytesIO()
+        canvas.save(buf, format="PNG")
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception:
+        # fallback: تحديد نوع الصورة من التوقيع بدل افتراض JPEG
+        try:
+            raw = base64.b64decode(str(b64_str))
+            if raw.startswith(b"\x89PNG"):
+                mime = "image/png"
+            elif raw.startswith(b"\xff\xd8\xff"):
+                mime = "image/jpeg"
+            elif raw.startswith(b"RIFF") and raw[8:12] == b"WEBP":
+                mime = "image/webp"
+            else:
+                mime = "image/png"
+            return f"data:{mime};base64,{b64_str}"
+        except Exception:
+            return ""
+
+# بطاقات الاشتراكات الموحدة للصفحة الرئيسية وصفحة الطالب
+DARSSLY_COURSES = [
+    {"icon": "📘", "title": "رياضيات أول إعدادي", "price": 200, "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim-3/plans", "tag": "أولى إعدادي"},
+    {"icon": "📗", "title": "رياضيات ثاني إعدادي", "price": 200, "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim/plans", "tag": "ثانية إعدادي"},
+    {"icon": "📐", "title": "رياضيات ثالث إعدادي", "price": 200, "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim-2/plans", "tag": "ثالثة إعدادي"},
+    {"icon": "📊", "title": "إحصاء ثالثة ثانوي", "price": 250, "link": "https://darssly.com/courses/mohamed-ghoneim-statistics/plans", "tag": "ثالثة ثانوي – إحصاء"},
+]
+
+def render_darssly_cards(section_key="home"):
+    interface_df = st.session_state.get("student_interface_df", pd.DataFrame())
+    row = interface_df.iloc[0] if interface_df is not None and not interface_df.empty else {}
+    sub_title = str(row.get("عنوان_الاشتراكات", "📢 اشتراكات درسلي"))
+    sub_desc = str(row.get("وصف_الاشتراكات", "اختر المرحلة وشاهد نظام الشرح والمتابعة والسعر الشهري"))
+    sub_img = STUDENT_FIXED_IMAGE_B64
+    sub_uri = teacher_image_data_uri(sub_img) if sub_img else ""
+    st.markdown("<div class='darssly-box'>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='color:#fff;text-align:center;margin:0 0 5px;font-size:23px;font-weight:900;'>{sub_title}</h3>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:#fff;text-align:center;margin:0 0 20px;font-size:15px;font-weight:800;'>{sub_desc}</p>", unsafe_allow_html=True)
+    cols = st.columns(2)
+    for idx, course in enumerate(DARSSLY_COURSES):
+        with cols[idx % 2]:
+            photo = (f"<img class='subscription-photo' src='{sub_uri}'>" if sub_uri else f"<div class='subscription-icon'>{course['icon']}</div>")
+            st.markdown(f"""
+                <div class='subscription-card' dir='rtl'>
+                    <div class='subscription-badge'>باقـة {course['tag']}</div>
+                    {photo}
+                    <div class='subscription-title'>{course['title']}</div>
+                    <div class='subscription-price'>{course['price']} جنيه / شهر</div>
+                    <div class='subscription-features'>✓ فيديوهات شرح مسجلة<br>✓ حصص Zoom مباشرة<br>✓ متابعة مستمرة<br>✓ حل وتدريب على الأسئلة</div>
+                </div>
+            """, unsafe_allow_html=True)
+            st.link_button(f"🔴 معرفة تفاصيل الاشتراك — {course['title']}", course['link'], use_container_width=True)
+            st.write("")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+COL_SESSIONS = ["التاريخ", "اسم الطالب", "المنهج/الدولة", "المجموعة/الصف", "الحالة", "سعر الحصة", "عدد الحصص الكلي", "نظام الدفع", "مستوى الطالب", "ملاحظات"]
+COL_USERS = ["اسم الطالب", "رقم الهاتف", "كلمة المرور", "المنهج/الدولة", "المجموعة/الصف", "اسم ولي الأمر", "رقم ولي الأمر", "تاريخ التسجيل", "الحالة_حظر", "حالة_الاشتراك_البنك"]
+COL_ASSESSMENTS = ["التاريخ", "اسم الطالب", "النوع", "عنوان التكليف", "الدرجة المحصلة", "الدرجة العظمى", "حالة التسليم", "ملاحظات وتوجيهات"]
+COL_MESSAGES = ["التاريخ_والوقت", "اسم الطالب", "المرسل", "نص الرسالة", "الصورة_base64"]
+COL_EXAMS = ["معرف_الامتحان", "عنوان الامتحان", "وصف الامتحان", "كلمة المرور", "المنهج/الدولة", "المجموعة/الصف", "المادة", "الفصل الدراسي", "مدة الامتحان بالدقائق", "الأسئلة_JSON", "تاريخ الإنشاء"]
+COL_ESSAYS = ["معرف_الحل", "معرف_الامتحان", "عنوان الامتحان", "اسم الطالب", "رقم السؤال", "نص السؤال", "إجابة الطالب النصية", "صورة الحل_base64", "درجة السؤال", "الدرجة المرصودة", "حالة التصحيح", "ملاحظات المعلم", "تاريخ الحل"]
+COL_BOOKINGS = ["تاريخ_الحجز", "اسم الطالب", "المنهج_الدولة", "المرحلة_الصف", "رقم_الهاتف", "رقم_ولي_الأمر", "الحالة"]
+COL_BANK_REQUESTS = ["تاريخ_الطلب", "اسم الطالب", "رقم_الهاتف", "كود_OTP", "حالة_الدفع", "إيصال_الدفع_base64"]
+COL_QUESTION_BANK = ["معرف_السؤال", "المنهج/الدولة", "المجموعة/الصف", "المادة", "نوع_السؤال", "بيانات_السؤال_JSON"]
+COL_VIDEOS = ["معرف_الفيديو", "عنوان_الفيديو", "المنهج/الدولة", "المجموعة/الصف", "رابط_الفيديو", "فيديو_base64", "تاريخ_الرفع"]
+COL_VIDEO_COMMENTS = ["التاريخ_والوقت", "عنوان_الفيديو", "اسم الطالب", "نص_التعليق"]
+COL_ABQARY = ["معرف_عبقري", "عنوان_الإمتحان", "المنهج/الدولة", "المجموعة/الصف", "رابط_الإمتحان", "كود_HTML", "رابط_النتيجة", "الرقم_السري_للنتيجة", "تاريخ_النشر"]
+COL_ONLINE_SCHEDULE = ["اسم الطالب", "اسم الأكاديمية", "المنهج/الدولة", "المجموعة/الصف", "رقم الطالب", "رقم مشرف الأكاديمية", "سعر الحصة", "تاريخ الحصة", "ساعة الحصة", "رابط زوم", "حالة فتح الحصة"]
+COL_WEEKLY_SCHEDULE = ["اسم الطالب", "اسم الأكاديمية", "المنهج/الدولة", "المجموعة/الصف", "رقم الطالب", "رقم مشرف الأكاديمية", "سعر الحصة", "اليوم", "الموعد", "اللون", "حالة الموعد"]
+COL_TEACHER_PROFILE = ["اسم المعلم", "الصورة_base64"]
+COL_STUDENT_INTERFACE = ["عنوان_الواجهة", "الشارة", "عنوان_البطل", "وصف_البطل", "ميزة_1", "ميزة_2", "ميزة_3", "ميزة_4", "الوصف", "صورة_الواجهة_base64", "عنوان_الاشتراكات", "وصف_الاشتراكات", "عنوان_الحجز", "نص_الحجز", "نص_الفوتر", "صورة_الاشتراكات_base64", "صورة_البانر_base64"]
+COL_PAYMENT_RECORDS = ["التاريخ", "الشهر", "اسم الطالب", "المبلغ", "طريقة الدفع", "حالة الدفع", "ملاحظات"]
+COL_ADS = ["معرف_الإعلان", "تاريخ_النشر", "العنوان", "نوع_الإعلان", "النص", "الوسائط_base64", "نوع_الوسائط", "الرابط", "نص_الزر", "الحالة"]
+
+def load_teacher_profile():
+    profile = pd.DataFrame(columns=COL_TEACHER_PROFILE)
+    excel_source = _get_excel_source()
+    if excel_source is not None:
+        try:
+            with pd.ExcelFile(excel_source) as xls:
+                if "TeacherProfile" in xls.sheet_names:
+                    profile = pd.read_excel(xls, "TeacherProfile")
+        except Exception:
+            pass
+    for c in COL_TEACHER_PROFILE:
+        if c not in profile.columns:
+            profile[c] = ""
+    if profile.empty:
+        profile = pd.DataFrame([{"اسم المعلم":"م/ محمد غنيم","الصورة_base64":img_b64}])
+    elif not str(profile.iloc[0].get("الصورة_base64", "")).strip() and img_b64:
+        profile.at[0,"الصورة_base64"] = img_b64
+    return profile
+
+def load_student_interface():
+    defaults = {
+        "عنوان_الواجهة": "أهلاً بيكم منورين المنصة! 🚀",
+        "الشارة": "البشمهندس x الرياضه",
+        "عنوان_البطل": "رحلتك نحو التفوق في الرياضيات تبدأ من هنا",
+        "وصف_البطل": "شرح مبسط، تدريب مستمر، اختبارات ومتابعة تساعدك توصل لهدفك.",
+        "ميزة_1": "شرح مبسط وتفاعلي", "ميزة_2": "اختبارات وتقييم مستمر",
+        "ميزة_3": "متابعة مستوى الطالب", "ميزة_4": "دعم فني ومساعدة",
+        "الوصف": "مع م / محمد غنيم. خبرة متميزة في تدريس الرياضيات والإحصاء للثانوية العامة والمرحلة الإعدادية. آلاف الطلاب حققوا التفوق والدرجات النهائية.",
+        "صورة_الواجهة_base64": STUDENT_FIXED_IMAGE_B64, "عنوان_الاشتراكات": "📢 اشتراكات درسلي",
+        "وصف_الاشتراكات": "اختر المرحلة وشاهد نظام الشرح والمتابعة والسعر الشهري",
+        "عنوان_الحجز": "📅 حجز دروس أونلاين مباشرة مع م / محمد غنيم",
+        "نص_الحجز": "احجز درس أونلاين مباشر وحدد المنهج والمرحلة ورقم الهاتف للتواصل معك.",
+        "نص_الفوتر": "جميع الحقوق محفوظة لدي م / محمد غنيم 2026",
+        "صورة_الاشتراكات_base64": STUDENT_FIXED_IMAGE_B64, "صورة_البانر_base64": ""
+    }
+    df = pd.DataFrame([defaults])
+    # واجهة الطالب لها تخزين سحابي مستقل حتى لو كان ملف Excel كبيراً أو لم يتم تحميله.
+    cloud_interface = _cloud_load_student_interface()
+    if isinstance(cloud_interface, dict) and cloud_interface:
+        for key, default in defaults.items():
+            value = cloud_interface.get(key, default)
+            if value is None or str(value).lower() == "nan":
+                value = default
+            df.at[0, key] = value
+        if not str(df.at[0, "صورة_الواجهة_base64"]).strip() and STUDENT_FIXED_IMAGE_B64:
+            df.at[0, "صورة_الواجهة_base64"] = STUDENT_FIXED_IMAGE_B64
+        if not str(df.at[0, "صورة_الاشتراكات_base64"]).strip() and STUDENT_FIXED_IMAGE_B64:
+            df.at[0, "صورة_الاشتراكات_base64"] = STUDENT_FIXED_IMAGE_B64
+        return df[COL_STUDENT_INTERFACE]
+    source = _get_excel_source()
+    if source is not None:
+        try:
+            with pd.ExcelFile(source) as xls:
+                if "StudentInterface" in xls.sheet_names:
+                    loaded = pd.read_excel(xls, "StudentInterface")
+                    if not loaded.empty:
+                        row = loaded.iloc[0].to_dict()
+                        for key, default in defaults.items():
+                            value = row.get(key, default)
+                            if pd.isna(value): value = default
+                            df.at[0, key] = value
+        except Exception:
+            pass
+    if not str(df.at[0, "صورة_الواجهة_base64"]).strip() and img_b64:
+        df.at[0, "صورة_الواجهة_base64"] = img_b64
+    if not str(df.at[0, "صورة_الاشتراكات_base64"]).strip() and img_b64:
+        df.at[0, "صورة_الاشتراكات_base64"] = img_b64
+    return df[COL_STUDENT_INTERFACE]
+
+
+def _get_print_profile():
+    """بيانات المعلم المستخدمة في رأس ملفات الطباعة."""
+    name = "م/ محمد غنيم"
+    photo_b64 = img_b64
+    try:
+        profile_df = st.session_state.get("teacher_profile_df", pd.DataFrame())
+        if profile_df is not None and not profile_df.empty:
+            saved_name = str(profile_df.iloc[0].get("اسم المعلم", "")).strip()
+            saved_photo = str(profile_df.iloc[0].get("الصورة_base64", "")).strip()
+            if saved_name and saved_name.lower() != "nan":
+                name = saved_name
+            if saved_photo and saved_photo.lower() != "nan":
+                photo_b64 = saved_photo
+    except Exception:
+        pass
+    return name, photo_b64, TEACHER_PHONE
+
+def make_print_html(title, rows_html, headers_html, subtitle=""):
+    teacher_name, teacher_photo_b64, teacher_phone = _get_print_profile()
+    photo_html = ""
+    if teacher_photo_b64:
+        photo_html = f"<img class='teacher-photo' src='data:image/png;base64,{teacher_photo_b64}' alt='صورة المعلم'>"
+    return f"""<!DOCTYPE html>
+<html dir='rtl' lang='ar'>
+<head>
+<meta charset='utf-8'>
+<title>{title}</title>
+<style>
+@page{{size:A4 landscape;margin:10mm}}
+*{{box-sizing:border-box}}
+body{{font-family:'Noto Kufi Arabic','Noto Sans Arabic','Amiri',Tahoma,Arial,sans-serif;font-weight:700;color:#10233f;padding:8px;background:#fff}}
+.header{{border:2px solid #0f766e;border-radius:18px;padding:14px 18px;margin-bottom:14px;background:linear-gradient(135deg,#effcf8,#eef7ff);display:flex;align-items:center;gap:16px;direction:rtl}}
+.teacher-photo{{width:82px;height:82px;border-radius:50%;object-fit:cover;border:4px solid #0f766e;background:#fff;display:block}}
+.brand{{flex:1;text-align:right}}
+.brand h2{{margin:0 0 4px;font-size:22px;color:#075985;font-weight:900}}
+.brand .phone{{font-size:13px;color:#334155;margin-top:4px}}
+.doc-title{{text-align:center;margin:10px 0 4px;font-size:21px;color:#0f172a;font-weight:900}}
+.subtitle{{text-align:center;margin:0 0 8px;color:#475569;font-size:12px}}
+.badge{{display:inline-block;background:#0f766e;color:white;border-radius:999px;padding:4px 12px;font-size:11px;margin-top:4px}}
+table{{width:100%;border-collapse:separate;border-spacing:0;margin-top:12px;overflow:hidden;border:1.5px solid #94a3b8;border-radius:10px}}
+th,td{{border-left:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;padding:7px 6px;text-align:center;font-size:10.5px;vertical-align:middle}}
+th{{background:#0f766e;color:#fff;font-size:11px;font-weight:900}}
+tr:last-child td{{border-bottom:0}}
+th:last-child,td:last-child{{border-left:0}}
+.student{{color:#fff;border-radius:9px;padding:6px 5px;margin:2px 0;line-height:1.45;box-shadow:0 2px 5px rgba(15,23,42,.12)}}
+.student b{{display:block;font-size:11px}}
+.student span,.student small{{display:block;font-size:8.5px}}
+.time{{font-weight:900;background:#f8fafc;font-size:11px;white-space:nowrap}}
+.footer{{margin-top:14px;padding-top:8px;border-top:1px solid #cbd5e1;text-align:center;font-size:9.5px;color:#475569}}
+@media print{{body{{padding:0}}}}
+
+
+    /* ===== هوية البشمهندس x الرياضه — تصميم موحد للطالب والمعلم ===== */
+    :root {{
+        --brand-navy:#06295f;
+        --brand-navy-2:#0a3f86;
+        --brand-blue:#1677ff;
+        --brand-blue-2:#2d8cff;
+        --brand-sky:#eaf4ff;
+        --brand-text:#102a52;
+        --brand-muted:#64748b;
+        --brand-card:#ffffff;
+        --brand-border:#dbe7f5;
+        --brand-shadow:0 12px 32px rgba(6,41,95,.09);
+    }}
+    html, body, [data-testid="stAppViewContainer"] {{
+        background:linear-gradient(180deg,#f7fbff 0%,#ffffff 55%,#f7fbff 100%) !important;
+    }}
+    .block-container {{ padding-top:1.2rem !important; padding-bottom:2rem !important; max-width:1450px !important; }}
+    [data-testid="stSidebar"] {{
+        background:linear-gradient(180deg,#052457 0%,#073d7d 48%,#052457 100%) !important;
+        border-left:1px solid rgba(255,255,255,.06) !important;
+    }}
+    [data-testid="stSidebar"] * {{ font-family:Tahoma,Arial,sans-serif !important; }}
+    [data-testid="stSidebar"] .stButton > button {{
+        background:transparent !important;
+        border:1px solid transparent !important;
+        color:#eaf4ff !important;
+        -webkit-text-fill-color:#eaf4ff !important;
+        border-radius:13px !important;
+        min-height:45px !important;
+        margin:3px 0 !important;
+        padding:9px 13px !important;
+        font-size:13px !important;
+        font-weight:800 !important;
+        box-shadow:none !important;
+        transition:all .18s ease !important;
+    }}
+    [data-testid="stSidebar"] .stButton > button:hover {{
+        background:linear-gradient(90deg,rgba(22,119,255,.38),rgba(45,140,255,.16)) !important;
+        border-color:rgba(125,190,255,.35) !important;
+        transform:translateX(-2px);
+    }}
+    [data-testid="stSidebar"] .stButton > button:focus,
+    [data-testid="stSidebar"] .stButton > button:active {{
+        background:linear-gradient(90deg,#1677ff,#2d8cff) !important;
+        color:#fff !important;
+        -webkit-text-fill-color:#fff !important;
+    }}
+    [data-testid="stSidebar"] hr {{ border-color:rgba(255,255,255,.12) !important; }}
+    [data-testid="stSidebar"] code {{ background:rgba(255,255,255,.08) !important; color:#dbeafe !important; border:1px solid rgba(255,255,255,.1) !important; }}
+
+    .modern-topbar {{
+        background:rgba(255,255,255,.96) !important;
+        border:1px solid var(--brand-border) !important;
+        border-radius:18px !important;
+        box-shadow:var(--brand-shadow) !important;
+    }}
+    .modern-avatar {{ border-color:var(--brand-blue) !important; }}
+    .modern-hero {{
+        background:linear-gradient(135deg,#052457 0%,#0a438c 58%,#1677ff 100%) !important;
+        border:0 !important;
+        color:#fff !important;
+        min-height:190px !important;
+        border-radius:25px !important;
+        box-shadow:0 16px 40px rgba(6,41,95,.18) !important;
+        position:relative !important;
+        overflow:hidden !important;
+    }}
+    .modern-hero:after {{
+        content:""; position:absolute; width:280px; height:280px; left:-80px; bottom:-170px;
+        border-radius:50%; background:rgba(255,255,255,.07); pointer-events:none;
+    }}
+    .modern-hero h1 {{ color:#fff !important; font-size:31px !important; }}
+    .modern-hero p {{ color:#dbeafe !important; }}
+    .modern-hero [style*="background:#2563eb"] {{ background:rgba(255,255,255,.16) !important; border:1px solid rgba(255,255,255,.18); }}
+    .hero-art {{ filter:drop-shadow(0 10px 14px rgba(0,0,0,.18)) !important; }}
+    .modern-stats {{ gap:16px !important; }}
+    .modern-stat {{ background:#fff !important; border:1px solid var(--brand-border) !important; box-shadow:0 9px 25px rgba(6,41,95,.07) !important; }}
+    .modern-stat .icon {{ color:var(--brand-blue) !important; filter:none !important; }}
+    .stat-green {{ background:linear-gradient(135deg,#f0f8ff,#ffffff) !important; }}
+    .stat-blue {{ background:linear-gradient(135deg,#edf6ff,#ffffff) !important; }}
+    .stat-purple {{ background:linear-gradient(135deg,#f2f6ff,#ffffff) !important; }}
+    .stat-yellow {{ background:linear-gradient(135deg,#f5f9ff,#ffffff) !important; }}
+    .modern-course-card {{
+        border:1px solid var(--brand-border) !important;
+        box-shadow:0 9px 25px rgba(6,41,95,.06) !important;
+    }}
+    .modern-course-card .course-icon {{ color:var(--brand-blue) !important; }}
+    .modern-section-title h3 {{ color:var(--brand-text) !important; }}
+
+    /* البطاقات والنماذج: نفس شكل شاشة الدخول والتسجيل في التصميم المرجعي */
+    [data-testid="stForm"] {{
+        background:rgba(255,255,255,.98) !important;
+        border:1px solid var(--brand-border) !important;
+        border-radius:22px !important;
+        padding:22px !important;
+        box-shadow:var(--brand-shadow) !important;
+    }}
+    [data-testid="stForm"] label {{ color:#29466f !important; font-weight:800 !important; }}
+    [data-testid="stForm"] input, [data-testid="stForm"] textarea, [data-testid="stForm"] select {{
+        border-radius:12px !important;
+        border:1px solid #cfe0f2 !important;
+    }}
+    .stButton > button, [data-testid="stFormSubmitButton"] > button {{
+        border-radius:12px !important;
+        border:1px solid #cfe0f2 !important;
+        font-weight:900 !important;
+        min-height:42px !important;
+        transition:all .18s ease !important;
+    }}
+    .stButton > button:hover, [data-testid="stFormSubmitButton"] > button:hover {{
+        border-color:#1677ff !important;
+        box-shadow:0 7px 18px rgba(22,119,255,.16) !important;
+        transform:translateY(-1px);
+    }}
+    [data-testid="stFormSubmitButton"] > button[kind="primary"], .stButton button[kind="primary"] {{
+        background:linear-gradient(135deg,#126be6,#2d8cff) !important;
+        color:#fff !important;
+        -webkit-text-fill-color:#fff !important;
+        border-color:#126be6 !important;
+    }}
+    .auth-intro-card {{
+        background:linear-gradient(145deg,#052457,#0b4b98) !important;
+        color:#fff !important;
+        border-radius:24px !important;
+        padding:30px !important;
+        min-height:100% !important;
+        box-shadow:0 15px 40px rgba(6,41,95,.18) !important;
+        direction:rtl;
+    }}
+    .auth-intro-card h2,.auth-intro-card h3,.auth-intro-card p {{ color:#fff !important; }}
+    .brand-about-card {{
+        background:#fff; border:1px solid var(--brand-border); border-radius:22px; padding:22px;
+        box-shadow:var(--brand-shadow); direction:rtl; margin:8px 0 20px;
+    }}
+    .brand-about-card h3 {{ color:var(--brand-text) !important; margin:0 0 8px; }}
+    .brand-about-card p {{ color:#5c6f89 !important; line-height:1.9; margin:0; font-weight:700; }}
+    .brand-pill {{ display:inline-block; padding:6px 12px; border-radius:999px; background:#eaf4ff; color:#126be6 !important; border:1px solid #cfe3ff; font-size:12px; font-weight:900; margin:3px; }}
+    .brand-primary-link {{ color:#1677ff !important; font-weight:900; }}
+
+    /* توحيد ألوان الأيقونات داخل المحتوى */
+    .vertical-section-header {{ border-right:4px solid #1677ff !important; color:#12345f !important; background:linear-gradient(90deg,#edf6ff,transparent) !important; }}
+    .subscription-card {{ border-color:#d8e6f5 !important; box-shadow:0 10px 28px rgba(6,41,95,.08) !important; }}
+    .subscription-card:hover {{ border-color:#1677ff !important; box-shadow:0 14px 34px rgba(22,119,255,.15) !important; }}
+    .subscription-photo {{ border-color:#1677ff !important; box-shadow:0 7px 18px rgba(22,119,255,.18) !important; }}
+    .subscription-icon {{ background:#eaf4ff !important; border-color:#1677ff !important; }}
+    .subscription-badge {{ background:#eaf4ff !important; color:#126be6 !important; border-color:#cfe3ff !important; }}
+    .call-btn {{ background:linear-gradient(135deg,#126be6,#2d8cff) !important; }}
+
+    @media (max-width:900px) {{
+        .modern-hero {{ min-height:165px !important; }}
+        .modern-hero h1 {{ font-size:24px !important; }}
+    }}
+
+</style>
+</head>
+<body>
+<div class='header'>{photo_html}<div class='brand'><h2>{teacher_name}</h2><div>البشمهندس x الرياضه</div><div class='phone'>📞 {teacher_phone}</div></div></div>
+<div class='doc-title'>{title}</div>
+<p class='subtitle'>{subtitle}</p>
+<table><thead><tr>{headers_html}</tr></thead><tbody>{rows_html}</tbody></table>
+<div class='footer'>إعداد ومتابعة: {teacher_name} &nbsp; | &nbsp; 📞 {teacher_phone} &nbsp; | &nbsp; جميع البيانات خاصة بالالبشمهندس x الرياضهية</div>
+</body>
+</html>"""
+
+def html_to_pdf_bytes(html_text):
+    if WeasyHTML is None:
+        return None
+    try:
+        return WeasyHTML(string=html_text, base_url=_os.getcwd()).write_pdf()
+    except Exception:
+        return None
+
 
 def _hamza_secret(name):
     try:
@@ -6,28 +890,18 @@ def _hamza_secret(name):
         return ""
 
 def _hamza_ai_call(user_text, media_items=None, history=None):
-    """حمصا: مدرس رياضيات بالذكاء الاصطناعي من Google Gemini، يدعم النص والصور وملفات PDF."""
+    """حمصا: مساعد رياضيات متعدد الوسائط باستخدام Gemini REST مع إعادة محاولة وانتقال تلقائي بين النماذج."""
     key = _hamza_secret("GEMINI_API_KEY")
     if not key:
         raise RuntimeError("AI_KEY_MISSING")
 
-    preferred = _hamza_secret("GEMINI_MODEL").strip()
-    # تجاهل أي موديل قديم محفوظ في Secrets مثل gemini-2.5-flash-lite.
-    allowed_models = [
-        "gemini-3.8-flash",
-        "gemini-3.7-flash",
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite",
-    ]
+    preferred = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
     models = []
-    if preferred in allowed_models:
-        models.append(preferred)
-    for candidate in allowed_models:
-        if candidate not in models:
+    for candidate in [preferred, "gemini-2.5-flash", "gemini-2.5-flash-lite"]:
+        if candidate and candidate not in models:
             models.append(candidate)
 
+    parts = []
     context = ""
     if history:
         context = "\n\n".join(
@@ -36,56 +910,38 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
         )
 
     prompt = f"""
-أنت "حمصا"، مدرس رياضيات وإحصاء داخل منصة تعليمية.
-مهمتك حل المسألة الموجودة في رسالة الطالب أو الصورة/الملف المرفق، وليس البحث على الإنترنت.
-لا تقل للطالب "ابحث" أو "سأبحث" ولا تستخدم أدوات بحث. اقرأ الصورة بنفسك وحل المسألة.
-
-أخرج الإجابة التعليمية بهذا الترتيب:
-1. "فهم السؤال"
-2. "القانون أو الفكرة"
-3. "الحل خطوة بخطوة"
-4. "الإجابة النهائية"
-
-قواعد الرياضيات:
-- استخدم LaTeX بشكل صحيح ولا تكتب كلمات مثل frac أو sqrt بدلاً من الأمر الرياضي.
-- المعادلات داخل السطر بين $...$، والمعادلات المستقلة في سطر كامل بين $$...$$.
-- الكسور يجب أن تكون مثل $\frac{a}{b}$، والجذور مثل $\sqrt{x}$، والأسس مثل $x^2$ والمؤشرات مثل $a_1$.
-- اجعل كل معادلة رياضية واتجاه الأرقام الرياضية LTR من اليسار إلى اليمين، حتى داخل شرح عربي.
-- إذا كانت المسألة بالإنجليزية، حافظ على نصها واتجاهها LTR.
-- إذا كانت المسألة بالعربية، اجعل الشرح RTL، مع إبقاء المعادلات والأرقام داخل $...$ أو $$...$$ باتجاه LTR.
-- نظّم الحل بعناوين واضحة: فهم السؤال، القانون أو الفكرة، الحل خطوة بخطوة، الإجابة النهائية.
-- لا تستخدم $ كعملة.
-- لا تغيّر أرقام السؤال ولا تخمّن رقماً غير واضح؛ إذا كانت قيمة في الصورة غير مقروءة فعلاً اذكر ذلك بوضوح.
-- لا تعطِ النتيجة فقط؛ اشرح طريقة الحل بالعربية المصرية المبسطة.
+أنت "حمصا"، مدرس رياضيات وإحصاء ودود داخل منصة تعليمية للطلاب.
+أجب بالعربية المصرية المبسطة، وكن دقيقاً جداً.
+إذا كانت المسألة رياضيات أو إحصاء:
+1) اكتب فهمك للسؤال.
+2) اشرح القاعدة أو الفكرة المستخدمة.
+3) حل المسألة خطوة بخطوة وبترتيب واضح.
+4) اكتب الإجابة النهائية بوضوح.
+5) إذا كان في السؤال رسم أو جدول أو صورة، اقرأه بعناية ولا تخمّن القيم غير الواضحة؛ اطلب من الطالب صورة أوضح إذا لزم.
+6) استخدم LaTeX عند الحاجة، ولف المعادلات بين $...$ للمعادلة داخل السطر أو $...$ للمعادلة في سطر مستقل، مثل $\\frac{1}{2}$ و $\\sqrt{x}$ و $x^2$ و $2x+5=17$.
+7) لا تستخدم علامة $ كعملة؛ استخدمها فقط كمحدد لـ LaTeX.
+8) لا تعطِ إجابة مختصرة فقط؛ الهدف أن يتعلم الطالب طريقة الحل.
+إذا كان السؤال غير رياضي، أخبر الطالب بلطف أن حمصا متخصص أساساً في الرياضيات والإحصاء.
 
 المحادثة السابقة:
 {context or "لا توجد محادثة سابقة."}
 
-رسالة الطالب:
+رسالة الطالب الحالية:
 {user_text.strip() or "حل المسألة الموجودة في الملف المرفق."}
 
 اكتب الإجابة مباشرة كنص منظم، ولا تستخدم JSON ولا تغلف الإجابة داخل كود.
 ابدأ بعنوان "فهم السؤال"، ثم "القانون أو الفكرة"، ثم "الحل خطوة بخطوة"، ثم "الإجابة النهائية".
 ضع كل معادلة مستقلة في سطر بين $...$، والمعادلات داخل الشرح بين $...$.
 """
-    parts = [{"text": prompt}]
+    parts.append({"text": prompt})
     for item in (media_items or []):
-        if not item or not item.get("data"):
-            continue
-        parts.append({
-            "inline_data": {
-                "mime_type": str(item.get("mime") or "image/jpeg"),
-                "data": str(item["data"])
-            }
-        })
+        if item and item.get("data"):
+            parts.append({"inline_data":{"mime_type":item.get("mime","application/octet-stream"),"data":item["data"]}})
 
-    # نستخدم GenerateContent بشكل بسيط ومتوافق: بدون responseSchema/JSON mode.
-    # حمصا يطلب JSON من النموذج ونقوم بتحليله محلياً، مع إبقاء الصور/PDF كما هي.
     body = {
-        "contents": [{"role": "user", "parts": parts}],
-        "generationConfig": {
-            "maxOutputTokens": 4096,
-            "temperature": 0.2
+        "contents":[{"role":"user","parts":parts}],
+        "generationConfig":{
+            "maxOutputTokens":4096
         }
     }
 
@@ -96,11 +952,11 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
             req = urllib.request.Request(
                 url,
                 data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-                headers={"Content-Type": "application/json", "x-goog-api-key": key},
+                headers={"Content-Type":"application/json","x-goog-api-key":key},
                 method="POST"
             )
             try:
-                with urllib.request.urlopen(req, timeout=120) as resp:
+                with urllib.request.urlopen(req, timeout=90) as resp:
                     raw = json.loads(resp.read().decode("utf-8"))
 
                 candidates = raw.get("candidates") or []
@@ -108,36 +964,4489 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
                     raise RuntimeError("EMPTY_RESPONSE")
                 content = candidates[0].get("content") or {}
                 text_parts = content.get("parts") or []
-                text = "".join(
-                    str(p.get("text", ""))
-                    for p in text_parts
-                    if p.get("text") is not None
-                ).strip()
+                text = "".join(str(p.get("text","")) for p in text_parts if p.get("text") is not None).strip()
                 if not text:
                     raise RuntimeError("EMPTY_RESPONSE")
 
-                text = text.replace(chr(96)*3 + "json", "").replace(chr(96)*3, "").strip()
-                # نستخدم النص الخام مباشرة: هذا يمنع فشل التحليل بسبب اختلاف تنسيق JSON
-                # ويترك LaTeX كما أرسله Gemini لعرض المعادلات والكسور بصورة صحيحة.
-                return {
-                    "answer": text,
-                    "final_answer": "",
-                    "topic": "رياضيات"
-                }
+                text = text.replace(chr(96)*3+"json","").replace(chr(96)*3,"").strip()
+                # نستخدم النص الخام مباشرة لتفادي فشل التحليل بسبب اختلاف تنسيق JSON،
+                # مع الحفاظ على LaTeX للمعادلات والكسور والجذور والأسس.
+                return {"answer":text,"final_answer":"","topic":"رياضيات"}
 
             except urllib.error.HTTPError as ex:
                 msg = ex.read().decode("utf-8", errors="ignore")
-                last_error = f"HTTP {getattr(ex,'code',0)}: {msg[:700]}"
+                last_error = msg or str(ex)
                 status = getattr(ex, "code", 0)
-                if status in (429, 500, 502, 503, 504):
-                    import time
+
+                # 503/UNAVAILABLE: نعيد المحاولة ثم ننتقل تلقائياً لموديل احتياطي.
+                if status in (500, 502, 503, 504) or "UNAVAILABLE" in msg:
                     if attempt < 2:
+                        import time
                         time.sleep(2 ** (attempt + 1))
                         continue
                     break
-                if status in (400, 401, 403, 404):
+
+                # 429: إعادة محاولة قصيرة، ثم موديل احتياطي إذا استمر الحد.
+                if status == 429 or "RESOURCE_EXHAUSTED" in msg or "rateLimitExceeded" in msg:
+                    if attempt < 2:
+                        import time
+                        time.sleep(3 * (attempt + 1))
+                        continue
                     break
+
+                # قد يرفض موديل معيّن JSON المهيكل أو يكون غير متاح للحساب؛
+                # ننتقل مباشرة للموديل التالي بدل إظهار فشل الصورة للطالب.
+                if status in (400, 401, 403, 404):
+                    # ننتقل تلقائياً للنموذج الاحتياطي بدون تغيير الصورة أو المفتاح.
+                    break
+
                 if attempt < 2:
                     import time
-                    time.sleep(2 ** (attempt + 1))
+                    time.sleep(2 * (attempt + 1))
                     continue
+
+            except (urllib.error.URLError, TimeoutError, RuntimeError, ValueError, KeyError) as ex:
+                last_error = str(ex)
+                if attempt < 2:
+                    import time
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                break
+            except Exception as ex:
+                last_error = str(ex)
+                break
+
+    low = str(last_error).lower()
+    if "429" in low or "resource_exhausted" in low or "ratelimit" in low:
+        raise RuntimeError("AI_RATE_LIMIT")
+    if "503" in low or "unavailable" in low or "high demand" in low:
+        raise RuntimeError("AI_BUSY")
+    if "api key" in low or "permission" in low or "unauthorized" in low:
+        raise RuntimeError("AI_KEY_MISSING")
+    raise RuntimeError("AI_ERROR")
+
+def _hamza_pdf_html(question, answer, final_answer, student_name):
+    q=html.escape(str(question or "").strip()).replace("\n","<br>")
+    a=html.escape(str(answer or "").strip()).replace("\n","<br>")
+    fa=html.escape(str(final_answer or "").strip()).replace("\n","<br>")
+    teacher_name, _, teacher_phone = _get_print_profile()
+    return f"""<!DOCTYPE html>
+<html dir='rtl' lang='ar'>
+<head><meta charset='utf-8'><title>حل المسألة - حمصا</title>
+<style>
+@page{{size:A4;margin:14mm}}
+*{{box-sizing:border-box}}
+body{{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#102a52;background:#fff;font-weight:700;line-height:1.9}}
+.header{{background:linear-gradient(135deg,#06295f,#1677ff);color:#fff;border-radius:20px;padding:22px 26px;margin-bottom:18px}}
+.header h1{{margin:0;font-size:27px;font-weight:900}} .header p{{margin:5px 0 0;color:#dbeafe}}
+.card{{border:1px solid #dbe7f5;border-radius:16px;padding:18px 20px;margin:12px 0;background:#fff}}
+.title{{font-size:18px;color:#126be6;font-weight:900;margin-bottom:8px}}
+.answer{{background:#f3f8ff;border-right:5px solid #1677ff}}
+.final{{background:#ecfdf5;border-right:5px solid #10b981;font-size:18px}}
+.footer{{margin-top:22px;border-top:1px solid #dbe7f5;padding-top:10px;text-align:center;color:#64748b;font-size:11px}}
+</style></head>
+<body>
+<div class='header'><h1>🤖 حمصا — حل المسألة</h1><p>{html.escape(student_name)} • البشمهندس x الرياضه</p></div>
+<div class='card'><div class='title'>📌 السؤال</div><div>{q}</div></div>
+<div class='card answer'><div class='title'>🧠 الحل خطوة بخطوة</div><div>{a}</div></div>
+<div class='card final'><div class='title'>✅ الإجابة النهائية</div><div>{fa}</div></div>
+<div class='footer'>إعداد المنصة: {html.escape(teacher_name)} • 📞 {html.escape(teacher_phone)} • حمصا المساعد الذكي</div>
+</body></html>"""
+
+def build_student_roster_html(names, title="كشف الطلاب المسجلين"):
+    rows=[]
+    for nm in names:
+        ur=st.session_state.users_df[st.session_state.users_df["اسم الطالب"].astype(str).str.strip()==nm]
+        wr=st.session_state.weekly_schedule_df[st.session_state.weekly_schedule_df["اسم الطالب"].astype(str).str.strip()==nm]
+        src=ur.iloc[0].to_dict() if not ur.empty else (wr.iloc[0].to_dict() if not wr.empty else {})
+        rows.append(f"<tr><td>{nm}</td><td>{src.get('رقم الهاتف',src.get('رقم الطالب',''))}</td><td>{src.get('اسم ولي الأمر','')}</td><td>{src.get('رقم ولي الأمر','')}</td><td>{src.get('المنهج/الدولة','')}</td><td>{src.get('المجموعة/الصف','')}</td></tr>")
+    return make_print_html(title,''.join(rows) or "<tr><td colspan='6'>لا توجد بيانات</td></tr>","<th>اسم الطالب</th><th>رقم الطالب</th><th>اسم ولي الأمر</th><th>رقم ولي الأمر</th><th>المنهج</th><th>المرحلة</th>",f"إجمالي الطلاب: {len(names)}")
+
+
+def format_schedule_time_ampm(value):
+    """عرض وقت الحصة بصيغة 12 ساعة مع AM/PM بدون تغيير القيمة المخزنة."""
+    try:
+        text = str(value).strip()
+        if not text or text.lower() == "nan":
+            return text
+        dt = pd.to_datetime(text, format="%H:%M", errors="coerce")
+        if pd.isna(dt):
+            dt = pd.to_datetime(text, errors="coerce")
+        if pd.isna(dt):
+            return text
+        return dt.strftime("%I:%M %p").lstrip("0")
+    except Exception:
+        return str(value)
+
+
+def _telegram_configured():
+    try:
+        token = str(st.secrets.get("TELEGRAM_BOT_TOKEN", "")).strip()
+        chat_id = str(st.secrets.get("TELEGRAM_CHAT_ID", "")).strip()
+        return bool(token and chat_id)
+    except Exception:
+        return False
+
+
+def _telegram_send_message(message):
+    """إرسال إشعار للهاتف عبر Telegram، بدون تخزين أي مفتاح داخل الكود."""
+    try:
+        token = str(st.secrets.get("TELEGRAM_BOT_TOKEN", "")).strip()
+        chat_id = str(st.secrets.get("TELEGRAM_CHAT_ID", "")).strip()
+        if not token or not chat_id:
+            return False, "لم يتم ضبط Telegram في Secrets."
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        body = urllib.parse.urlencode({
+            "chat_id": chat_id,
+            "text": str(message),
+            "parse_mode": "HTML",
+            "disable_web_page_preview": "true",
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        if payload.get("ok"):
+            return True, ""
+        return False, str(payload.get("description", "تعذر إرسال إشعار Telegram."))
+    except Exception as exc:
+        return False, str(exc)
+
+
+def build_weekly_schedule_print_html(df, title="الجدول الأسبوعي لمواعيد الطلاب"):
+    """نسخة طباعة احترافية A4 Landscape للجدول الأسبوعي، مع بطاقات واضحة لكل طالب."""
+    days = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"]
+    teacher_name, teacher_photo_b64, teacher_phone = _get_print_profile()
+    today_text = datetime.now().strftime("%Y-%m-%d")
+
+    if df is None or df.empty:
+        rows = "<tr><td colspan='8' class='empty'>لا توجد مواعيد مسجلة حالياً.</td></tr>"
+        headers = "<th class='time-head'>الساعة</th>" + "".join(f"<th>{d}</th>" for d in days)
+        total = 0
+    else:
+        work = df.copy()
+        work["_time"] = work["الموعد"].astype(str).str[:5]
+        work["_day"] = work["اليوم"].astype(str)
+        work = work[work["حالة الموعد"].astype(str) != "متوقف"].copy() if "حالة الموعد" in work.columns else work
+        times = sorted([t for t in work["_time"].dropna().unique() if t and t != "nan"])
+        body_rows = []
+        for tm in times:
+            cells = [f"<td class='time-cell'>{html.escape(format_schedule_time_ampm(tm))}</td>"]
+            for d in days:
+                matches = work[(work["_time"] == tm) & (work["_day"] == d)]
+                cards = []
+                for _, r in matches.iterrows():
+                    student = html.escape(str(r.get("اسم الطالب", "")))
+                    grade = html.escape(str(r.get("المجموعة/الصف", "")))
+                    academy = html.escape(str(r.get("اسم الأكاديمية", "")))
+                    phone = html.escape(str(r.get("رقم الطالب", "")))
+                    color = str(r.get("اللون", "#1677ff"))
+                    if not re.match(r"^#[0-9A-Fa-f]{6}$", color):
+                        color = "#1677ff"
+                    card_html = (
+                        f"<div class='student-card' style='--student-color:{color}'>"
+                        f"<div class='student-name'>👤 {student}</div>"
+                        f"<div class='student-meta'>{grade}</div>"
+                        f"<div class='student-meta'>{academy}</div>"
+                        + (f"<div class='student-phone'>📞 {phone}</div>" if phone and phone.lower() != "nan" else "")
+                        + "</div>"
+                    )
+                    cards.append(card_html)
+                cells.append("<td class='day-cell'>" + ("".join(cards) if cards else "<span class='dash'>—</span>") + "</td>")
+            body_rows.append("<tr>" + "".join(cells) + "</tr>")
+        rows = "".join(body_rows) if body_rows else "<tr><td colspan='8' class='empty'>لا توجد مواعيد نشطة.</td></tr>"
+        headers = "<th class='time-head'>الساعة</th>" + "".join(f"<th>{d}</th>" for d in days)
+        total = len(work)
+
+    photo_html = ""
+    if teacher_photo_b64:
+        photo_html = f"<img class='teacher-photo' src='data:image/png;base64,{teacher_photo_b64}' alt='صورة المعلم'>"
+
+    return f"""<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<title>{html.escape(title)}</title><style>
+@page {{ size:A4 landscape; margin:9mm; }}
+* {{ box-sizing:border-box; }}
+body {{ margin:0; background:#fff; color:#102a52; font-family:'Cairo','Tahoma','Arial',sans-serif; font-weight:700; }}
+.page {{ width:100%; }}
+.header {{ background:linear-gradient(135deg,#062b63 0%,#0b56ad 65%,#1677ff 100%); color:#fff; border-radius:18px; padding:13px 17px; display:flex; align-items:center; gap:14px; box-shadow:0 8px 20px rgba(6,43,99,.18); }}
+.teacher-photo {{ width:66px; height:66px; border-radius:50%; object-fit:cover; border:3px solid rgba(255,255,255,.8); background:#fff; }}
+.brand {{ flex:1; text-align:right; }}
+.brand h2 {{ margin:0; font-size:20px; font-weight:900; color:#fff; }}
+.brand p {{ margin:2px 0 0; font-size:10px; color:#dbeafe; }}
+.header-badge {{ background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25); border-radius:999px; padding:5px 10px; font-size:9px; color:#fff; }}
+.title {{ text-align:center; margin:10px 0 2px; font-size:20px; color:#062b63; font-weight:900; }}
+.subtitle {{ text-align:center; color:#64748b; font-size:9px; margin-bottom:8px; }}
+table {{ width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed; overflow:hidden; border:1px solid #cbd5e1; border-radius:12px; }}
+th,td {{ border-left:1px solid #dbe4ef; border-bottom:1px solid #dbe4ef; text-align:center; vertical-align:top; }}
+th {{ background:#eaf4ff; color:#0b3b78; padding:7px 4px; font-size:10px; font-weight:900; }}
+th.time-head {{ width:70px; background:#062b63; color:#fff; }}
+td {{ padding:4px; min-height:60px; }}
+td.time-cell {{ background:#f8fbff; color:#062b63; font-size:10px; font-weight:900; vertical-align:middle; white-space:nowrap; }}
+.student-card {{ border-radius:9px; padding:6px 5px; margin:2px 0; background:linear-gradient(135deg,var(--student-color),#0b56ad); color:#fff; text-align:right; border-right:4px solid rgba(255,255,255,.85); box-shadow:0 2px 6px rgba(15,23,42,.12); }}
+.student-name {{ font-size:9px; font-weight:900; line-height:1.3; }}
+.student-meta {{ font-size:7px; margin-top:2px; opacity:.96; line-height:1.25; }}
+.student-phone {{ font-size:6.7px; margin-top:2px; opacity:.9; }}
+.dash {{ color:#cbd5e1; font-size:13px; }}
+.empty {{ padding:25px; color:#64748b; font-size:13px; }}
+.footer {{ margin-top:8px; display:flex; justify-content:space-between; gap:8px; border-top:1px solid #dbe4ef; padding-top:6px; color:#64748b; font-size:7.5px; }}
+@media print {{ body {{ background:#fff; }} }}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    {photo_html}
+    <div class="brand">
+      <h2>{html.escape(teacher_name)}</h2>
+      <p>البشمهندس x الرياضه — جدول حصص الطلاب الأسبوعي</p>
+      <p>📞 {html.escape(teacher_phone)}</p>
+    </div>
+    <div class="header-badge">إصدار رسمي للطباعة</div>
+  </div>
+  <div class="title">{html.escape(title)}</div>
+  <div class="subtitle">إجمالي المواعيد النشطة: {total} &nbsp; | &nbsp; تاريخ الإصدار: {today_text}</div>
+  <table><thead><tr>{headers}</tr></thead><tbody>{rows}</tbody></table>
+  <div class="footer">
+    <span>إعداد ومتابعة: {html.escape(teacher_name)}</span>
+    <span>جميع المواعيد وفق آخر جدول محفوظ على المنصة</span>
+    <span>البشمهندس x الرياضه</span>
+  </div>
+</div>
+</body>
+</html>"""
+
+
+def load_ads():
+    """تحميل الإعلانات مع استرجاع الوسائط كاملة من AdsMedia لتجنب حد Excel البالغ 32767 حرفاً للخلية."""
+    ads_df = pd.DataFrame(columns=COL_ADS)
+    media_df = pd.DataFrame()
+    excel_source = _get_excel_source()
+    if excel_source is not None:
+        try:
+            with pd.ExcelFile(excel_source) as xls:
+                if "Ads" in xls.sheet_names:
+                    ads_df = pd.read_excel(xls, "Ads")
+                if "AdsMedia" in xls.sheet_names:
+                    media_df = pd.read_excel(xls, "AdsMedia")
+        except Exception:
+            pass
+    for col in COL_ADS:
+        if col not in ads_df.columns:
+            ads_df[col] = "نشط" if col == "الحالة" else ""
+    ads_df = ads_df[COL_ADS].copy()
+    # مهم مع pandas 3.x: حوّل عمود الوسائط إلى object قبل إعادة تركيب Base64 الطويل.
+    # وإلا قد يكون العمود dtype = float64/NA فيؤدي التعيين إلى TypeError.
+    ads_df["الوسائط_base64"] = ads_df["الوسائط_base64"].astype(object)
+    # النسخة الجديدة: تجميع الصورة/الفيديو من أجزاء مستقلة حتى لا تُقص الصورة داخل Excel.
+    if not media_df.empty and "معرف_الإعلان" in media_df.columns and "البيانات" in media_df.columns:
+        media_map = {}
+        for ad_id, grp in media_df.groupby(media_df["معرف_الإعلان"].astype(str)):
+            if "جزء" in grp.columns:
+                grp = grp.sort_values("جزء")
+            media_map[str(ad_id)] = "".join(grp["البيانات"].fillna("").astype(str).tolist())
+        for i, row in ads_df.iterrows():
+            ad_id = str(row.get("معرف_الإعلان", ""))
+            if ad_id in media_map and media_map[ad_id]:
+                ads_df.at[i, "الوسائط_base64"] = media_map[ad_id]
+    return ads_df
+
+def _ad_media_uri(row):
+    b64 = str(row.get("الوسائط_base64", "") or "").strip()
+    mime = str(row.get("نوع_الوسائط", "") or "").strip() or "image/jpeg"
+    if b64 and b64.lower() != "nan":
+        return f"data:{mime};base64,{b64}"
+    return ""
+
+def _ad_text_html(text):
+    """يعرض نص الإعلان مع تحويل أي رابط URL داخله إلى رابط أزرق قابل للضغط."""
+    safe = html.escape(str(text or ""))
+    pattern = r"(https?://[^\s<]+|www\.[^\s<]+)"
+    def _link(match):
+        raw = match.group(1)
+        trailing = ""
+        while raw and raw[-1] in ".,،؛;:!؟?)\"']":
+            trailing = raw[-1] + trailing
+            raw = raw[:-1]
+        href = raw if raw.startswith("http") else "https://" + raw
+        return f'<a href="{html.escape(href, quote=True)}" target="_blank" rel="noopener noreferrer" style="color:#0b74ff;text-decoration:underline;font-weight:900;">{raw}</a>{trailing}'
+    return re.sub(pattern, _link, safe).replace("\n", "<br>")
+
+def render_student_ads():
+    """عرض الإعلانات النشطة للطالب في صورة شرائح (Carousel) إعلانًا واحدًا في كل مرة."""
+    ads_df = st.session_state.get("ads_df", pd.DataFrame(columns=COL_ADS)).copy()
+    if ads_df.empty:
+        return
+    active = ads_df[ads_df["الحالة"].astype(str).str.strip().isin(["نشط", "فعال", "مفعل", "مفعّل", "نعم"])].copy() if "الحالة" in ads_df.columns else ads_df.copy()
+    if active.empty:
+        return
+    active = active.iloc[::-1].reset_index(drop=True)
+
+    st.markdown("<div class='vertical-section-header'>📢 الإعلانات</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align:center;color:#64748b;font-weight:800;margin-bottom:14px;'>آخر الإعلانات والتنبيهات المنشورة من لوحة المعلم</div>", unsafe_allow_html=True)
+
+    slide_key = "student_ad_slide"
+    if slide_key not in st.session_state:
+        st.session_state[slide_key] = 0
+    if st.session_state[slide_key] >= len(active):
+        st.session_state[slide_key] = 0
+    if st.session_state[slide_key] < 0:
+        st.session_state[slide_key] = len(active) - 1
+
+    slide_no = int(st.session_state[slide_key])
+    row = active.iloc[slide_no]
+    title = html.escape(str(row.get("العنوان", "إعلان جديد") or "إعلان جديد"))
+    text = str(row.get("النص", "") or "").strip()
+    kind = str(row.get("نوع_الإعلان", "") or "").strip()
+    media_uri = _ad_media_uri(row)
+    link = str(row.get("الرابط", "") or "").strip()
+    button = html.escape(str(row.get("نص_الزر", "افتح الإعلان") or "افتح الإعلان").strip())
+
+    with st.container(border=True):
+        st.markdown(
+            f"<div style='direction:rtl;text-align:right'>"
+            f"<div style='font-size:23px;font-weight:900;color:#0f172a'>{title}</div>"
+            f"<div style='font-size:12px;color:#64748b;margin-top:4px'>{html.escape(str(row.get('تاريخ_النشر','')))}</div>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+        if media_uri and kind in ["صورة", "صورة + بوست", "صورة وبوست"]:
+            st.markdown(
+                f"<div style='width:100%;text-align:center;margin:14px 0;'>"
+                f"<img src='{media_uri}' loading='eager' decoding='auto' "
+                f"style='display:block;width:100%;height:auto;max-height:520px;object-fit:contain;"
+                f"border-radius:16px;image-rendering:auto;'></div>",
+                unsafe_allow_html=True
+            )
+        elif media_uri and kind == "فيديو":
+            try:
+                st.video(base64.b64decode(str(row.get("الوسائط_base64", ""))))
+            except Exception:
+                if link:
+                    try:
+                        st.video(link)
+                    except Exception:
+                        pass
+        elif kind == "فيديو" and link:
+            try:
+                st.video(link)
+            except Exception:
+                pass
+
+        if text:
+            st.markdown(
+                f"<div style='direction:rtl;text-align:right;line-height:2;font-weight:800;"
+                f"font-size:16px;padding:10px 2px;word-break:break-word'>{_ad_text_html(text)}</div>",
+                unsafe_allow_html=True
+            )
+        if link:
+            st.link_button(button or "فتح الرابط", link, use_container_width=True)
+
+    # أزرار الشرائح أسفل الإعلان.
+    prev_col, info_col, next_col = st.columns([1, 2, 1])
+    with prev_col:
+        if st.button("❮ السابق", use_container_width=True, key="student_ad_prev"):
+            st.session_state[slide_key] = (slide_no - 1) % len(active)
+            st.rerun()
+    with info_col:
+        dots = " ".join("●" if i == slide_no else "○" for i in range(len(active)))
+        st.markdown(
+            f"<div style='text-align:center;font-weight:900;color:#2563eb;padding:8px 0;'>"
+            f"{dots}<br><span style='color:#64748b;font-size:12px'>{slide_no + 1} / {len(active)}</span></div>",
+            unsafe_allow_html=True
+        )
+    with next_col:
+        if st.button("التالي ❯", use_container_width=True, key="student_ad_next"):
+            st.session_state[slide_key] = (slide_no + 1) % len(active)
+            st.rerun()
+
+
+def _parse_parent_report_date(value):
+    """توحيد تواريخ التقرير حتى تعمل مع date/datetime و dd/mm/yyyy و yyyy-mm-dd بدون التباس."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return pd.NaT
+    if isinstance(value, pd.Timestamp):
+        return value
+    if isinstance(value, datetime):
+        return pd.Timestamp(value)
+    if isinstance(value, date):
+        return pd.Timestamp(value)
+    text = str(value).strip()
+    if not text or text.lower() == "nan":
+        return pd.NaT
+    text = text.replace("\u0660","0").replace("\u0661","1").replace("\u0662","2").replace("\u0663","3").replace("\u0664","4").replace("\u0665","5").replace("\u0666","6").replace("\u0667","7").replace("\u0668","8").replace("\u0669","9")
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y", "%Y/%m/%d", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return pd.Timestamp(datetime.strptime(text, fmt))
+        except Exception:
+            pass
+    return pd.to_datetime(text, errors="coerce", dayfirst=True)
+
+
+def load_all_data():
+    users_df = pd.DataFrame(columns=COL_USERS)
+    sessions_df = pd.DataFrame(columns=COL_SESSIONS)
+    assessments_df = pd.DataFrame(columns=COL_ASSESSMENTS)
+    messages_df = pd.DataFrame(columns=COL_MESSAGES)
+    exams_df = pd.DataFrame(columns=COL_EXAMS)
+    essays_df = pd.DataFrame(columns=COL_ESSAYS)
+    bookings_df = pd.DataFrame(columns=COL_BOOKINGS)
+    bank_requests_df = pd.DataFrame(columns=COL_BANK_REQUESTS)
+    question_bank_df = pd.DataFrame(columns=COL_QUESTION_BANK)
+    videos_df = pd.DataFrame(columns=COL_VIDEOS)
+    video_comments_df = pd.DataFrame(columns=COL_VIDEO_COMMENTS)
+    abqary_df = pd.DataFrame(columns=COL_ABQARY)
+    online_schedule_df = pd.DataFrame(columns=COL_ONLINE_SCHEDULE)
+    weekly_schedule_df = pd.DataFrame(columns=COL_WEEKLY_SCHEDULE)
+    payment_records_df = pd.DataFrame(columns=COL_PAYMENT_RECORDS)
+
+    excel_source = _get_excel_source()
+    if excel_source is not None:
+        try:
+            with pd.ExcelFile(excel_source) as xls:
+                if "Users" in xls.sheet_names: users_df = pd.read_excel(xls, "Users")
+                if "Sessions" in xls.sheet_names: sessions_df = pd.read_excel(xls, "Sessions")
+                elif "Sheet1" in xls.sheet_names: sessions_df = pd.read_excel(xls, "Sheet1")
+                if "Assessments" in xls.sheet_names: assessments_df = pd.read_excel(xls, "Assessments")
+                if "Messages" in xls.sheet_names: messages_df = pd.read_excel(xls, "Messages")
+                if "Exams" in xls.sheet_names: exams_df = pd.read_excel(xls, "Exams")
+                if "Essays" in xls.sheet_names: essays_df = pd.read_excel(xls, "Essays")
+                if "Bookings" in xls.sheet_names: bookings_df = pd.read_excel(xls, "Bookings")
+                if "BankRequests" in xls.sheet_names: bank_requests_df = pd.read_excel(xls, "BankRequests")
+                if "QuestionBank" in xls.sheet_names: question_bank_df = pd.read_excel(xls, "QuestionBank")
+                if "Videos" in xls.sheet_names: videos_df = pd.read_excel(xls, "Videos")
+                if "VideoComments" in xls.sheet_names: video_comments_df = pd.read_excel(xls, "VideoComments")
+                if "AbqaryExams" in xls.sheet_names:
+                    abqary_df = pd.read_excel(xls, "AbqaryExams")
+                    # دعم البيانات القديمة التي لا تحتوي على كود HTML
+                    if "كود_HTML" not in abqary_df.columns:
+                        abqary_df["كود_HTML"] = ""
+                    for _c in COL_ABQARY:
+                        if _c not in abqary_df.columns:
+                            abqary_df[_c] = ""
+                    abqary_df = abqary_df[COL_ABQARY]
+                if "OnlineSchedule" in xls.sheet_names: online_schedule_df = pd.read_excel(xls, "OnlineSchedule")
+                if "WeeklySchedule" in xls.sheet_names: weekly_schedule_df = pd.read_excel(xls, "WeeklySchedule")
+                if "PaymentRecords" in xls.sheet_names: payment_records_df = pd.read_excel(xls, "PaymentRecords")
+        except Exception:
+            pass
+
+    for col in COL_USERS:
+        if col not in users_df.columns:
+            if col == "رقم الهاتف": users_df[col] = ""
+            elif col in ["اسم ولي الأمر", "رقم ولي الأمر"]: users_df[col] = ""
+            elif col == "الحالة_حظر": users_df[col] = "نشط"
+            elif col == "حالة_الاشتراك_البنك": users_df[col] = "غير مشترك"
+            else: users_df[col] = ""
+    for col in COL_WEEKLY_SCHEDULE:
+        if col not in weekly_schedule_df.columns:
+            if col == "اللون": weekly_schedule_df[col] = "#2563eb"
+            elif col == "حالة الموعد": weekly_schedule_df[col] = "نشط"
+            else: weekly_schedule_df[col] = ""
+
+    for col in COL_PAYMENT_RECORDS:
+        if col not in payment_records_df.columns:
+            if col == "حالة الدفع": payment_records_df[col] = "مؤكد"
+            elif col == "المبلغ": payment_records_df[col] = 0.0
+            else: payment_records_df[col] = ""
+
+    for col in COL_ONLINE_SCHEDULE:
+        if col not in online_schedule_df.columns:
+            if col == "رابط زوم": online_schedule_df[col] = "https://us05web.zoom.us/j/83526892910?pwd=2jWRgATgBRPbXttdnm0QpLwBApsZL4.1"
+            elif col == "حالة فتح الحصة": online_schedule_df[col] = "مغلقة"
+            elif col == "اسم الأكاديمية": online_schedule_df[col] = "أكاديمية البشمهندس"
+            else: online_schedule_df[col] = ""
+
+    return users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df, bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df, abqary_df, online_schedule_df, weekly_schedule_df, payment_records_df
+
+def load_all_data_from_excel_bytes(excel_bytes):
+    cols=[COL_USERS,COL_SESSIONS,COL_ASSESSMENTS,COL_MESSAGES,COL_EXAMS,COL_ESSAYS,COL_BOOKINGS,COL_BANK_REQUESTS,COL_QUESTION_BANK,COL_VIDEOS,COL_VIDEO_COMMENTS,COL_ABQARY,COL_ONLINE_SCHEDULE,COL_WEEKLY_SCHEDULE,COL_PAYMENT_RECORDS]
+    sheets=["Users","Sessions","Assessments","Messages","Exams","Essays","Bookings","BankRequests","QuestionBank","Videos","VideoComments","AbqaryExams","OnlineSchedule","WeeklySchedule","PaymentRecords"]
+    out=[]
+    with pd.ExcelFile(io.BytesIO(excel_bytes), engine="openpyxl") as xls:
+        for sheet, columns in zip(sheets, cols):
+            df=pd.read_excel(xls,sheet) if sheet in xls.sheet_names else pd.DataFrame(columns=columns)
+            for c in columns:
+                if c not in df.columns: df[c]=""
+            out.append(df[columns])
+    return tuple(out)
+
+def _backup_tables_map():
+    """كل بيانات المنصة الموجودة في ذاكرة التطبيق، بما فيها الجداول الإضافية."""
+    return {
+        "Users": st.session_state.get("users_df", pd.DataFrame()),
+        "Sessions": st.session_state.get("sessions_df", pd.DataFrame()),
+        "Assessments": st.session_state.get("assessments_df", pd.DataFrame()),
+        "Messages": st.session_state.get("messages_df", pd.DataFrame()),
+        "Exams": st.session_state.get("exams_df", pd.DataFrame()),
+        "Essays": st.session_state.get("essays_df", pd.DataFrame()),
+        "Bookings": st.session_state.get("bookings_df", pd.DataFrame()),
+        "BankRequests": st.session_state.get("bank_requests_df", pd.DataFrame()),
+        "QuestionBank": st.session_state.get("question_bank_df", pd.DataFrame()),
+        "Videos": st.session_state.get("videos_df", pd.DataFrame()),
+        "VideoComments": st.session_state.get("video_comments_df", pd.DataFrame()),
+        "AbqaryExams": st.session_state.get("abqary_df", pd.DataFrame()),
+        "OnlineSchedule": st.session_state.get("online_schedule_df", pd.DataFrame()),
+        "WeeklySchedule": st.session_state.get("weekly_schedule_df", pd.DataFrame()),
+        "PaymentRecords": st.session_state.get("payment_records_df", pd.DataFrame()),
+        "Ads": st.session_state.get("ads_df", pd.DataFrame(columns=COL_ADS)),
+        "StudentInterface": st.session_state.get("student_interface_df", load_student_interface()),
+        "TeacherProfile": st.session_state.get("teacher_profile_df", load_teacher_profile()),
+    }
+
+def _build_excel_backup_bytes():
+    """نسخة Excel للقراءة البشرية، مع فصل الوسائط الكبيرة حتى لا تُقص داخل خلية Excel."""
+    buf = io.BytesIO()
+    tables = _backup_tables_map()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        for sheet, df in tables.items():
+            out = df.copy()
+            # Excel لديه حد 32767 حرفاً للخلية؛ الوسائط الكبيرة محفوظة كاملة داخل ZIP/manifest.
+            for c in list(out.columns):
+                if "base64" in str(c).lower() or "إيصال" in str(c):
+                    out[c] = out[c].apply(lambda v: "[محفوظة كاملة داخل backup_manifest.json/assets]" if str(v or "").strip() not in ("", "nan", "None") else "")
+            out.to_excel(writer, sheet_name=sheet[:31], index=False)
+        # نسخة نصية منفصلة للإعلانات حتى يمكن قراءتها بسهولة.
+        ads = tables["Ads"].copy()
+        if "الوسائط_base64" in ads.columns:
+            ads["الوسائط_base64"] = "[محفوظة كاملة داخل assets]"
+        ads.to_excel(writer, sheet_name="Ads", index=False)
+    return buf.getvalue()
+
+def _backup_zip_bytes():
+    """نسخة أمان كاملة جداً: Excel + JSON دقيق + كل الصور/الفيديوهات/الإيصالات كأصول منفصلة."""
+    tables = _backup_tables_map()
+    manifest = {
+        "format": "alhandasa-complete-backup-v2",
+        "created_at": datetime.now().isoformat(),
+        "tables": {},
+        "notes": [
+            "هذا الملف هو النسخة الأساسية للاسترجاع.",
+            "بيانات التقارير مثل تقرير ولي الأمر محفوظة من خلال الجداول التي تُبنى منها التقارير: الطلاب والحصص والتقييمات والمدفوعات والجداول.",
+            "الوسائط الكبيرة والإيصالات والفيديوهات محفوظة كملفات مستقلة داخل assets للحفاظ عليها بدون قص Excel."
+        ]
+    }
+    assets = {}
+    for sheet, df in tables.items():
+        df = df.copy()
+        manifest["tables"][sheet] = {"columns": [str(c) for c in df.columns], "rows": []}
+        for _, row in df.iterrows():
+            out = {}
+            for col in df.columns:
+                val = row.get(col, "")
+                if pd.isna(val):
+                    val = ""
+                if isinstance(val, (datetime, date)):
+                    val = val.isoformat()
+                else:
+                    val = str(val)
+                low = str(col).lower()
+                # كل الصور/الفيديوهات/الإيصالات المشفرة تُفصل عن JSON، مع الحفاظ على قيمتها الأصلية 100%.
+                external = ("base64" in low or "إيصال" in str(col) or "صورة" in str(col) or "فيديو" in str(col)) and len(val) > 0
+                if external and val not in ("nan", "None"):
+                    safe_sheet = re.sub(r"[^A-Za-z0-9_-]+", "_", str(sheet))[:40]
+                    asset_id = f"assets/{safe_sheet}/{uuid.uuid4().hex}.b64"
+                    assets[asset_id] = val.encode("utf-8")
+                    out[col] = {"__asset__": asset_id, "encoding": "base64-text"}
+                else:
+                    out[col] = val
+            manifest["tables"][sheet]["rows"].append(out)
+    excel_bytes = _build_excel_backup_bytes()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        z.writestr("platform_readable.xlsx", excel_bytes)
+        z.writestr("backup_manifest.json", json.dumps(manifest, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        readme = "نسخة احتياطية كاملة لمنصة البشمهندس x الرياضه. الاسترجاع من هذا الملف يعيد الجداول والوسائط والإيصالات والفيديوهات كما كانت في وقت النسخ."
+        z.writestr("README.txt", readme.encode("utf-8"))
+        for path, data in assets.items():
+            z.writestr(path, data)
+    return buf.getvalue()
+
+def _restore_complete_zip(zip_bytes):
+    """استرجاع النسخة الكاملة من ZIP مع إعادة كل الأصول المشفرة إلى أعمدة البيانات الأصلية."""
+    with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as z:
+        if "backup_manifest.json" not in z.namelist():
+            raise ValueError("هذا ليس ملف النسخة الكاملة الجديد. استخدم ملف XLSX القديم أو نسخة ZIP صحيحة.")
+        manifest = json.loads(z.read("backup_manifest.json").decode("utf-8"))
+        tables = {}
+        for sheet, info in manifest.get("tables", {}).items():
+            rows = []
+            for row in info.get("rows", []):
+                out = {}
+                for col, val in row.items():
+                    if isinstance(val, dict) and "__asset__" in val:
+                        out[col] = z.read(val["__asset__"]).decode("utf-8")
+                    else:
+                        out[col] = val
+                rows.append(out)
+            tables[sheet] = pd.DataFrame(rows, columns=info.get("columns", []))
+        rec_names = ["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df"]
+        rec_sheets = ["Users","Sessions","Assessments","Messages","Exams","Essays","Bookings","BankRequests","QuestionBank","Videos","VideoComments","AbqaryExams","OnlineSchedule","WeeklySchedule","PaymentRecords"]
+        for n, sheet in zip(rec_names, rec_sheets):
+            st.session_state[n] = tables.get(sheet, pd.DataFrame())
+        st.session_state.ads_df = tables.get("Ads", pd.DataFrame(columns=COL_ADS))
+        st.session_state.student_interface_df = tables.get("StudentInterface", load_student_interface())
+        st.session_state.teacher_profile_df = tables.get("TeacherProfile", load_teacher_profile())
+        if sum(len(st.session_state[n]) for n in rec_names) == 0 and st.session_state.ads_df.empty:
+            raise ValueError("النسخة الاحتياطية لا تحتوي على بيانات أساسية.")
+        ok = save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df, st.session_state.weekly_schedule_df, st.session_state.payment_records_df, st.session_state.ads_df)
+        if _cloud_storage_enabled() and not ok:
+            raise RuntimeError("فشل تأكيد حفظ النسخة المسترجعة في التخزين السحابي.")
+        _cloud_save_student_interface(st.session_state.student_interface_df)
+        return sum(len(st.session_state[n]) for n in rec_names) + len(st.session_state.ads_df)
+
+def _restore_ads_from_excel(xls):
+    ads=pd.read_excel(xls,"Ads") if "Ads" in xls.sheet_names else pd.DataFrame(columns=COL_ADS)
+    for c in COL_ADS:
+        if c not in ads.columns: ads[c]="نشط" if c=="الحالة" else ""
+    ads=ads[COL_ADS].copy(); media_map={}
+    if "AdsMedia" in xls.sheet_names:
+        m=pd.read_excel(xls,"AdsMedia")
+        if not m.empty:
+            for aid,g in m.groupby("معرف_الإعلان"):
+                media_map[str(aid)]="".join(str(v or "") for v in g.sort_values("جزء")["البيانات"].tolist())
+    for i,r in ads.iterrows():
+        aid=str(r.get("معرف_الإعلان",""))
+        if aid in media_map: ads.at[i,"الوسائط_base64"]=media_map[aid]
+    return ads
+
+def _restore_complete_backup(excel_bytes):
+    rec=load_all_data_from_excel_bytes(excel_bytes)
+    with pd.ExcelFile(io.BytesIO(excel_bytes),engine="openpyxl") as xls:
+        ads=_restore_ads_from_excel(xls)
+        interface=load_student_interface(); profile=load_teacher_profile()
+        if "StudentInterface" in xls.sheet_names:
+            t=pd.read_excel(xls,"StudentInterface")
+            if not t.empty:
+                for c in COL_STUDENT_INTERFACE:
+                    if c not in t.columns: t[c]=""
+                interface=t[COL_STUDENT_INTERFACE].copy()
+        if "TeacherProfile" in xls.sheet_names:
+            t=pd.read_excel(xls,"TeacherProfile")
+            if not t.empty:
+                for c in COL_TEACHER_PROFILE:
+                    if c not in t.columns: t[c]=""
+                profile=t[COL_TEACHER_PROFILE].copy()
+    if sum(len(x) for x in rec)==0 and ads.empty: raise ValueError("النسخة الاحتياطية لا تحتوي على بيانات أساسية.")
+    names=["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df"]
+    for n,df in zip(names,rec): st.session_state[n]=df
+    st.session_state.ads_df=ads; st.session_state.student_interface_df=interface; st.session_state.teacher_profile_df=profile
+    ok=save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df,st.session_state.ads_df)
+    if _cloud_storage_enabled() and not ok: raise RuntimeError("فشل تأكيد حفظ النسخة المسترجعة في التخزين السحابي.")
+    _cloud_save_student_interface(st.session_state.student_interface_df)
+    return sum(len(x) for x in rec)+len(ads)
+
+def save_all_data(users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df, bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df, abqary_df, online_schedule_df, weekly_schedule_df=None, payment_records_df=None, ads_df=None):
+    if weekly_schedule_df is None:
+        weekly_schedule_df = st.session_state.get("weekly_schedule_df", pd.DataFrame(columns=COL_WEEKLY_SCHEDULE))
+    if payment_records_df is None:
+        payment_records_df = st.session_state.get("payment_records_df", pd.DataFrame(columns=COL_PAYMENT_RECORDS))
+    if ads_df is None:
+        ads_df = st.session_state.get("ads_df", pd.DataFrame(columns=COL_ADS))
+    excel_buffer = io.BytesIO()
+    with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+        users_df.to_excel(writer, sheet_name="Users", index=False)
+        sessions_df.to_excel(writer, sheet_name="Sessions", index=False)
+        assessments_df.to_excel(writer, sheet_name="Assessments", index=False)
+        messages_df.to_excel(writer, sheet_name="Messages", index=False)
+        exams_df.to_excel(writer, sheet_name="Exams", index=False)
+        essays_df.to_excel(writer, sheet_name="Essays", index=False)
+        bookings_df.to_excel(writer, sheet_name="Bookings", index=False)
+        bank_requests_df.to_excel(writer, sheet_name="BankRequests", index=False)
+        question_bank_df.to_excel(writer, sheet_name="QuestionBank", index=False)
+        videos_df.to_excel(writer, sheet_name="Videos", index=False)
+        video_comments_df.to_excel(writer, sheet_name="VideoComments", index=False)
+        abqary_df.to_excel(writer, sheet_name="AbqaryExams", index=False)
+        online_schedule_df.to_excel(writer, sheet_name="OnlineSchedule", index=False)
+        weekly_schedule_df.to_excel(writer, sheet_name="WeeklySchedule", index=False)
+        payment_records_df.to_excel(writer, sheet_name="PaymentRecords", index=False)
+        # بيانات الإعلان النصية/الوصفية في Ads، بينما الوسائط الكبيرة تُخزن على أجزاء داخل AdsMedia
+        # حتى لا تتجاوز الصورة الأصلية حد Excel للخلية ولا يتم قصها أو فقدان جودتها.
+        ads_meta = ads_df.copy()
+        if "الوسائط_base64" in ads_meta.columns:            ads_meta["الوسائط_base64"] = ""
+        ads_meta.to_excel(writer, sheet_name="Ads", index=False)
+        media_rows = []
+        chunk_size = 30000
+        if not ads_df.empty:
+            for _, ad_row in ads_df.iterrows():
+                ad_id = str(ad_row.get("معرف_الإعلان", ""))
+                b64 = str(ad_row.get("الوسائط_base64", "") or "").strip()
+                if b64 and b64.lower() != "nan":
+                    for part_no, pos in enumerate(range(0, len(b64), chunk_size), start=1):
+                        media_rows.append({"معرف_الإعلان": ad_id, "جزء": part_no, "البيانات": b64[pos:pos+chunk_size]})
+        pd.DataFrame(media_rows, columns=["معرف_الإعلان", "جزء", "البيانات"]).to_excel(writer, sheet_name="AdsMedia", index=False)
+        st.session_state.get("student_interface_df", load_student_interface()).to_excel(writer, sheet_name="StudentInterface", index=False)
+        st.session_state.get("teacher_profile_df", pd.DataFrame([{"اسم المعلم":"م/ محمد غنيم","الصورة_base64":img_b64}])).to_excel(writer, sheet_name="TeacherProfile", index=False)
+    excel_bytes = excel_buffer.getvalue()
+    # احفظ محلياً أيضاً عندما يكون ذلك ممكناً، ثم ارفع نفس الملف للتخزين الدائم.
+    try:
+        with open(FILE_NAME, "wb") as _local_file:
+            _local_file.write(excel_bytes)
+    except Exception:
+        pass
+    _cloud_ok = _cloud_save_excel_bytes(excel_bytes, reason="manual_or_autosave")
+    _structured_ok = True
+    if _cloud_ok:
+        # بالإضافة إلى ملف Excel الرئيسي، حافظ على نسخة منظمة داخل كل جدول Supabase.
+        _structured_ok = _cloud_sync_all_structured_tables(
+            users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df,
+            bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df,
+            abqary_df, online_schedule_df, weekly_schedule_df, payment_records_df, ads_df
+        )
+    return bool(_cloud_ok and _structured_ok)
+
+if "users_df" not in st.session_state:
+    u_df, s_df, a_df, m_df, e_df, es_df, b_df, br_df, qb_df, v_df, vc_df, ab_df, os_df, ws_df, pr_df = load_all_data()
+    st.session_state.users_df = u_df
+    st.session_state.sessions_df = s_df
+    st.session_state.assessments_df = a_df
+    st.session_state.messages_df = m_df
+    st.session_state.exams_df = e_df
+    st.session_state.essays_df = es_df
+    st.session_state.bookings_df = b_df
+    st.session_state.bank_requests_df = br_df
+    st.session_state.question_bank_df = qb_df
+    st.session_state.videos_df = v_df
+    st.session_state.video_comments_df = vc_df
+    st.session_state.abqary_df = ab_df
+    st.session_state.online_schedule_df = os_df
+    st.session_state.weekly_schedule_df = ws_df
+    st.session_state.payment_records_df = pr_df
+    st.session_state.ads_df = load_ads()
+    st.session_state.teacher_profile_df = load_teacher_profile()
+    # استخدم صورة المعلم المحفوظة داخل TeacherProfile/التخزين السحابي في كل صفحات الطالب
+    # بدلاً من الاعتماد على ملف teacher.jpg الموجود محلياً فقط.
+    try:
+        _saved_teacher_photo = str(st.session_state.teacher_profile_df.iloc[0].get("الصورة_base64", "")).strip() if not st.session_state.teacher_profile_df.empty else ""
+        if _saved_teacher_photo and _saved_teacher_photo.lower() != "nan":
+            img_b64 = _saved_teacher_photo
+    except Exception:
+        pass
+
+    # نقطة أمان: سجّل حجم البيانات التي تم تحميلها قبل السماح بالحفظ التلقائي.
+    # لو كانت البيانات موجودة عند التحميل، لا يعتبرها autosave تغييرًا جديدًا.
+    try:
+        _loaded_core_total = (
+            len(u_df) + len(s_df) + len(a_df) + len(ws_df) + len(pr_df)
+        )
+        st.session_state["_loaded_core_total"] = int(_loaded_core_total)
+        st.session_state["_data_load_verified"] = True
+        st.session_state["_initial_data_source"] = "cloud_or_local"
+        st.session_state["_last_autosave_signature"] = _autosave_signature() if "_autosave_signature" in globals() else None
+    except Exception:
+        st.session_state["_data_load_verified"] = False
+
+# تأكد من وجود جدول المواعيد حتى لو كانت جلسة Streamlit قديمة قبل إضافة الميزة
+if "weekly_schedule_df" not in st.session_state:
+    try:
+        _, _, _, _, _, _, _, _, _, _, _, _, _, ws_df = load_all_data()
+        st.session_state.weekly_schedule_df = ws_df
+    except Exception:
+        st.session_state.weekly_schedule_df = pd.DataFrame(columns=COL_WEEKLY_SCHEDULE)
+if "payment_records_df" not in st.session_state:
+    st.session_state.payment_records_df = pd.DataFrame(columns=COL_PAYMENT_RECORDS)
+    if _os.path.exists(FILE_NAME):
+        try:
+            with pd.ExcelFile(FILE_NAME) as _xls_pay:
+                if "PaymentRecords" in _xls_pay.sheet_names:
+                    st.session_state.payment_records_df = pd.read_excel(_xls_pay, "PaymentRecords")
+        except Exception:
+            pass
+    for _pc in COL_PAYMENT_RECORDS:
+        if _pc not in st.session_state.payment_records_df.columns:
+            st.session_state.payment_records_df[_pc] = 0.0 if _pc == "المبلغ" else ("مؤكد" if _pc == "حالة الدفع" else "")
+
+if "ads_df" not in st.session_state:
+    st.session_state.ads_df = load_ads()
+    for _ac in COL_ADS:
+        if _ac not in st.session_state.ads_df.columns:
+            st.session_state.ads_df[_ac] = "نشط" if _ac == "الحالة" else ""
+    st.session_state.ads_df = st.session_state.ads_df[COL_ADS]
+
+if "teacher_profile_df" not in st.session_state:
+    st.session_state.teacher_profile_df = load_teacher_profile()
+
+# مزامنة صورة المعلم من الملف السحابي مع المتغير المستخدم في الصفحة الرئيسية وبطاقات درسلي
+try:
+    _saved_teacher_photo = str(st.session_state.teacher_profile_df.iloc[0].get("الصورة_base64", "")).strip() if not st.session_state.teacher_profile_df.empty else ""
+    if _saved_teacher_photo and _saved_teacher_photo.lower() != "nan":
+        img_b64 = _saved_teacher_photo
+except Exception:
+    pass
+
+if "student_interface_df" not in st.session_state:
+    st.session_state.student_interface_df = load_student_interface()
+if "page_view" not in st.session_state:
+    st.session_state.page_view = "home"
+
+if "student_sub_page" not in st.session_state:
+    st.session_state.student_sub_page = "dashboard"
+
+if "teacher_page" not in st.session_state:
+    st.session_state.teacher_page = "dashboard"
+
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
+
+# حالات إظهار/إخفاء القوائم والإشعارات — مستقلة لكل واجهة.
+if "student_sidebar_open" not in st.session_state:
+    st.session_state.student_sidebar_open = True
+if "teacher_sidebar_open" not in st.session_state:
+    st.session_state.teacher_sidebar_open = True
+if "student_notifications_open" not in st.session_state:
+    st.session_state.student_notifications_open = False
+if "teacher_notifications_open" not in st.session_state:
+    st.session_state.teacher_notifications_open = False
+
+def _app_notifications(role="student", student_name=""):
+    """إشعارات مفصولة حسب الحساب: الطالب يرى بياناته فقط، والمدفوعات للمعلم فقط."""
+    items = []
+    try:
+        # ===== الطالب: بيانات هذا الطالب فقط =====
+        if role == "student":
+            name = str(student_name or "").strip()
+            if not name:
+                return []
+
+            msg_df = st.session_state.get("messages_df", pd.DataFrame())
+            if not msg_df.empty and "اسم الطالب" in msg_df.columns:
+                rows = msg_df[msg_df["اسم الطالب"].astype(str).str.strip() == name]
+                if "المرسل" in rows.columns:
+                    rows = rows[rows["المرسل"].astype(str).str.strip().str.lower() != "الطالب"]
+                for _, r in rows.tail(5).iloc[::-1].iterrows():
+                    txt = str(r.get("نص الرسالة", "رسالة جديدة")).strip() or "رسالة جديدة"
+                    sender = str(r.get("المرسل", "المعلم")).strip() or "المعلم"
+                    dt = str(r.get("التاريخ_والوقت", "")).strip()
+                    items.append(("💬", f"رسالة من {sender}", txt, dt))
+
+            ws = st.session_state.get("weekly_schedule_df", pd.DataFrame())
+            if not ws.empty and "اسم الطالب" in ws.columns:
+                sr = ws[ws["اسم الطالب"].astype(str).str.strip() == name].tail(5).iloc[::-1]
+                for _, r in sr.iterrows():
+                    day = str(r.get("اليوم", "")).strip()
+                    tm = str(r.get("الموعد", "")).strip()
+                    items.append(("🗓️", "موعد حصتك", f"لديك حصة {day} {tm}".strip(), ""))
+
+            hw = st.session_state.get("assessments_df", pd.DataFrame())
+            if not hw.empty and "اسم الطالب" in hw.columns:
+                hr = hw[hw["اسم الطالب"].astype(str).str.strip() == name].tail(5).iloc[::-1]
+                for _, r in hr.iterrows():
+                    title = str(r.get("الواجب", r.get("اسم الواجب", "واجب جديد"))).strip()
+                    if title and title.lower() != "nan":
+                        items.append(("📚", "واجبك", title, str(r.get("التاريخ", "")).strip()))
+
+            # مهم: لا نقرأ payment_records_df هنا نهائياً، ولا نرسل أي معلومة مالية للطالب.
+            return items[:10]
+
+        # ===== المعلم: يمكنه رؤية التنبيهات الإدارية والمالية =====
+        msg_df = st.session_state.get("messages_df", pd.DataFrame())
+        if not msg_df.empty and "المرسل" in msg_df.columns:
+            rows = msg_df[msg_df["المرسل"].astype(str).str.strip().str.lower().str.contains("طالب|student", regex=True, na=False)].tail(5).iloc[::-1]
+            for _, r in rows.iterrows():
+                stn = str(r.get("اسم الطالب", "طالب")).strip() or "طالب"
+                txt = str(r.get("نص الرسالة", "رسالة جديدة")).strip() or "رسالة جديدة"
+                items.append(("💬", f"رسالة من {stn}", txt, str(r.get("التاريخ_والوقت", "")).strip()))
+        bk = st.session_state.get("bookings_df", pd.DataFrame())
+        if not bk.empty:
+            for _, r in bk.tail(5).iloc[::-1].iterrows():
+                stn = str(r.get("اسم الطالب", "طالب")).strip() or "طالب"
+                status = str(r.get("الحالة", r.get("حالة الطلب", "طلب جديد"))).strip()
+                items.append(("📅", "طلب حجز", f"طلب حجز من {stn} — {status}", ""))
+        p_df = st.session_state.get("payment_records_df", pd.DataFrame())
+        if not p_df.empty:
+            items.append(("💰", "تنبيه مالي للمعلم", f"يوجد {len(p_df)} عملية دفع مسجلة", ""))
+    except Exception:
+        pass
+    return items[:10]
+
+def _render_notification_box(role="student", student_name=""):
+    items = _app_notifications(role, student_name)
+    if not items:
+        st.info("لا توجد إشعارات حالياً 🔔")
+        return
+    with st.container(border=True):
+        st.markdown("### 🔔 الإشعارات")
+        for icon, title, body, dt in items:
+            time_txt = f" — {dt}" if dt and dt.lower() != "nan" else ""
+            st.markdown(f"<div style='padding:10px 12px;margin:7px 0;border:1px solid #dbe5f0;border-radius:12px;background:rgba(37,99,235,.05);direction:rtl'><b>{icon} {title}</b><div style='margin-top:4px;line-height:1.7'>{body}</div><small style='opacity:.65'>{time_txt}</small></div>", unsafe_allow_html=True)
+
+query_params = st.query_params
+is_student_mode = query_params.get("role") == "student"
+
+if "logged_student" not in st.session_state:
+    st.session_state.logged_student = None
+
+saved_student_phone = query_params.get("st_phone")
+if not st.session_state.logged_student and saved_student_phone:
+    matched_st = st.session_state.users_df[st.session_state.users_df["رقم الهاتف"].astype(str).str.strip() == str(saved_student_phone).strip()]
+    if not matched_st.empty:
+        st.session_state.logged_student = matched_st.iloc[0].to_dict()
+
+def delete_student_completely(student_name_to_del):
+    target = student_name_to_del.strip()
+    st.session_state.users_df = st.session_state.users_df[st.session_state.users_df["اسم الطالب"].astype(str).str.strip() != target].reset_index(drop=True)
+    st.session_state.sessions_df = st.session_state.sessions_df[st.session_state.sessions_df["اسم الطالب"].astype(str).str.strip() != target].reset_index(drop=True)
+    st.session_state.assessments_df = st.session_state.assessments_df[st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip() != target].reset_index(drop=True)
+    st.session_state.messages_df = st.session_state.messages_df[st.session_state.messages_df["اسم الطالب"].astype(str).str.strip() != target].reset_index(drop=True)
+    st.session_state.essays_df = st.session_state.essays_df[st.session_state.essays_df["اسم الطالب"].astype(str).str.strip() != target].reset_index(drop=True)
+    st.session_state.bookings_df = st.session_state.bookings_df[st.session_state.bookings_df["اسم الطالب"].astype(str).str.strip() != target].reset_index(drop=True)
+    st.session_state.bank_requests_df = st.session_state.bank_requests_df[st.session_state.bank_requests_df["اسم الطالب"].astype(str).str.strip() != target].reset_index(drop=True)
+    st.session_state.video_comments_df = st.session_state.video_comments_df[st.session_state.video_comments_df["اسم الطالب"].astype(str).str.strip() != target].reset_index(drop=True)
+    st.session_state.online_schedule_df = st.session_state.online_schedule_df[st.session_state.online_schedule_df["اسم الطالب"].astype(str).str.strip() != target].reset_index(drop=True)
+    st.session_state.weekly_schedule_df = st.session_state.weekly_schedule_df[st.session_state.weekly_schedule_df["اسم الطالب"].astype(str).str.strip() != target].reset_index(drop=True)
+    st.session_state.payment_records_df = st.session_state.payment_records_df[st.session_state.payment_records_df["اسم الطالب"].astype(str).str.strip() != target].reset_index(drop=True)
+    save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+
+def _money_sum(series):
+    try:
+        return float(pd.to_numeric(series, errors="coerce").fillna(0).sum())
+    except Exception:
+        return 0.0
+
+
+def get_student_financials(student_name):
+    """حساب إجمالي الحصص والمدفوعات والرصيد المتبقي للطالب."""
+    target = str(student_name).strip()
+    s_df = st.session_state.get("sessions_df", pd.DataFrame())
+    p_df = st.session_state.get("payment_records_df", pd.DataFrame())
+    if s_df.empty or "اسم الطالب" not in s_df.columns:
+        due = 0.0
+    else:
+        rows = s_df[s_df["اسم الطالب"].astype(str).str.strip() == target]
+        due = _money_sum(rows["سعر الحصة"]) if "سعر الحصة" in rows.columns else 0.0
+    if p_df.empty or "اسم الطالب" not in p_df.columns:
+        paid = 0.0
+    else:
+        if "حالة الدفع" in p_df.columns:
+            rows = p_df[(p_df["اسم الطالب"].astype(str).str.strip() == target) & (p_df["حالة الدفع"].astype(str).str.strip().isin(["مؤكد", "مدفوع"]))]
+        else:
+            rows = p_df[p_df["اسم الطالب"].astype(str).str.strip() == target]
+        paid = _money_sum(rows["المبلغ"]) if "المبلغ" in rows.columns else 0.0
+    return due, paid, due - paid
+
+
+def get_all_financial_totals():
+    p_df = st.session_state.get("payment_records_df", pd.DataFrame())
+    s_df = st.session_state.get("sessions_df", pd.DataFrame())
+    total_due = _money_sum(s_df["سعر الحصة"]) if not s_df.empty and "سعر الحصة" in s_df.columns else 0.0
+    if not p_df.empty and "المبلغ" in p_df.columns:
+        if "حالة الدفع" in p_df.columns:
+            paid_rows = p_df[p_df["حالة الدفع"].astype(str).str.strip().isin(["مؤكد", "مدفوع"]) ]
+        else:
+            paid_rows = p_df
+        total_paid = _money_sum(paid_rows["المبلغ"])
+    else:
+        total_paid = 0.0
+    return total_due, total_paid, total_due - total_paid
+
+
+def _month_from_value(value):
+    try:
+        return pd.to_datetime(value).strftime("%Y-%m")
+    except Exception:
+        return ""
+
+def get_student_monthly_financials(student_name, month_key):
+    target = str(student_name).strip()
+    s_df = st.session_state.get("sessions_df", pd.DataFrame()).copy()
+    p_df = st.session_state.get("payment_records_df", pd.DataFrame()).copy()
+    if not s_df.empty and "اسم الطالب" in s_df.columns:
+        rows = s_df[s_df["اسم الطالب"].astype(str).str.strip() == target].copy()
+        if "التاريخ" in rows.columns:
+            rows = rows[rows["التاريخ"].apply(_month_from_value) == month_key]
+        due = _money_sum(rows["سعر الحصة"]) if "سعر الحصة" in rows.columns else 0.0
+    else:
+        due = 0.0
+    if not p_df.empty and "اسم الطالب" in p_df.columns:
+        rows = p_df[p_df["اسم الطالب"].astype(str).str.strip() == target].copy()
+        if "الشهر" in rows.columns:
+            rows = rows[rows["الشهر"].astype(str).str.strip() == month_key]
+        elif "التاريخ" in rows.columns:
+            rows = rows[rows["التاريخ"].apply(_month_from_value) == month_key]
+        if "حالة الدفع" in rows.columns:
+            rows = rows[rows["حالة الدفع"].astype(str).str.strip().isin(["مؤكد", "مدفوع"])]
+        paid = _money_sum(rows["المبلغ"]) if "المبلغ" in rows.columns else 0.0
+    else:
+        paid = 0.0
+    return due, paid, due - paid
+
+def get_monthly_financial_totals(month_key):
+    s_df = st.session_state.get("sessions_df", pd.DataFrame()).copy()
+    p_df = st.session_state.get("payment_records_df", pd.DataFrame()).copy()
+    sm = s_df[s_df["التاريخ"].apply(_month_from_value) == month_key] if not s_df.empty and "التاريخ" in s_df.columns else pd.DataFrame()
+    due = _money_sum(sm["سعر الحصة"]) if not sm.empty and "سعر الحصة" in sm.columns else 0.0
+    if not p_df.empty:
+        if "الشهر" in p_df.columns:
+            pm = p_df[p_df["الشهر"].astype(str).str.strip() == month_key]
+        else:
+            pm = p_df[p_df["التاريخ"].apply(_month_from_value) == month_key] if "التاريخ" in p_df.columns else pd.DataFrame()
+        if "حالة الدفع" in pm.columns:
+            pm = pm[pm["حالة الدفع"].astype(str).str.strip().isin(["مؤكد", "مدفوع"])]
+        paid = _money_sum(pm["المبلغ"]) if "المبلغ" in pm.columns else 0.0
+    else:
+        paid = 0.0
+    return due, paid, due - paid
+
+
+if st.session_state.dark_mode:
+    bg_color = "#0f172a"
+    text_color = "#f8fafc"
+    card_bg = "#1e293b"
+    card_border = "#334155"
+else:
+    bg_color = "#ffffff"
+    text_color = "#0f172a"
+    card_bg = "#f8fafc"
+    card_border = "#cbd5e1"
+
+st.markdown(f"""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&display=swap');
+    
+    html, body, [class*="css"], p, span, label, div, button, h1, h2, h3, h4, h5, h6 {{
+        font-family: 'Cairo', sans-serif !important;
+        font-weight: 900 !important;
+        letter-spacing: 0.3px !important;
+        color: {text_color} !important;
+    }}
+
+    .stApp {{
+        background-color: {bg_color} !important;
+    }}
+
+    input, textarea, select, div[data-baseweb="select"] > div {{
+        font-family: 'Cairo', sans-serif !important;
+        font-weight: 800 !important;
+        color: {text_color} !important;
+        background-color: {card_bg} !important;
+    }}
+
+    div[data-baseweb="popover"], div[role="dialog"], div[aria-label*="Choose a date"], div[aria-label*="Calendar"], div[data-baseweb="calendar"] {{
+        background-color: {card_bg} !important;
+        color: {text_color} !important;
+        border-radius: 12px !important;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
+    }}
+    div[data-baseweb="calendar"] *, div[data-baseweb="popover"] * {{
+        color: {text_color} !important;
+        background-color: transparent !important;
+    }}
+    div[data-baseweb="calendar"] button {{
+        color: {text_color} !important;
+        background-color: {card_bg} !important;
+        border-radius: 6px !important;
+        font-weight: 900 !important;
+    }}
+    div[data-baseweb="calendar"] button:hover {{
+        background-color: #059669 !important;
+        color: #ffffff !important;
+    }}
+
+    div[data-baseweb="popover"], div[role="listbox"] div {{
+        background-color: {card_bg} !important;
+        color: {text_color} !important;
+    }}
+    div[role="option"] span, div[role="option"] div {{
+        color: {text_color} !important;
+    }}
+
+    body, h1, h2, h3, h4, h5, h6, .stMarkdown, .stSelectbox, .stTextInput, .stTextArea {{
+        direction: rtl;
+        text-align: right;
+    }}
+    
+    img {{
+        max-width: 100% !important;
+        height: auto !important;
+        object-fit: contain !important;
+        border-radius: 8px;
+    }}
+
+    .darssly-navbar {{
+        background: {card_bg};
+        padding: 12px 25px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        border: 1px solid {card_border};
+    }}
+    .navbar-brand {{ display: flex; align-items: center; gap: 15px; }}
+    .navbar-title-group h3 {{ margin: 0 !important; color: #059669 !important; font-size: 18px !important; }}
+    .navbar-title-group p {{ margin: 2px 0 0 0 !important; color: {text_color} !important; font-size: 12px !important; opacity: 0.8; }}
+
+    .exam-builder-header {{
+        background-color: #f59e0b; color: #ffffff !important; padding: 16px 22px; border-radius: 10px 10px 0 0; font-size: 22px; font-weight: 900; margin-bottom: 15px; display: flex; align-items: center; gap: 12px;
+    }}
+    .vertical-section-header {{
+        background: linear-gradient(135deg, #0284c7, #0369a1); color: #ffffff !important; padding: 14px 20px; border-radius: 10px; margin-top: 25px; margin-bottom: 15px; font-size: 20px; font-weight: 900; display: flex; align-items: center; gap: 10px;
+    }}
+    
+    .stButton>button {{
+        background: #10b981 !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; border: none !important; border-radius: 10px; font-weight: 900 !important; font-size: 16px !important; padding: 12px 22px; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3); width: 100% !important;
+    }}
+    .stButton>button:hover {{ background: #059669 !important; }}
+
+    div.stFormSubmitButton > button, div.row-widget.stButton > button:nth-of-type(1) {{
+        background-color: #dc2626 !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+    }}
+    div.stFormSubmitButton > button:hover {{
+        background-color: #b91c1c !important;
+    }}
+
+    .stLinkButton>a {{
+        background-color: #dc2626 !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        font-family: 'Cairo', sans-serif !important;
+        font-weight: 900 !important;
+        font-size: 16px !important;
+        border-radius: 10px !important;
+        text-align: center !important;
+        display: block !important;
+        padding: 10px 15px !important;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+        border: none !important;
+        text-decoration: none !important;
+    }}
+    .stLinkButton>a:hover {{
+        background-color: #b91c1c !important;
+        color: #ffffff !important;
+    }}
+
+    .darssly-box {{
+        background: linear-gradient(135deg, #059669, #10b981); border-radius: 16px; padding: 24px; margin-bottom: 25px; box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3); border: 2px solid rgba(255, 255, 255, 0.25); color: #ffffff !important;
+    }}
+    .darssly-box * {{ color: #ffffff !important; }}
+
+    .course-card {{
+        background: {card_bg}; border: 2px solid {card_border}; border-radius: 16px; padding: 20px; text-align: center; box-shadow: 0 6px 16px rgba(0,0,0,0.08); margin-bottom: 20px; display: flex; flex-direction: column; justify-content: space-between; height: 100%;
+    }}
+    .course-icon-box {{
+        font-size: 45px; background: #065f46; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; border-radius: 50%; margin: 0 auto 15px auto; border: 2px solid #10b981;
+    }}
+    .course-title {{ color: #059669 !important; font-size: 20px !important; font-weight: 900 !important; margin-bottom: 8px !important; }}
+    .course-desc {{ color: {text_color} !important; font-size: 14px !important; font-weight: 800 !important; opacity: 0.9; margin-bottom: 15px !important; }}
+
+    .social-top-container {{
+        display: flex; gap: 12px; align-items: center; margin-top: 10px; justify-content: center;
+    }}
+    .social-btn-top {{
+        display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; text-decoration: none !important; box-shadow: 0 3px 8px rgba(0,0,0,0.25); transition: transform 0.2s ease;
+    }}
+    .social-btn-top:hover {{ transform: scale(1.12); }}
+    .social-btn-top svg {{ width: 20px; height: 20px; fill: #ffffff; }}
+
+    .facebook-bg {{ background-color: #1877F2; }}
+    .whatsapp-bg {{ background-color: #25D366; }}
+    .telegram-bg {{ background-color: #229ED9; }}
+    .tiktok-bg   {{ background-color: #000000; border: 1px solid #444; }}
+    .youtube-bg  {{ background-color: #FF0000; }}
+
+    .subscription-card {{
+        background: {card_bg}; border: 2px solid #dbe4ef; border-radius: 22px; padding: 18px 18px 12px; text-align: center; box-shadow: 0 10px 28px rgba(15,23,42,.10); margin-bottom: 18px; overflow: hidden; position: relative;
+    }}
+    .subscription-card:hover {{ border-color: #10b981; box-shadow: 0 14px 34px rgba(5,150,105,.16); }}
+    .subscription-photo {{ width: 118px; height: 118px; border-radius: 50%; object-fit: cover; border: 5px solid #10b981; box-shadow: 0 7px 18px rgba(5,150,105,.22); margin: 2px auto 10px; display:block; }}
+    .subscription-icon {{ width: 118px; height: 118px; border-radius: 50%; background: #ecfdf5; display:flex; align-items:center; justify-content:center; font-size:50px; margin: 2px auto 10px; border:5px solid #10b981; }}
+    .subscription-title {{ color:#0f172a; font-size:20px; font-weight:900; margin:7px 0 4px; }}
+    .subscription-price {{ color:#ea580c; font-size:25px; font-weight:1000; margin:4px 0 10px; }}
+    .subscription-features {{ color:{text_color}; font-size:13px; font-weight:800; line-height:1.9; margin-bottom:8px; }}
+    .subscription-badge {{ display:inline-block; background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; border-radius:999px; padding:4px 12px; font-size:12px; font-weight:900; margin-bottom:5px; }}
+
+    .social-top-container {{
+        display: flex; gap: 12px; align-items: center; margin-top: 10px; justify-content: center;
+    }}
+    .social-btn-top {{
+        display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; text-decoration: none !important; box-shadow: 0 3px 8px rgba(0,0,0,0.25); transition: transform 0.2s ease;    }}
+    .social-btn-top:hover {{ transform: scale(1.12); }}
+    .social-btn-top svg {{ width: 20px; height: 20px; fill: #ffffff; }}
+
+    .facebook-bg {{ background-color: #1877F2; }}
+    .whatsapp-bg {{ background-color: #25D366; }}
+    .telegram-bg {{ background-color: #229ED9; }}
+    .tiktok-bg   {{ background-color: #000000; border: 1px solid #444; }}
+    .youtube-bg  {{ background-color: #FF0000; }}
+
+
+    .call-btn-container {{ display: flex; justify-content: center; margin-top: 25px; margin-bottom: 15px; width: 100%; }}
+    .call-btn {{
+        display: inline-flex; align-items: center; justify-content: center; gap: 12px; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff !important; padding: 14px 28px; border-radius: 50px; font-size: 18px; font-weight: 900; text-decoration: none !important; border: 2px solid #ffffff;
+    }}
+    .social-footer-box {{
+        margin-top: 25px; padding: 20px 0; border-top: 1px solid rgba(150, 150, 150, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;
+    }}
+    .rights-text {{ font-size: 16px; font-weight: 900; margin-top: 12px; text-align: center; color: {text_color}; }}
+
+    /* ===== الهوية الحديثة الموحدة للطالب والمعلم ===== */
+    [data-testid="stSidebar"] {{ background:linear-gradient(180deg,#0b1736 0%,#101f46 55%,#0b1736 100%) !important; }}
+    [data-testid="stSidebar"] * {{ color:#f8fafc !important; }}
+    [data-testid="stSidebar"] .stButton > button {{ background:transparent !important; border:1px solid transparent !important; box-shadow:none !important; color:#e5eefc !important; -webkit-text-fill-color:#e5eefc !important; border-radius:12px !important; text-align:right !important; justify-content:flex-start !important; min-height:44px !important; padding:9px 13px !important; margin:3px 0 !important; font-size:14px !important; }}
+    [data-testid="stSidebar"] .stButton > button:hover {{ background:rgba(37,99,235,.25) !important; border-color:rgba(96,165,250,.25) !important; color:#fff !important; -webkit-text-fill-color:#fff !important; }}
+    [data-testid="stSidebar"] hr {{ border-color:rgba(255,255,255,.12) !important; }}
+    .modern-topbar {{ background:#fff; border:1px solid #e5eaf2; border-radius:18px; padding:12px 18px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 6px 22px rgba(15,23,42,.06); direction:rtl; }}
+    .modern-brand {{ display:flex; align-items:center; gap:12px; }}
+    .modern-avatar {{ width:48px !important; height:48px !important; border-radius:50% !important; object-fit:cover !important; border:3px solid #2563eb !important; box-shadow:0 5px 14px rgba(37,99,235,.18); }}
+    .modern-hero {{ background:linear-gradient(135deg,#eaf4ff 0%,#f5f9ff 62%,#eef7ff 100%); border:1px solid #dbeafe; border-radius:24px; padding:28px 30px; min-height:170px; display:flex; align-items:center; justify-content:space-between; direction:rtl; box-shadow:0 10px 28px rgba(30,64,175,.07); margin-bottom:20px; }}
+    .modern-hero h1 {{ color:#0f2a5a !important; font-size:30px !important; margin:0 0 8px !important; font-weight:900 !important; }}
+    .modern-hero p {{ color:#51627d !important; font-size:15px !important; margin:0 !important; font-weight:700 !important; }}
+    .hero-art {{ width:180px; height:140px; display:flex; align-items:center; justify-content:center; font-size:82px; filter:drop-shadow(0 10px 10px rgba(15,23,42,.10)); }}
+    .modern-stats {{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:0 0 24px; direction:rtl; }}
+    .modern-stat {{ border-radius:18px; padding:17px 16px; min-height:105px; border:1px solid rgba(15,23,42,.05); box-shadow:0 6px 18px rgba(15,23,42,.05); }}
+    .modern-stat .icon {{ font-size:26px; margin-bottom:7px; }}
+    .modern-stat .num {{ font-size:27px; font-weight:900; line-height:1; color:#14213d !important; }}
+    .modern-stat .label {{ font-size:12px; font-weight:800; color:#55657d !important; margin-top:7px; }}
+    .stat-green {{ background:#ecfdf5; }} .stat-blue {{ background:#eff6ff; }} .stat-purple {{ background:#f5f3ff; }} .stat-yellow {{ background:#fffbeb; }}
+    .modern-section-title {{ display:flex; justify-content:space-between; align-items:center; direction:rtl; margin:8px 0 14px; }}
+    .modern-section-title h3 {{ margin:0 !important; color:#17233d !important; font-size:20px !important; }}
+    .modern-course-card {{ background:#fff; border:1px solid #e6ebf3; border-radius:18px; padding:18px; min-height:145px; box-shadow:0 7px 20px rgba(15,23,42,.05); direction:rtl; }}
+    .modern-course-card .course-icon {{ font-size:36px; }}
+    .modern-course-card h4 {{ margin:7px 0 4px; color:#1d3557 !important; font-size:17px; }}
+    .modern-course-card p {{ margin:0; color:#64748b !important; font-size:12px; font-weight:700; }}
+    @media (max-width:900px) {{ .modern-stats {{ grid-template-columns:repeat(2,1fr); }} .hero-art {{ width:120px; font-size:62px; }} .modern-hero h1 {{font-size:24px !important;}} }}
+    @media (max-width:600px) {{ .modern-stats {{ grid-template-columns:1fr 1fr; gap:9px; }} .modern-hero {{padding:20px;}} .hero-art {{display:none;}} }}
+    </style>
+""", unsafe_allow_html=True)
+
+# =============================================================================
+# الهوية البصرية الجديدة الشاملة — البشمهندس x الرياضه
+# نفس روح التصميم المرجعي: Navy + Electric Blue + White + Pastel cards
+# بدون تغيير منطق الصفحات أو قواعد البيانات أو المهام.
+# =============================================================================
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
+:root{--navy:#062b63;--navy2:#041f4a;--blue:#1677ff;--blue2:#0b5fe7;--sky:#eaf4ff;--ink:#0b2145;--muted:#64748b;--line:#dbe7f5;--card:#ffffff;}
+html,body,[class*="css"],.stApp,.stMarkdown,button,input,textarea,select{font-family:'Cairo',sans-serif!important}
+.stApp{background:linear-gradient(180deg,#f7fbff 0%,#eef6ff 48%,#f8fbff 100%)!important}
+.main .block-container{max-width:1500px!important;padding-top:1rem!important;padding-left:2rem!important;padding-right:2rem!important}
+[data-testid="stHeader"]{background:transparent!important}
+[data-testid="stSidebar"]{background:linear-gradient(180deg,var(--navy2),#063a7a 58%,var(--navy))!important;border-left:1px solid rgba(255,255,255,.08)!important}
+[data-testid="stSidebar"] *{color:#fff!important}
+[data-testid="stSidebar"] .stButton>button{background:transparent!important;border:1px solid transparent!important;box-shadow:none!important;border-radius:12px!important;min-height:43px!important;text-align:right!important;justify-content:flex-start!important;color:#dcecff!important;-webkit-text-fill-color:#dcecff!important;font-size:13px!important;font-weight:800!important;margin:3px 0!important}
+[data-testid="stSidebar"] .stButton>button:hover{background:rgba(22,119,255,.28)!important;border-color:rgba(96,165,250,.35)!important;color:#fff!important;-webkit-text-fill-color:#fff!important}
+[data-testid="stSidebar"] hr{border-color:rgba(255,255,255,.12)!important}
+[data-testid="stSidebar"] code{background:rgba(255,255,255,.08)!important;border:1px solid rgba(255,255,255,.1)!important;color:#dbeafe!important}
+.stButton>button{background:linear-gradient(135deg,#1677ff,#0b5fe7)!important;color:#fff!important;-webkit-text-fill-color:#fff!important;border:0!important;border-radius:12px!important;min-height:44px!important;font-weight:800!important;box-shadow:0 7px 18px rgba(22,119,255,.18)!important;transition:.2s!important}
+.stButton>button:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(22,119,255,.25)!important}
+.stFormSubmitButton>button{background:linear-gradient(135deg,#1677ff,#0b5fe7)!important;color:#fff!important;-webkit-text-fill-color:#fff!important;border:0!important}
+.stLinkButton>a{background:#1677ff!important;color:#fff!important;border-radius:12px!important;border:0!important}
+input,textarea,div[data-baseweb="select"]>div{border:1px solid #d5e3f3!important;border-radius:12px!important;background:#fff!important;min-height:42px!important}
+label{font-weight:800!important;color:#1e3a5f!important}
+[data-testid="stMetric"]{background:#fff;border:1px solid #e0eaf5;border-radius:18px;padding:15px!important;box-shadow:0 8px 22px rgba(20,58,100,.06)}
+[data-testid="stMetricValue"]{color:#125cc9!important;font-weight:900!important}
+[data-testid="stMetricLabel"]{color:#64748b!important;font-weight:800!important}
+.modern-topbar,.brandbar{background:#fff!important;border:1px solid #e1ebf6!important;border-radius:18px!important;box-shadow:0 8px 25px rgba(16,58,104,.07)!important}
+.modern-hero{background:linear-gradient(115deg,#062b63 0%,#0b56ad 62%,#1684ff 100%)!important;border:0!important;border-radius:26px!important;color:#fff!important;min-height:215px!important;box-shadow:0 16px 38px rgba(6,43,99,.20)!important;position:relative;overflow:hidden}
+.modern-hero:after{content:'✦  ✧  ∙  ✦  ∙  ✧';position:absolute;left:4%;top:12%;font-size:55px;color:rgba(255,255,255,.08);letter-spacing:22px;transform:rotate(-12deg)}
+.modern-hero h1,.modern-hero p{color:#fff!important;position:relative;z-index:2}
+.hero-art{position:relative;z-index:2!important}
+.modern-stat{background:#fff!important;border:1px solid #e1ebf6!important;min-height:105px!important;box-shadow:0 8px 22px rgba(20,58,100,.06)!important}
+.modern-stat .num{color:#125cc9!important}.modern-stat .label{color:#64748b!important}
+.stat-green{background:linear-gradient(180deg,#fff,#effcf7)!important}.stat-blue{background:linear-gradient(180deg,#fff,#eef6ff)!important}.stat-purple{background:linear-gradient(180deg,#fff,#f5f1ff)!important}.stat-yellow{background:linear-gradient(180deg,#fff,#fff8e8)!important}
+.modern-section-title h3{color:#0b2b57!important}
+.modern-course-card,.course-card,.subscription-card{background:#fff!important;border:1px solid #e0eaf5!important;box-shadow:0 9px 24px rgba(20,58,100,.06)!important;border-radius:18px!important}
+.modern-course-card h4,.course-title{color:#125cc9!important}
+.vertical-section-header{background:linear-gradient(135deg,#062b63,#1677ff)!important;border-radius:14px!important;box-shadow:0 8px 20px rgba(22,119,255,.14)!important}
+.exam-builder-header{background:linear-gradient(135deg,#0b5fe7,#1677ff)!important}
+.darssly-box{background:linear-gradient(135deg,#062b63,#1677ff)!important;border:0!important}
+.subscription-photo{border-color:#1677ff!important}.subscription-card:hover{border-color:#1677ff!important}
+.social-btn-top{background:#1677ff!important;border:0!important}.social-btn-top svg{fill:#fff!important}
+.facebook-bg,.whatsapp-bg,.telegram-bg,.tiktok-bg,.youtube-bg{background:#1677ff!important}
+/* landing */
+.landing-wrap{background:#fff;border:1px solid #dce8f6;border-radius:28px;overflow:hidden;box-shadow:0 18px 50px rgba(6,43,99,.12);margin:5px 0 25px}
+.landing-hero{background:linear-gradient(120deg,#041f4a 0%,#073c7c 55%,#0d70df 100%);min-height:410px;padding:42px;display:flex;align-items:center;direction:rtl;color:#fff;position:relative;overflow:hidden}
+.landing-hero:before{content:'';position:absolute;width:560px;height:560px;border-radius:50%;border:1px solid rgba(255,255,255,.09);left:-180px;top:-260px;box-shadow:0 0 0 35px rgba(255,255,255,.025),0 0 0 70px rgba(255,255,255,.018)}
+.landing-copy{flex:1;position:relative;z-index:2;text-align:right;padding:10px 25px}
+.landing-copy .brand-pill{display:inline-block;background:rgba(38,137,255,.25);border:1px solid rgba(147,197,253,.35);padding:6px 14px;border-radius:999px;font-size:12px;font-weight:900;margin-bottom:13px}
+.landing-copy h1{font-size:40px;line-height:1.35;margin:0 0 10px;color:#fff!important;font-weight:900}
+.landing-copy h1 span{color:#49a0ff!important}.landing-copy p{font-size:17px;line-height:2;color:#dbeafe!important;max-width:650px}
+.landing-features{display:flex;gap:14px;margin-top:22px;flex-wrap:wrap}.landing-feature{width:120px;text-align:center}.landing-feature .i{width:48px;height:48px;margin:auto;border-radius:14px;background:#1677ff;display:flex;align-items:center;justify-content:center;font-size:23px}.landing-feature div:last-child{font-size:11px;font-weight:800;color:#fff;margin-top:7px}
+.landing-photo{width:300px;height:340px;object-fit:cover;border-radius:26px;object-position:center top;border:4px solid rgba(255,255,255,.25);box-shadow:0 20px 45px rgba(0,0,0,.25);background:#0a3d7d}
+.landing-login{width:430px;background:rgba(255,255,255,.98);border-radius:22px;padding:25px;box-shadow:0 20px 50px rgba(0,0,0,.18);color:#0b2145;position:relative;z-index:3;margin:0 0 0 15px}
+.landing-login h2{color:#0b2b57!important;margin:0 0 4px;font-size:24px}.landing-login p{color:#64748b!important;font-size:12px;margin-bottom:16px}
+.login-tabs{display:flex;gap:8px;margin-bottom:15px}.login-tab{flex:1;padding:10px;border-radius:10px;text-align:center;background:#eef6ff;color:#125cc9!important;font-weight:900;font-size:13px}
+.about-panel{background:linear-gradient(180deg,#fff,#f5faff);border:1px solid #dce8f6;border-radius:22px;padding:22px;text-align:right;box-shadow:0 8px 25px rgba(20,58,100,.05)}
+.about-panel h3{color:#0b3b78!important;margin-top:0}.about-panel p{color:#526984!important;line-height:2;font-size:13px}
+/* logged dashboard */
+.dashboard-banner{background:linear-gradient(115deg,#062b63,#0c62c8);border-radius:22px;padding:22px 28px;color:#fff;display:flex;align-items:center;justify-content:space-between;overflow:hidden;box-shadow:0 14px 35px rgba(6,43,99,.16)}.dashboard-banner h2{color:#fff!important;margin:0 0 6px;font-size:25px}.dashboard-banner p{color:#dbeafe!important;margin:0;font-size:13px}.dashboard-banner img{width:120px;height:120px;object-fit:cover;border-radius:22px;border:3px solid rgba(255,255,255,.35)}
+.quick-card{background:#fff;border:1px solid #e0eaf5;border-radius:18px;padding:18px;min-height:135px;box-shadow:0 8px 22px rgba(20,58,100,.06)}
+.quick-card h4{color:#0b3b78!important;margin:0 0 6px}.quick-card p{color:#64748b!important;font-size:12px}
+@media(max-width:950px){.landing-hero{flex-direction:column;gap:25px;padding:28px}.landing-login{width:100%;margin:0}.landing-photo{width:210px;height:240px}.landing-copy{text-align:center}.landing-copy h1{font-size:30px}.landing-features{justify-content:center}.main .block-container{padding-left:1rem!important;padding-right:1rem!important}}
+.landing-welcome-row{display:flex;align-items:center;gap:12px;margin:0 0 8px;direction:rtl}
+.landing-welcome-row h2{color:#fff!important;font-size:22px!important;margin:0!important;font-weight:900!important}
+.landing-welcome-photo{width:58px;height:58px;border-radius:50%;object-fit:cover;object-position:center top;border:3px solid rgba(255,255,255,.75);box-shadow:0 8px 20px rgba(0,0,0,.25);background:#fff;flex:0 0 58px}
+.landing-auth-title{text-align:center;color:#64748b;font-size:12px;font-weight:900;margin:-5px auto 10px}
+/* تحويل زري الدخول والتسجيل الحقيقيين لشكل تبويبات التصميم، بدون أي نصوص HTML وهمية */
+button[data-testid="baseButton-primary"]{border-radius:11px!important;font-weight:900!important;min-height:44px!important}
+.landing-auth-title + div [data-testid="stButton"] button{border-radius:11px!important;min-height:44px!important;font-weight:900!important;border:1px solid #bcd4f0!important;box-shadow:none!important}
+
+/* ===== الوضع الداكن الحقيقي — يطبق بعد كل CSS السابق حتى لا تغلبه الألوان الثابتة ===== */
+__DARK_CSS_PLACEHOLDER__
+</style>
+""", unsafe_allow_html=True)
+
+if st.session_state.dark_mode:
+    _theme_css = """
+    .stApp, html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { background:#0b1220 !important; color:#e5e7eb !important; }
+    .main .block-container { background:transparent !important; }
+    .modern-topbar, .about-panel, .quick-card, .modern-course-card, .course-card, .subscription-card, [data-testid="stMetric"] { background:#111827 !important; border-color:#273449 !important; color:#e5e7eb !important; box-shadow:0 8px 24px rgba(0,0,0,.25) !important; }
+    .modern-topbar *, .about-panel *, .quick-card *, .modern-course-card *, .course-card *, .subscription-card *, [data-testid="stMetric"] * { color:#e5e7eb !important; }
+    .modern-topbar div[style*="color:#0f172a"], .modern-topbar div[style*="color: #0f172a"] { color:#f8fafc !important; }
+    .modern-hero { background:linear-gradient(135deg,#0f2a52,#123f78,#145bb3) !important; border-color:#1e3a5f !important; }
+    .modern-stat { background:#111827 !important; border-color:#273449 !important; }
+    .modern-stat .num, .modern-stat .label, .modern-section-title h3, .modern-course-card h4, .course-title { color:#f8fafc !important; }
+    .stat-green { background:#102b24 !important; } .stat-blue { background:#10243d !important; } .stat-purple { background:#221b3d !important; } .stat-yellow { background:#332a12 !important; }
+    .landing-wrap { background:#0f172a !important; border-color:#24324a !important; }
+    .about-panel { background:linear-gradient(180deg,#111827,#0f172a) !important; }
+    .about-panel h3 { color:#93c5fd !important; } .about-panel p { color:#cbd5e1 !important; }
+    .landing-login { background:#111827 !important; color:#f8fafc !important; border:1px solid #334155 !important; }
+    .landing-login h2 { color:#f8fafc !important; } .landing-login p { color:#cbd5e1 !important; }
+    .login-tab { background:#172554 !important; color:#93c5fd !important; border:1px solid #1e40af !important; }
+    .landing-auth-title { color:#cbd5e1 !important; }
+    .landing-auth-title + div [data-testid="stButton"] button { background:#172554 !important; color:#93c5fd !important; border-color:#1e40af !important; }
+    .landing-photo, .landing-welcome-photo { border-color:#60a5fa !important; }
+    .subscription-title { color:#f8fafc !important; } .subscription-features { color:#d1d5db !important; }
+    .subscription-badge { background:#052e2b !important; color:#6ee7b7 !important; border-color:#065f46 !important; }
+    input, textarea, div[data-baseweb="select"] > div, div[data-baseweb="input"] > div { background:#111827 !important; color:#f8fafc !important; border-color:#374151 !important; -webkit-text-fill-color:#f8fafc !important; }
+    input::placeholder, textarea::placeholder { color:#94a3b8 !important; }
+    label, .stMarkdown, .stText, p, span { color:#e5e7eb !important; }
+    [data-testid="stMetricValue"] { color:#93c5fd !important; } [data-testid="stMetricLabel"] { color:#cbd5e1 !important; }
+    .stSelectbox label, .stTextInput label, .stNumberInput label, .stDateInput label, .stTextArea label { color:#e5e7eb !important; }
+    div[data-baseweb="popover"], div[role="dialog"], div[data-baseweb="calendar"] { background:#111827 !important; color:#f8fafc !important; border-color:#374151 !important; }
+    div[data-baseweb="popover"] *, div[role="dialog"] *, div[data-baseweb="calendar"] * { color:#f8fafc !important; }
+    .stTabs [data-baseweb="tab-list"] { background:#0f172a !important; } .stTabs [data-baseweb="tab"] { color:#cbd5e1 !important; }
+    .stDataFrame, [data-testid="stDataFrame"] { background:#111827 !important; }
+    .stExpander { background:#111827 !important; border-color:#334155 !important; }
+    .stExpander summary, .stExpander summary span { color:#f8fafc !important; }
+    """
+else:
+    _theme_css = ""
+st.markdown(f"<style>{_theme_css}</style>", unsafe_allow_html=True)
+
+# شريط تنقل علوي احترافي للطالب والمعلم — بدون قائمة جانبية
+_nav_css = """
+<style>
+[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] { display:none !important; }
+.main .block-container { max-width:100% !important; padding-top:1rem !important; }
+.top-navigation-shell { position:sticky; top:0; z-index:999990; background:rgba(255,255,255,.94); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-bottom:1px solid rgba(148,163,184,.22); box-shadow:0 8px 28px rgba(15,23,42,.08); direction:rtl; }
+.top-navigation-title { font-size:12px; font-weight:900; color:#0f172a; white-space:nowrap; }
+.top-navigation-subtitle { font-size:10px; color:#64748b; white-space:nowrap; }
+.top-navigation-collapsed { display:flex; align-items:center; justify-content:center; min-height:48px; border-radius:16px; background:rgba(255,255,255,.95); border:1px solid rgba(148,163,184,.25); box-shadow:0 8px 22px rgba(15,23,42,.10); }
+div[data-testid="stPills"] { width:100% !important; }
+div[data-testid="stPills"] > div { gap:7px !important; overflow-x:auto !important; scrollbar-width:thin !important; padding:2px 2px 7px !important; }
+div[data-testid="stPills"] button { white-space:nowrap !important; border-radius:13px !important; min-height:38px !important; padding:6px 13px !important; font-weight:850 !important; border:1px solid rgba(148,163,184,.22) !important; transition:all .18s ease !important; }
+div[data-testid="stPills"] button:hover { transform:translateY(-1px) !important; box-shadow:0 7px 18px rgba(15,23,42,.10) !important; }
+div[role="radiogroup"] { overflow-x:auto !important; flex-wrap:nowrap !important; gap:7px !important; padding:2px 2px 7px !important; scrollbar-width:thin !important; }
+div[role="radiogroup"] label { white-space:nowrap !important; border-radius:13px !important; }
+@media (max-width:768px) { .main .block-container { padding-left:10px !important; padding-right:10px !important; } div[data-testid="stPills"] button { min-height:36px !important; padding:5px 10px !important; font-size:12px !important; } }
+</style>
+"""
+st.markdown(_nav_css, unsafe_allow_html=True)
+
+# ============================================================================== 
+# 1. واجهة الطالب الشاملة
+# ==============================================================================
+if is_student_mode:
+    # ===== شريط الطالب العلوي =====
+    _nav_open = st.session_state.student_sidebar_open
+    _toggle_col, _brand_col, _pills_col = st.columns([1.0, 2.2, 8.8], vertical_alignment="center")
+    with _toggle_col:
+        if st.button(("✕" if _nav_open else "☰"), key="student_sidebar_toggle", use_container_width=True, help="إظهار أو إخفاء شريط التنقل"):
+            st.session_state.student_sidebar_open = not st.session_state.student_sidebar_open
+            st.rerun()
+    with _brand_col:
+        st.markdown("<div class='top-navigation-title'>البشمهندس x الرياضه</div><div class='top-navigation-subtitle'>م/ محمد غنيم</div>", unsafe_allow_html=True)
+    with _pills_col:
+        if _nav_open:
+            if st.session_state.logged_student:
+                _student_nav = [("⌂ الرئيسية","dashboard"), ("🤖 اسأل حمصا","hamza"), ("▣ المقررات","videos"), ("▤ الواجبات","hw_grades"), ("◫ الجدول","attendance"), ("▥ النتائج","exam_grades"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__"), ("↪ خروج","__logout__")]
+                _student_current = st.session_state.student_sub_page
+            else:
+                _student_nav = [("⌂ الرئيسية","__home__"), ("🤖 اسأل حمصا","__hamza_public__"), ("👤 دخول","__login__"), ("✨ حساب جديد","__register__"), ("👥 ضيف","__guest__"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__")]
+                _student_current = st.session_state.page_view
+
+            # أزرار حقيقية بدل st.pills لضمان استجابة النقر على جميع إصدارات Streamlit Cloud.
+            _nav_cols = st.columns(len(_student_nav), gap="small")
+            for _ni, (_label, _target) in enumerate(_student_nav):
+                with _nav_cols[_ni]:
+                    _is_current = (_target == _student_current)
+                    if st.button(_label, key=f"student_top_nav_btn_{_ni}", use_container_width=True, type="primary" if _is_current else "secondary"):
+                        if _target == "__theme__":
+                            st.session_state.dark_mode = not st.session_state.dark_mode
+                        elif _target == "__logout__":
+                            st.session_state.logged_student=None; st.session_state.page_view="home"; st.session_state.student_sub_page="dashboard"; st.query_params.clear(); st.query_params["role"]="student"
+                        elif _target == "__home__": st.session_state.page_view="home"
+                        elif _target == "__hamza_public__": st.session_state.page_view="hamza_public"
+                        elif _target == "__login__": st.session_state.page_view="login"
+                        elif _target == "__register__": st.session_state.page_view="register"
+                        elif _target == "__guest__": st.session_state.page_view="guest_reg"
+                        elif st.session_state.logged_student:
+                            st.session_state.student_sub_page=_target
+                        st.rerun()
+        else:
+            st.markdown('<div class="top-navigation-collapsed"><span class="top-navigation-subtitle">شريط التنقل مخفي — اضغط ☰ لإظهاره</span></div>', unsafe_allow_html=True)
+
+    # صورة/أفاتار الشريط العلوي للطالب
+    _nav_uri = STUDENT_FIXED_IMAGE_URI
+    _nav_avatar_tag = f'<img src="{_nav_uri}" class="modern-avatar">' if _nav_uri else ''
+
+    _student_name_for_header = str(st.session_state.logged_student.get("اسم الطالب", "طالبنا العزيز")) if st.session_state.logged_student else "طالبنا العزيز"
+    _student_notifs = _app_notifications("student", _student_name_for_header if st.session_state.logged_student else "")
+    _student_notif_count = len(_student_notifs)
+    _top_a, _top_b = st.columns([10, 1])
+    with _top_a:
+        st.markdown(f"""
+            <div class="modern-topbar">
+                <div class="modern-brand">
+                    {_nav_avatar_tag}
+                    <div><div style="font-size:12px;color:#64748b!important;font-weight:800;">البشمهندس x الرياضه</div><div style="font-size:19px;color:#0f172a!important;font-weight:900;">مرحباً، {_student_name_for_header}</div></div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+    with _top_b:
+        if st.button(f"🔔 {_student_notif_count}", key="student_notifications_btn", use_container_width=True, help="عرض الإشعارات"):
+            st.session_state.student_notifications_open = not st.session_state.student_notifications_open
+            st.rerun()
+    if st.session_state.student_notifications_open:
+        _render_notification_box("student", _student_name_for_header if st.session_state.logged_student else "")
+
+    # --- أيقونات التواصل أعلى صفحة الطالب (إضافة جديدة بدون حذف الفوتر القديم) ---
+    st.markdown(f"""
+        <div class="social-top-container" style="justify-content:flex-start; margin-top:0; margin-bottom:12px; padding:8px 12px; background:{card_bg}; border:1px solid {card_border}; border-radius:14px;">
+            <a href="https://www.facebook.com/share/19fD41rV3H/" target="_blank" title="Facebook" class="social-btn-top facebook-bg"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+            <a href="https://wa.me/201016361440" target="_blank" title="WhatsApp" class="social-btn-top whatsapp-bg"><svg viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.599 2.669-.699c.971.53 1.77.822 2.791.823h.002c3.18 0 5.767-2.586 5.768-5.766 0-3.18-2.587-5.766-5.77-5.766zm9.969 5.828c0 5.519-4.481 10-10 10-1.761 0-3.424-.46-4.881-1.267l-5.619 1.474 1.499-5.485c-.911-1.516-1.43-3.285-1.43-5.176 0-5.519 4.481-10 10-10 5.519 0 10 4.481 10 10z"/></svg></a>
+            <a href="https://t.me/mrmaths22" target="_blank" title="Telegram" class="social-btn-top telegram-bg"><svg viewBox="0 0 24 24"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.121l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.832.942z"/></svg></a>
+            <a href="https://www.tiktok.com/@eng_mohamedghonaim?_r=1&_t=ZS-99VdklZPBUS" target="_blank" title="TikTok" class="social-btn-top tiktok-bg"><svg viewBox="0 0 24 24"><path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.068-.102a2.895 2.895 0 0 1 2.373-4.513c.277 0 .546.039.803.111V9.417a6.338 6.338 0 0 0-.803-.051C6.017 9.366 3.2 12.183 3.2 15.647 3.2 19.11 6.017 22 9.479 22c3.462 0 6.279-2.817 6.279-6.353V9.07c1.378.983 3.054 1.564 4.869 1.584V7.209a4.845 4.845 0 0 1-1.038-.523z"/></svg></a>
+            <a href="https://youtube.com/@engineermaths?si=8C6T808VuAU5OMOt" target="_blank" title="YouTube" class="social-btn-top youtube-bg"><svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.016 3.016 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+            <span style="font-weight:900; margin-right:8px; color:{text_color};">تابعنا وتواصل معنا</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.write("---")
+
+    if st.session_state.page_view == "guest_reg":
+        st.markdown(f"<h3 style='color: {text_color}; font-size: 24px;'>👥 تسجيل بياناتك كـ (ضيف جديد):</h3>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: {text_color}; font-size: 16px;'>أدخل اسمك، رقم هاتفك، ومنهجك لتظهر في سجلات المعلم فوراً:</p>", unsafe_allow_html=True)
+        
+        with st.form("guest_registration_form"):
+            g_name = st.text_input("اسم الطالب بالكامل:*", placeholder="مثال: كريم أحمد محمود")
+            g_phone = st.text_input("رقم الهاتف المحمول:*", placeholder="010XXXXXXXX")
+            g_curr = st.selectbox("المنهج الدراسي / الدولة:*", list(CURRICULUM_DATA.keys()))
+            g_grade = st.selectbox("المرحلة / الصف الدراسي:*", CURRICULUM_DATA[g_curr])
+            g_pass = st.text_input("اختر رقماً سرياً خاصاً بك:*", type="password", value="1234")
+            
+            c_g1, c_g2 = st.columns(2)
+            with c_g1:
+                submit_guest = st.form_submit_button("🚀 حفظ والدخول للمنصة")
+            with c_g2:
+                if st.form_submit_button("العودة للرئيسية"):
+                    st.session_state.page_view = "home"
+                    st.rerun()
+
+            if submit_guest:
+                if not g_name.strip() or not g_phone.strip():
+                    st.error("يرجى كتابة الاسم ورقم الهاتف على الأقل.")
+                else:
+                    new_guest_user = {
+                        "اسم الطالب": g_name.strip(),
+                        "رقم الهاتف": g_phone.strip(),
+                        "كلمة المرور": g_pass.strip(),
+                        "المنهج/الدولة": g_curr,
+                        "المجموعة/الصف": g_grade,
+                        "تاريخ التسجيل": str(date.today()),
+                        "الحالة_حظر": "نشط",
+                        "حالة_الاشتراك_البنك": "غير مشترك"
+                    }
+                    existing = st.session_state.users_df[st.session_state.users_df["رقم الهاتف"].astype(str).str.strip() == g_phone.strip()]
+                    if existing.empty:
+                        st.session_state.users_df = pd.concat([st.session_state.users_df, pd.DataFrame([new_guest_user])], ignore_index=True)
+                    else:
+                        st.session_state.users_df.loc[st.session_state.users_df["رقم الهاتف"].astype(str).str.strip() == g_phone.strip(), ["اسم الطالب", "المنهج/الدولة", "المجموعة/الصف"]] = [g_name.strip(), g_curr, g_grade]
+                    
+                    save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                    
+                    st.session_state.logged_student = new_guest_user
+                    st.query_params["role"] = "student"
+                    st.query_params["st_phone"] = g_phone.strip()
+                    st.success(f"أهلاً بك يا {g_name.strip()}! تم تسجيل بياناتك بنجاح في سجلات المعلم.")
+                    st.rerun()
+
+    elif not st.session_state.logged_student:
+        if st.session_state.page_view == "hamza_public":
+            st.markdown("""
+            <div style="background:linear-gradient(135deg,#062b63,#1677ff);color:#fff;border-radius:24px;padding:28px 24px;margin-bottom:18px;direction:rtl;text-align:right;box-shadow:0 14px 35px rgba(6,43,99,.18);">
+                <div style="font-size:13px;opacity:.9;">البشمهندس x الرياضه</div>
+                <h1 style="margin:5px 0;font-size:30px;color:#fff;">🤖 اسأل حمصا</h1>
+                <p style="margin:0;color:#dbeafe;font-size:15px;">حل مسألتك بالتصوير أو الكتابة أو رفع صفحة من الكتاب — بدون تسجيل دخول.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("⬅️ رجوع للواجهة الرئيسية", key="hamza_public_back", use_container_width=True):
+                st.session_state.page_view="home"
+                st.rerun()
+
+            if "hamza_public_history" not in st.session_state:
+                st.session_state.hamza_public_history=[]
+            if "hamza_public_last" not in st.session_state:
+                st.session_state.hamza_public_last=None
+
+            with st.container(border=True):
+                st.markdown("### 📷 صوّر المسألة من داخل الموقع")
+                cam=st.camera_input("افتح الكاميرا وصوّر المسألة", key="hamza_public_camera")
+                st.markdown("### 🖼️ أو ارفع صورة / 📄 PDF")
+                up=st.file_uploader("ارفع المسألة أو صفحة من الكتاب", type=["png","jpg","jpeg","webp","pdf"], key="hamza_public_upload")
+                qtext=st.text_area("✍️ أو اكتب المسألة هنا", height=150, placeholder="مثال: أوجد قيمة س إذا كان 2س + 5 = 17", key="hamza_public_text")
+                if cam is not None:
+                    st.image(cam, caption="الصورة التي التقطتها", use_container_width=True)
+                elif up is not None and str(up.type).startswith("image/"):
+                    st.image(up, caption="الصورة المرفوعة", use_container_width=True)
+
+                p1,p2=st.columns(2)
+                with p1:
+                    solve=st.button("🧠 حل المسألة مع حمصا", use_container_width=True, type="primary", key="hamza_public_solve")
+                with p2:
+                    clear=st.button("🗑️ مسح", use_container_width=True, key="hamza_public_clear")
+
+                if clear:
+                    st.session_state.hamza_public_history=[]
+                    st.session_state.hamza_public_last=None
+                    st.rerun()
+
+                if solve:
+                    media=[]
+                    source=cam if cam is not None else up
+                    if source is not None:
+                        try:
+                            raw=source.getvalue()
+                            mime=str(getattr(source,"type","") or "image/jpeg")
+                            media=[{"mime":mime,"data":base64.b64encode(raw).decode("ascii")}]
+                        except Exception:
+                            media=[]
+                    if not qtext.strip() and not media:
+                        st.warning("اكتب المسألة أو صوّرها/ارفعها أولاً.")
+                    else:
+                        try:
+                            with st.spinner("🤖 حمصا يقرأ المسألة ويحلها..."):
+                                result=_hamza_ai_call(qtext,media,st.session_state.hamza_public_history)
+                            answer=str(result.get("answer","")).strip()
+                            final_answer=str(result.get("final_answer","")).strip()
+                            topic=str(result.get("topic","رياضيات")).strip()
+                            st.session_state.hamza_public_last={"question":qtext.strip() or "المسألة المرفقة","answer":answer,"final_answer":final_answer,"topic":topic}
+                            st.session_state.hamza_public_history.append({"student":qtext.strip() or "حل المسألة من الصورة المرفقة","assistant":answer})
+                        except Exception as exc:
+                            code=str(exc)
+                            if "AI_KEY_MISSING" in code:
+                                st.error("⚠️ حمصا غير مفعّل حالياً.")
+                            elif "AI_RATE_LIMIT" in code:
+                                st.warning("⏳ حمصا مشغول حالياً بسبب حد الاستخدام. حاول مرة أخرى بعد قليل.")
+                            elif "AI_BUSY" in code:
+                                st.warning("🔄 حمصا مشغول حالياً. اضغط مرة أخرى بعد لحظات.")
+                            else:
+                                st.error("❌ حمصا لم يستطع معالجة الطلب حالياً. أعد المحاولة بعد لحظات؛ وإذا استمرت المشكلة سنعرف السبب من سجل الخطأ.")
+
+            last=st.session_state.get("hamza_public_last")
+            if last:
+                st.markdown("### 🧠 حل حمصا")
+                st.markdown(f"<div style='background:{card_bg};border:1px solid {card_border};border-right:5px solid #1677ff;border-radius:16px;padding:20px;line-height:2;direction:rtl;'><b>🧠 الحل خطوة بخطوة</b></div>", unsafe_allow_html=True)
+                st.markdown(str(last.get('answer','')).strip())
+                st.markdown("<div style='background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:15px;margin-top:12px;direction:rtl;'><b>✅ الإجابة النهائية</b></div>", unsafe_allow_html=True)
+                st.markdown(str(last.get('final_answer','')).strip())
+                phtml=_hamza_pdf_html(last.get("question",""),last.get("answer",""),last.get("final_answer",""),"طالب")
+                ppdf=html_to_pdf_bytes(phtml)
+                if ppdf:
+                    st.download_button("🖨️ طباعة / تحميل الحل PDF",ppdf,file_name="حل_المسألة_حمصا.pdf",mime="application/pdf",use_container_width=True,key="hamza_public_pdf")
+                else:
+                    st.download_button("🖨️ طباعة الحل",phtml.encode("utf-8"),file_name="حل_المسألة_حمصا.html",mime="text/html",use_container_width=True,key="hamza_public_html")
+                follow=st.text_input("💬 عندك سؤال عن خطوة معينة؟",key="hamza_public_follow")
+                if st.button("↩️ اسأل حمصا عن الخطوة دي",use_container_width=True,key="hamza_public_follow_btn") and follow.strip():
+                    try:
+                        with st.spinner("🤖 حمصا يشرح لك أكثر..."):
+                            result=_hamza_ai_call(follow,[],st.session_state.hamza_public_history)
+                        ans=str(result.get("answer","")).strip()
+                        fa=str(result.get("final_answer","")).strip()
+                        st.session_state.hamza_public_last["answer"] += "\n\n— متابعة الطالب —\n"+ans
+                        if fa: st.session_state.hamza_public_last["final_answer"]=fa
+                        st.session_state.hamza_public_history.append({"student":follow.strip(),"assistant":ans})
+                        st.rerun()
+                    except Exception:
+                        st.error("تعذر إرسال المتابعة حالياً. حاول مرة أخرى.")
+
+        elif st.session_state.page_view == "home":
+            _ui_df = st.session_state.get("student_interface_df", pd.DataFrame())
+            si = _ui_df.iloc[0].to_dict() if not _ui_df.empty else {}
+            ui_title = str(si.get("عنوان_الواجهة", "أهلاً بيكم منورين المنصة! 🚀"))
+            ui_badge = str(si.get("الشارة", "البشمهندس x الرياضه"))
+            ui_desc = str(si.get("الوصف", "منصة تعليمية متكاملة متخصصة في الرياضيات والإحصاء، تجمع الشرح والتدريب والاختبارات والمتابعة في مكان واحد."))
+            ui_main_b64 = str(si.get("صورة_الواجهة_base64", "") or "").strip() or STUDENT_FIXED_IMAGE_B64
+            ui_main_uri = STUDENT_FIXED_IMAGE_URI if STUDENT_FIXED_IMAGE_B64 else (teacher_image_data_uri(ui_main_b64) if ui_main_b64 else "")
+            ui_booking_title = str(si.get("عنوان_الحجز", "📅 احجز حصتك أونلاين مع م/ محمد غنيم"))
+            ui_booking_text = str(si.get("نص_الحجز", "احجز موعدك وتابع حصصك ومواعيد Zoom من داخل المنصة."))
+
+            # الصفحة الرئيسية الجديدة: Hero + صورة المعلم + بطاقة الدخول/التسجيل بنفس التصميم المرجعي
+            st.markdown(f"""
+            <div class="landing-wrap">
+              <div class="landing-hero">
+                <div class="landing-copy">
+                  <div class="brand-pill">{ui_badge}</div>
+                  <h1>منصة <span>البشمهندس x الرياضه</span></h1>
+                  <div class="landing-welcome-row">
+                    <img class="landing-welcome-photo" src="{STUDENT_FIXED_IMAGE_URI}" alt="م/ محمد غنيم">
+                    <h2>{ui_title}</h2>
+                  </div>
+                  <h3 style="margin:8px 0 4px;">{html.escape(str(si.get("عنوان_البطل", "رحلتك نحو التفوق في الرياضيات تبدأ من هنا")))}</h3>
+                  <p>{html.escape(str(si.get("وصف_البطل", "شرح مبسط، تدريب مستمر، اختبارات ومتابعة تساعدك توصل لهدفك.")))}</p>
+                  <div class="landing-features">
+                    <div class="landing-feature"><div class="i">▶</div><div>{html.escape(str(si.get("ميزة_1", "شرح مبسط وتفاعلي")))}</div></div>
+                    <div class="landing-feature"><div class="i">▣</div><div>{html.escape(str(si.get("ميزة_2", "اختبارات وتقييم مستمر")))}</div></div>
+                    <div class="landing-feature"><div class="i">↗</div><div>{html.escape(str(si.get("ميزة_3", "متابعة مستوى الطالب")))}</div></div>
+                    <div class="landing-feature"><div class="i">◉</div><div>{html.escape(str(si.get("ميزة_4", "دعم فني ومساعدة")))}</div></div>
+                  </div>
+                </div>
+                <img class="landing-photo" src="{ui_main_uri}" alt="م/ محمد غنيم">
+                <div class="landing-login">
+                  <h2>مرحباً بك في منصة</h2>
+                  <h2>البشمهندس x الرياضه</h2>
+                  <p>اختر ما يناسبك لبدء رحلتك التعليمية</p>
+                  <div class="login-tabs-placeholder"></div>
+                </div>
+              </div>
+            </div>
+            <div class="about-panel">
+              <h3>نبذة عن المنصة</h3>
+              <p>{ui_desc}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            # أزرار الدخول والتسجيل هنا هي عناصر Streamlit حقيقية وقابلة للضغط.
+            # تم حذف النصوص HTML القديمة حتى لا تظهر كأنها أزرار غير فعالة.
+            st.markdown("<div class='landing-auth-title'>اختر ما يناسبك لبدء رحلتك التعليمية</div>", unsafe_allow_html=True)
+            c_home_b1,c_home_b2,c_home_b3=st.columns(3)
+            with c_home_b1:
+                if st.button("تسجيل الدخول", key="landing_login_btn", use_container_width=True, type="primary"):
+                    st.session_state.page_view="login"
+                    st.rerun()
+            with c_home_b2:
+                if st.button("إنشاء حساب جديد", key="landing_register_btn", use_container_width=True):
+                    st.session_state.page_view="register"
+                    st.rerun()
+            with c_home_b3:
+                if st.button("👥 الدخول كضيف", key="landing_guest_btn", use_container_width=True):
+                    st.session_state.page_view="guest_reg"
+                    st.rerun()
+            st.markdown("""
+            <div style="background:linear-gradient(135deg,#062b63,#1677ff);border-radius:20px;padding:20px 24px;margin:18px 0;color:#fff;direction:rtl;box-shadow:0 12px 30px rgba(6,43,99,.16);">
+                <div style="font-size:28px;font-weight:900;">🤖 اسأل حمصا</div>
+                <div style="font-size:14px;opacity:.92;margin-top:5px;">حل مسألتك بالتصوير 📷 أو بالكتابة ✍️ — بدون تسجيل دخول</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("🚀 ابدأ مع حمصا الآن", key="public_hamza_landing_btn", use_container_width=True, type="primary"):
+                st.session_state.page_view="hamza_public"
+                st.rerun()
+            render_student_ads()
+            st.markdown("### 📚 ماذا ستجد داخل المنصة؟")
+            cc1,cc2,cc3,cc4=st.columns(4)
+            for cc,icon,title,desc in [(cc1,"▣","المقررات والشروحات","فيديوهات منظمة حسب المرحلة"),(cc2,"✦","الاختبارات","اختبارات ونتائج وتقييم"),(cc3,"◫","الجدول والحصص","Zoom والحصص والمتابعة"),(cc4,"◈","درسلي","باقات تعليمية ومتابعة")]:
+                with cc: st.markdown(f"<div class='modern-course-card'><div class='course-icon'>{icon}</div><h4>{title}</h4><p>{desc}</p></div>",unsafe_allow_html=True)
+            st.write("---")
+            render_darssly_cards("home")
+            st.markdown(f"<div class='vertical-section-header'>{ui_booking_title}</div>", unsafe_allow_html=True)
+            if ui_booking_text.strip(): st.markdown(f"<p style='text-align:center;font-weight:800;line-height:1.8;color:#526984'>{ui_booking_text}</p>", unsafe_allow_html=True)
+            with st.form("online_booking_form", clear_on_submit=True):
+                book_name = st.text_input("اسم الطالب بالكامل:")
+                book_curr = st.selectbox("اختر المنهج الدراسي / الدولة:", list(CURRICULUM_DATA.keys()), key="book_c")
+                book_grade = st.selectbox("المرحلة / الصف الدراسي:", CURRICULUM_DATA[book_curr], key="book_g")
+                book_phone = st.text_input("رقم هاتف الطالب:")
+                book_parent_phone = st.text_input("رقم تليفون ولي الأمر:")
+                if st.form_submit_button("إرسال طلب الحجز"):
+                    if not book_name.strip() or not book_phone.strip(): st.error("يرجى كتابة اسم الطالب ورقم الهاتف على الأقل.")
+                    else:
+                        new_booking={"تاريخ_الحجز":str(date.today()),"اسم الطالب":book_name.strip(),"المنهج_الدولة":book_curr,"المرحلة_الصف":book_grade,"رقم_الهاتف":book_phone.strip(),"رقم_ولي_الأمر":book_parent_phone.strip(),"الحالة":"قيد المتابعة"}
+                        st.session_state.bookings_df=pd.concat([st.session_state.bookings_df,pd.DataFrame([new_booking])],ignore_index=True)
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.success("✓ تم إرسال طلب الحجز بنجاح!")
+
+        elif st.session_state.page_view == "login":
+            st.markdown("<div class='about-panel' style='max-width:760px;margin:auto;text-align:center'><h3>🔐 تسجيل الدخول</h3><p>ادخل إلى حسابك في البشمهندس x الرياضه وتابع دروسك ونتائجك.</p></div>", unsafe_allow_html=True)
+            with st.form("student_login_form"):
+                login_phone = st.text_input("رقم الهاتف المحمول المسجل:")
+                login_pass = st.text_input("الرقم السري الخاص بك:", type="password")
+                c_l1, c_l2 = st.columns(2)
+                with c_l1: submit_login = st.form_submit_button("تسجيل الدخول")
+                with c_l2:
+                    if st.form_submit_button("العودة للرئيسية"): st.session_state.page_view="home"; st.rerun()
+                if submit_login:
+                    users_match=st.session_state.users_df[(st.session_state.users_df["رقم الهاتف"].astype(str).str.strip()==login_phone.strip())&(st.session_state.users_df["كلمة المرور"].astype(str).str.strip()==login_pass.strip())]
+                    if not users_match.empty:
+                        user_info=users_match.iloc[0].to_dict()
+                        if user_info.get("الحالة_حظر")=="محظور": st.error("🚫 تم حظر هذا الحساب من قبل المعلم.")
+                        else:
+                            st.session_state.logged_student=user_info; st.query_params["role"]="student"; st.query_params["st_phone"]=user_info["رقم الهاتف"]
+                            st.success(f"مرحباً بك مجدداً يا {user_info['اسم الطالب']}!"); st.rerun()
+                    else: st.error("رقم الهاتف أو الرقم السري غير صحيح.")
+
+        elif st.session_state.page_view == "register":
+            st.markdown("<div class='about-panel' style='max-width:820px;margin:auto;text-align:center'><h3>✨ إنشاء حساب جديد</h3><p>أنشئ حسابك مجاناً وابدأ رحلتك التعليمية مع البشمهندس x الرياضه.</p></div>", unsafe_allow_html=True)
+            with st.form("student_register_form"):
+                reg_name=st.text_input("اسمك بالكامل:"); reg_phone=st.text_input("رقم الهاتف المحمول (لتسجيل الدخول به لاحقاً):*")
+                reg_curr=st.selectbox("المنهج الدراسي / الدولة:",list(CURRICULUM_DATA.keys())); reg_grade=st.selectbox("المرحلة / الصف الدراسي:",CURRICULUM_DATA[reg_curr]); reg_pass=st.text_input("اختر رقماً سرياً خاصاً بك:",type="password")
+                c_r1,c_r2=st.columns(2)
+                with c_r1: submit_reg=st.form_submit_button("إنشاء الحساب")
+                with c_r2:
+                    if st.form_submit_button("العودة للرئيسية"): st.session_state.page_view="home"; st.rerun()
+                if submit_reg:
+                    if not reg_name.strip() or not reg_phone.strip() or not reg_pass.strip(): st.error("يرجى ملء جميع الحقول المطلوبة.")
+                    else:
+                        existing=st.session_state.users_df[st.session_state.users_df["رقم الهاتف"].astype(str).str.strip()==reg_phone.strip()]
+                        if not existing.empty: st.warning("رقم الهاتف هذا مسجل بالفعل! يرجى تسجيل الدخول مباشرة برقم هاتفك.")
+                        else:
+                            new_user={"اسم الطالب":reg_name.strip(),"رقم الهاتف":reg_phone.strip(),"كلمة المرور":reg_pass.strip(),"المنهج/الدولة":reg_curr,"المجموعة/الصف":reg_grade,"تاريخ التسجيل":str(date.today()),"الحالة_حظر":"نشط","حالة_الاشتراك_البنك":"غير مشترك"}
+                            st.session_state.users_df=pd.concat([st.session_state.users_df,pd.DataFrame([new_user])],ignore_index=True)
+                            save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                            st.session_state.logged_student=new_user; st.query_params["role"]="student"; st.query_params["st_phone"]=new_user["رقم الهاتف"]
+                            st.success(f"تم إنشاء حسابك بنجاح يا {reg_name}!"); st.rerun()
+
+        st.markdown("<div class='vertical-section-header'>🎥 حصص سريعة وملخصات هامة في أقل من دقيقة</div>", unsafe_allow_html=True)
+        col_vid1, col_vid2, col_vid3 = st.columns([1, 2, 1])
+        with col_vid2:
+            st.video("https://www.youtube.com/watch?v=6PleAxZCNZM")
+
+    else:
+        st_user = st.session_state.logged_student
+
+        # تحميل إعدادات واجهة الطالب داخل صفحة الطالب المسجل أيضاً.
+        # هذا يمنع خطأ NameError ويضمن استمرار ظهور اشتراكات درسلي وصور الواجهة.
+        _student_ui_df = st.session_state.get("student_interface_df", pd.DataFrame())
+        si = _student_ui_df.iloc[0].to_dict() if not _student_ui_df.empty else {}
+        if not si:
+            try:
+                _student_ui_df = load_student_interface()
+                if _student_ui_df is not None and not _student_ui_df.empty:
+                    st.session_state.student_interface_df = _student_ui_df
+                    si = _student_ui_df.iloc[0].to_dict()
+            except Exception:
+                si = {}
+
+        # فلترة ذكية ومرنة لمرحلة الطالب بصرف النظر عن أي فروق بسيطة في الأحرف أو الأقواس
+        user_grade_raw = str(st_user.get("المجموعة/الصف", "")).strip()
+        user_grade_clean = user_grade_raw.split("(")[0].strip().lower()
+
+        fresh_user = st.session_state.users_df[st.session_state.users_df["رقم الهاتف"].astype(str).str.strip() == str(st_user.get("رقم الهاتف", "")).strip()]
+        if not fresh_user.empty and fresh_user.iloc[0].get("الحالة_حظر") == "محظور":
+            st.error("🚫 عذراً، تم حظر حسابك.")
+            st.session_state.logged_student = None
+            st.query_params.clear()
+            st.query_params["role"] = "student"
+            st.rerun()
+
+        col_u1, col_u2 = st.columns([4, 1])
+        with col_u1:
+            st.markdown(f"""
+                <div style="background: {card_bg}; padding: 14px 20px; border-radius: 12px; border-right: 5px solid #10b981; margin-bottom: 20px; border: 1px solid {card_border};">
+                    <h3 style="margin: 0; color: #059669; font-size: 20px;">أهلاً بك: {st_user['اسم الطالب']} 🌟</h3>
+                    <p style="margin: 4px 0 10px 0; font-weight: 900; color: {text_color}; font-size: 16px;">{st_user.get('المنهج/الدولة', '')} | {st_user.get('المجموعة/الصف', '')} | الهاتف: {st_user.get('رقم الهاتف', '')}</p>
+                </div>
+            """, unsafe_allow_html=True)
+        with col_u2:
+            st.write("")
+            if st.button("🚪 خروج"):
+                st.session_state.logged_student = None
+                st.session_state.page_view = "home"
+                st.query_params.clear()
+                st.query_params["role"] = "student"
+                st.rerun()
+
+        # ===== زر حمصا الجانبي للطالب =====
+        _hamza_side_cols = st.columns([1.2, 8.8, 1.2])
+        with _hamza_side_cols[0]:
+            if st.button("🤖\nاسأل حمصا", key="student_hamza_side_btn", use_container_width=True, type="primary"):
+                st.session_state.student_sub_page = "hamza"
+                st.rerun()
+        st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+
+        # ===== لوحة الطالب المسجل: نفس الهوية البصرية مع إبقاء كل الأقسام القديمة =====
+        st.markdown(f"""
+            <div class="modern-hero">
+                <div>
+                    <div style="display:inline-block;background:#2563eb;color:#fff!important;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:900;margin-bottom:10px;">البشمهندس x الرياضه</div>
+                    <h1>أهلاً بك، {st_user['اسم الطالب']} 👋</h1>
+                    <p>{st_user.get('المنهج/الدولة','')} • {st_user.get('المجموعة/الصف','')} • نتمنى لك رحلة تعلم ممتعة ومثمرة</p>
+                </div>
+                <div class="hero-art">📚🎓</div>
+            </div>
+        """,unsafe_allow_html=True)
+        _student_key_for_stats=str(st_user.get("اسم الطالب", "")).strip().lower()
+        _my_hw=len(st.session_state.assessments_df[st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip().str.lower()==_student_key_for_stats]) if "اسم الطالب" in st.session_state.assessments_df.columns else 0
+        _my_exams=len(st.session_state.exams_df)
+        _my_sched=len(st.session_state.online_schedule_df[st.session_state.online_schedule_df["اسم الطالب"].astype(str).str.strip().str.lower()==_student_key_for_stats]) if "اسم الطالب" in st.session_state.online_schedule_df.columns else 0
+        st.markdown(f"""
+            <div class="modern-stats">
+                <div class="modern-stat stat-green"><div class="icon">📝</div><div class="num">{_my_hw}</div><div class="label">الواجبات والمهام</div></div>
+                <div class="modern-stat stat-blue"><div class="icon">🧠</div><div class="num">{_my_exams}</div><div class="label">الاختبارات المتاحة</div></div>
+                <div class="modern-stat stat-purple"><div class="icon">💻</div><div class="num">{_my_sched}</div><div class="label">حصص Zoom</div></div>
+                <div class="modern-stat stat-yellow"><div class="icon">📅</div><div class="num">{len(st.session_state.weekly_schedule_df[st.session_state.weekly_schedule_df["اسم الطالب"].astype(str).str.strip().str.lower()==_student_key_for_stats]) if "اسم الطالب" in st.session_state.weekly_schedule_df.columns else 0}</div><div class="label">المواعيد الأسبوعية</div></div>
+            </div>
+        """,unsafe_allow_html=True)
+        # --- جدول الأونلاين وزوم مع التايمر ---
+        st.markdown("<div class='vertical-section-header'>💻 حصص الأونلاين وجدول زوم الخاص بي</div>", unsafe_allow_html=True)
+        student_name_str = str(st_user.get("اسم الطالب", "")).strip()
+        os_df = st.session_state.online_schedule_df
+        st_sched = os_df[os_df["اسم الطالب"].astype(str).str.strip().str.lower() == student_name_str.lower()]
+
+        if st_sched.empty:
+            st.info("لا توجد حصص أونلاين مسجلة في الجدول المخصص لك حالياً.")
+        else:
+            for _, s_row in st_sched.iterrows():
+                academy_name = s_row.get("اسم الأكاديمية", "أكاديمية البشمهندس")
+                sched_grade = s_row["المجموعة/الصف"]
+                sched_sup_phone = s_row["رقم مشرف الأكاديمية"]
+                sched_price = s_row["سعر الحصة"]
+                sched_date = s_row.get("تاريخ الحصة", str(date.today()))
+                sched_time = s_row.get("ساعة الحصة", "18:00")
+                zoom_link = s_row["رابط زوم"]
+                zoom_status = s_row["حالة فتح الحصة"]
+
+                try:
+                    target_dt = datetime.strptime(f"{sched_date} {sched_time}", "%Y-%m-%d %H:%M")
+                    now_dt = datetime.now()
+                    diff_seconds = int((target_dt - now_dt).total_seconds())
+                except Exception:
+                    diff_seconds = -1
+
+                timer_text = ""
+                if diff_seconds > 0:
+                    d_days = diff_seconds // 86400
+                    d_hours = (diff_seconds % 86400) // 3600
+                    d_mins = (diff_seconds % 3600) // 60
+                    d_secs = diff_seconds % 60
+                    if d_days > 0:
+                        timer_text = f"⏳ باقي على الحصة: {d_days} يوم و {d_hours} ساعة و {d_mins} دقيقة"
+                    else:
+                        timer_text = f"⏳ باقي على الحصة: {d_hours:02d}:{d_mins:02d}:{d_secs:02d}"
+                elif diff_seconds == 0:
+                    timer_text = "🟢 وقت الحصة الآن!"
+                else:
+                    timer_text = "📌 موعد الحصة قد حان أو انتهى."
+
+                st.markdown(f"""
+                    <div style="background:{card_bg}; border:2px solid #0284c7; border-radius:14px; padding:20px; margin-bottom:15px;">
+                        <h4 style="color:#0284c7; margin-top:0;">🏛️ الأكاديمية: {academy_name} | المرحلة: {sched_grade}</h4>
+                        <p style="font-size:16px; margin:4px 0;"><b>📅 موعد الحصة:</b> {sched_date} في تمام الساعة {sched_time}</p>
+                        <p style="font-size:16px; margin:4px 0; color:#d97706;"><b>{timer_text}</b></p>
+                        <p style="font-size:16px; margin:4px 0;"><b>💰 سعر الحصة:</b> {sched_price} جنيه</p>
+                        <p style="font-size:16px; margin:4px 0;"><b>📞 رقم مشرف الأكاديمية:</b> {sched_sup_phone}</p>
+                        <p style="font-size:16px; margin:4px 0;"><b>حالة الحصة الحالية:</b> <span style="color: {'#16a34a' if zoom_status == 'مفتوحة' else '#dc2626'};"><b>{zoom_status}</b></span></p>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                if zoom_status == "مفتوحة":
+                    if zoom_link and zoom_link != "nan":
+                        st.link_button("🚀 انضم الآن إلى حصة زوم (الحصة مفتوحة) 🟢", zoom_link, use_container_width=True)
+                    else:
+                        st.link_button("🚀 انضم الآن إلى حصة زوم 🟢", "https://us05web.zoom.us/j/83526892910?pwd=2jWRgATgBRPbXttdnm0QpLwBApsZL4.1", use_container_width=True)
+                else:
+                    st.warning("⏳ الحصة مغلقة حالياً. سيتم فتحها من قبل المعلم في موعدها المحدد.")
+
+        # --- موعد الطالب الأسبوعي المرتبط بملف الطالب ---
+        student_weekly = st.session_state.weekly_schedule_df[st.session_state.weekly_schedule_df["اسم الطالب"].astype(str).str.strip().str.lower() == student_name_str.lower()]
+        if not student_weekly.empty:
+            st.markdown("<div class='vertical-section-header'>🗓️ مواعيدي الأسبوعية</div>", unsafe_allow_html=True)
+            for _, wr in student_weekly.iterrows():
+                w_color = str(wr.get("اللون", "#2563eb"))
+                st.markdown(f"""<div style='border-right:6px solid {w_color};background:{card_bg};border:1px solid {card_border};border-radius:12px;padding:14px;margin-bottom:10px;'>
+                <b>📅 {wr.get('اليوم','')} — ⏰ {wr.get('الموعد','')}</b><br>
+                🏛️ الأكاديمية: {wr.get('اسم الأكاديمية','')} | 📚 {wr.get('المنهج/الدولة','')} — {wr.get('المجموعة/الصف','')}<br>
+                💰 سعر الحصة: {wr.get('سعر الحصة',0)} جنيه | 📞 مشرف الأكاديمية: {wr.get('رقم مشرف الأكاديمية','')}
+                </div>""", unsafe_allow_html=True)
+
+        # --- اشتراكات درسلي داخل منصة الطالب ---
+        # تصميم بطاقات مختصر وواضح، مع الأسعار المحددة لكل مرحلة وروابط الاشتراك الحالية.
+        darssly_subscriptions = [
+            {
+                "badge": "باقة شهرية",
+                "title": "باقة أولى إعدادي",
+                "grade": "الصف الأول الإعدادي",
+                "price": "200",
+                "icon": "📘",
+                "accent": "#f59e0b",
+                "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim-3/plans",
+            },
+            {
+                "badge": "باقة شهرية",
+                "title": "باقة ثانية إعدادي",
+                "grade": "الصف الثاني الإعدادي",
+                "price": "200",
+                "icon": "📗",
+                "accent": "#10b981",
+                "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim/plans",
+            },
+            {
+                "badge": "باقة شهرية",
+                "title": "باقة ثالثة إعدادي",
+                "grade": "الصف الثالث الإعدادي",
+                "price": "200",
+                "icon": "📕",
+                "accent": "#8b5cf6",                "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim-2/plans",
+            },
+            {
+                "badge": "باقة شهرية",
+                "title": "إحصاء ثالثة ثانوي",
+                "grade": "الصف الثالث الثانوي — إحصاء",
+                "price": "250",
+                "icon": "📊",
+                "accent": "#ef4444",
+                "link": "https://darssly.com/courses/mohamed-ghoneim-statistics/plans",
+            },
+        ]
+
+        # إظهار الباقات فقط إذا كانت مرحلة الطالب من الباقات المحددة، مع إظهار الكل عند عدم وجود تطابق.
+        grade_for_package = str(user_grade_raw or user_grade_clean or "").strip().lower()
+        grade_aliases = {
+            "باقة أولى إعدادي": ["الأول الإعدادي", "اول اعدادي", "أولى إعدادي", "اولى اعدادي", "1 اعدادي", "الأول اعدادي"],
+            "باقة ثانية إعدادي": ["الثاني الإعدادي", "ثاني اعدادي", "ثانية إعدادي", "ثانيه اعدادي", "2 اعدادي", "الثاني اعدادي"],
+            "باقة ثالثة إعدادي": ["الثالث الإعدادي", "ثالث اعدادي", "ثالثة إعدادي", "ثالثه اعدادي", "3 اعدادي", "الثالث اعدادي"],
+            "إحصاء ثالثة ثانوي": ["ثالثة ثانوي", "ثالث ثانوي", "الثالث الثانوي", "إحصاء", "احصاء"],
+        }
+        matched_packages = []
+        for pkg in darssly_subscriptions:
+            aliases = [str(x).lower() for x in grade_aliases.get(pkg["title"], [])]
+            if any(a in grade_for_package for a in aliases) or any(grade_for_package in a for a in aliases if grade_for_package):
+                matched_packages.append(pkg)
+        if not matched_packages:
+            matched_packages = darssly_subscriptions
+
+        st.markdown("<div class='vertical-section-header'>💳 اشتراكات درسلي</div>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="text-align:center; margin: -4px 0 18px; color:{text_color}; font-weight:800; font-size:16px;">
+            اشترك في باقتك الشهرية واستمتع بنظام شرح ومتابعة متكامل
+        </div>
+        """, unsafe_allow_html=True)
+
+        student_sub_b64 = str(si.get("صورة_الاشتراكات_base64", "") or "").strip() or STUDENT_FIXED_IMAGE_B64
+        student_sub_uri = teacher_image_data_uri(student_sub_b64) if student_sub_b64 else STUDENT_FIXED_IMAGE_URI
+
+        package_cols = st.columns(len(matched_packages))
+        for p_idx, pkg in enumerate(matched_packages):
+            with package_cols[p_idx]:
+                st.markdown(f"""
+                <div style="background:{card_bg}; border:1.5px solid {pkg['accent']}; border-radius:20px; padding:18px 16px 14px; min-height:365px; box-shadow:0 8px 24px rgba(15,23,42,.08); direction:rtl; text-align:right; margin-bottom:10px;">
+                    <div style="display:inline-block; background:{pkg['accent']}18; color:{pkg['accent']}; border:1px solid {pkg['accent']}55; border-radius:20px; padding:5px 12px; font-size:13px; font-weight:900;">{pkg['badge']}</div>
+                    {f"<img src='{student_sub_uri}' style='width:108px;height:108px;border-radius:50%;object-fit:cover;display:block;margin:14px auto 10px;border:5px solid {pkg['accent']};box-shadow:0 8px 20px rgba(15,23,42,.18);'>" if student_sub_uri else f"<div style='font-size:46px; text-align:center; margin:14px 0 8px;'>{pkg['icon']}</div>"}
+                    <h3 style="color:{text_color}; text-align:center; font-size:20px; margin:4px 0 6px;">{pkg['title']}</h3>
+                    <p style="color:{text_color}; opacity:.82; text-align:center; font-weight:800; font-size:14px; margin-bottom:16px;">{pkg['grade']}</p>
+                    <div style="font-size:30px; font-weight:950; color:{pkg['accent']}; text-align:center; margin-bottom:12px;">{pkg['price']} جنيه <span style="font-size:13px; color:{text_color};">/ شهر</span></div>
+                    <div style="background:{pkg['accent']}0d; border-radius:14px; padding:10px 12px; color:{text_color}; font-size:13px; line-height:1.9; font-weight:700;">
+                        ✓ فيديوهات شرح مسجلة<br>
+                        ✓ حصص Zoom مباشرة<br>
+                        ✓ متابعة مستمرة<br>
+                        ✓ حل وتدريب على الأسئلة
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                st.link_button("🔴 معرفة تفاصيل الباقة", pkg["link"], use_container_width=True)
+
+        st.write("")
+
+        st.markdown("<div class='vertical-section-header'>🗂️ لوحة خدمات الطالب التفاعلية</div>", unsafe_allow_html=True)
+        
+        if st.button("🤖 اسأل حمصا — حل مسائل بالصور والكتابة", use_container_width=True, type="primary"):
+            st.session_state.student_sub_page = "hamza"
+            st.rerun()
+        if st.button("🎥 الفيديوهات والشروحات التعليمية", use_container_width=True):
+            st.session_state.student_sub_page = "videos"
+            st.rerun()
+        if st.button("▤  بنك الأسئلة الشامل (الاشتراك والدفع)", use_container_width=True):
+            st.session_state.student_sub_page = "bank"
+            st.rerun()
+        if st.button("🧠 اختبارات ونتائج موقع عبقري 💡", use_container_width=True):
+            st.session_state.student_sub_page = "abqary"
+            st.rerun()
+        if st.button("✍️ الاختبارات الإلكترونية التفاعلية", use_container_width=True):
+            st.session_state.student_sub_page = "exams"
+            st.rerun()
+        if st.button("📝 تسجيل حضور حصة اليوم", use_container_width=True):
+            st.session_state.student_sub_page = "attendance"
+            st.rerun()
+        if st.button("📊 متابعة درجات الواجبات", use_container_width=True):
+            st.session_state.student_sub_page = "hw_grades"
+            st.rerun()
+        if st.button("📈 متابعة درجات الاختبارات", use_container_width=True):
+            st.session_state.student_sub_page = "exam_grades"
+            st.rerun()
+        if st.button("💬 مركز الدردشة والدعم المباشر", use_container_width=True):
+            st.session_state.student_sub_page = "chat"
+            st.rerun()
+
+        sub_page = st.session_state.student_sub_page
+        if sub_page != "dashboard":
+            if st.button("⬅️ رجوع إلى خدمات الطالب", key="student_subpage_back", use_container_width=True):
+                st.session_state.student_sub_page = "dashboard"
+                st.rerun()
+        st.write("---")
+
+        # --- حمصا: حل المسائل بالتصوير/رفع الصور/PDF أو الكتابة ---
+        if sub_page == "hamza":
+            st.markdown(f"<h3 style='color:{text_color};font-size:25px;'>🤖 اسأل حمصا</h3>", unsafe_allow_html=True)
+            st.info("📷 صوّر المسألة من الموبايل مباشرة، أو ارفع صورة/PDF، أو اكتب السؤال. حمصا سيحلها خطوة بخطوة.")
+            if "hamza_history" not in st.session_state: st.session_state.hamza_history = []
+            if "hamza_last" not in st.session_state: st.session_state.hamza_last = None
+            with st.container(border=True):
+                cam = st.camera_input("📷 صوّر المسألة من داخل الموقع", key="hamza_camera")
+                up = st.file_uploader("🖼️ ارفع صورة أو 📄 PDF من الكتاب", type=["png","jpg","jpeg","webp","pdf"], key="hamza_upload")
+                hamza_text = st.text_area("✍️ أو اكتب المسألة هنا", height=140, placeholder="مثال: أوجد قيمة س إذا كان 2س + 5 = 17")
+                if cam is not None: st.image(cam, caption="الصورة التي التقطتها", use_container_width=True)
+                elif up is not None and str(up.type).startswith("image/"): st.image(up, caption="الصورة المرفوعة", use_container_width=True)
+                h1,h2=st.columns(2)
+                with h1: solve_btn=st.button("🧠 حل المسألة مع حمصا", use_container_width=True, type="primary", key="hamza_solve_btn")
+                with h2: clear_btn=st.button("🗑️ مسح السؤال والمحادثة", use_container_width=True, key="hamza_clear_btn")
+                if clear_btn:
+                    st.session_state.hamza_history=[]; st.session_state.hamza_last=None; st.rerun()
+                if solve_btn:
+                    media=[]; source=cam if cam is not None else up
+                    if source is not None:
+                        try:
+                            raw=source.getvalue(); mime=str(getattr(source,"type","") or "image/jpeg")
+                            media=[{"mime":mime,"data":base64.b64encode(raw).decode("ascii")}]
+                        except Exception: media=[]
+                    if not hamza_text.strip() and not media:
+                        st.warning("اكتب المسألة أو صوّرها/ارفعها أولاً.")
+                    else:
+                        try:
+                            with st.spinner("🤖 حمصا يقرأ المسألة ويحلها..."):
+                                result=_hamza_ai_call(hamza_text, media, st.session_state.hamza_history)
+                            answer=str(result.get("answer","")).strip(); final_answer=str(result.get("final_answer","")).strip(); topic=str(result.get("topic","رياضيات")).strip()
+                            st.session_state.hamza_last={"question":hamza_text.strip() or "المسألة المرفقة","answer":answer,"final_answer":final_answer,"topic":topic}
+                            st.session_state.hamza_history.append({"student":hamza_text.strip() or "حل المسألة من الصورة المرفقة","assistant":answer})
+                        except Exception as exc:
+                            code=str(exc)
+                            if "AI_KEY_MISSING" in code: st.error("⚠️ ميزة حمصا غير مفعلة حالياً. تأكد من وجود GEMINI_API_KEY في Streamlit Secrets.")
+                            elif "AI_RATE_LIMIT" in code: st.warning("⏳ حمصا مشغول حالياً بسبب حد الاستخدام. حاول مرة أخرى بعد قليل.")
+                            elif "AI_BUSY" in code: st.warning("🔄 حمصا مشغول حالياً. اضغط حل المسألة مرة أخرى بعد لحظات.")
+                            else: st.error("❌ تعذر حل المسألة حالياً. حاول بصورة أوضح أو أعد المحاولة.")
+            last=st.session_state.get("hamza_last")
+            if last:
+                st.markdown("### 🧠 حل حمصا")
+                st.markdown(f"<div style='background:{card_bg};border:1px solid {card_border};border-right:5px solid #1677ff;border-radius:16px;padding:20px;line-height:2;direction:rtl;'><b>🧠 الحل خطوة بخطوة</b></div>", unsafe_allow_html=True)
+                st.markdown(str(last.get('answer','')).strip())
+                st.markdown("<div style='background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:15px;margin-top:12px;direction:rtl;'><b>✅ الإجابة النهائية</b></div>", unsafe_allow_html=True)
+                st.markdown(str(last.get('final_answer','')).strip())
+                phtml=_hamza_pdf_html(last.get("question",""),last.get("answer",""),last.get("final_answer",""),str(st_user.get("اسم الطالب","طالب"))); ppdf=html_to_pdf_bytes(phtml)
+                if ppdf: st.download_button("🖨️ طباعة / تحميل حل المسألة PDF",ppdf,file_name="حل_المسألة_حمصا.pdf",mime="application/pdf",use_container_width=True,key="hamza_pdf")
+                else: st.download_button("🖨️ طباعة الحل",phtml.encode("utf-8"),file_name="حل_المسألة_حمصا.html",mime="text/html",use_container_width=True,key="hamza_html")
+                follow=st.text_input("💬 عندك سؤال على خطوة معينة؟",key="hamza_followup")
+                if st.button("↩️ اسأل حمصا عن الخطوة دي",use_container_width=True,key="hamza_follow_btn") and follow.strip():
+                    try:
+                        with st.spinner("🤖 حمصا يشرح لك أكثر..."):
+                            result=_hamza_ai_call(follow,[],st.session_state.hamza_history)
+                        answer=str(result.get("answer","")).strip(); final_answer=str(result.get("final_answer","")).strip()
+                        st.session_state.hamza_last["answer"] += "\n\n— متابعة الطالب —\n"+answer
+                        if final_answer: st.session_state.hamza_last["final_answer"]=final_answer
+                        st.session_state.hamza_history.append({"student":follow.strip(),"assistant":answer}); st.rerun()
+                    except Exception: st.error("تعذر إرسال المتابعة حالياً. حاول مرة أخرى.")
+                st.caption(f"📚 الموضوع: {last.get('topic','رياضيات')}")
+
+        # --- قسم اختبارات عبقري مع فلترة مرنة ومطابقة شاملة ---
+        if sub_page == "abqary":
+            st.markdown(f"<h3 style='color: {text_color}; font-size: 22px;'>🧠 اختبارات ونتائج موقع عبقري</h3>", unsafe_allow_html=True)
+            abq_df = st.session_state.abqary_df
+            
+            # فلترة مرنة جداً تتأكد من ظهور الامتحان بغض النظر عن الأقواس أو التشكيل
+            st_abq = abq_df[abq_df["المجموعة/الصف"].astype(str).str.strip().str.lower().apply(
+                lambda x: user_grade_clean in x or user_grade_raw.lower() in x or x in user_grade_clean
+            )]
+            if st_abq.empty:
+                st_abq = abq_df.copy() # لو مفيش تطابق حرفي تام، اعرض الكل عشان الطالب ميتعطلش
+
+            if st_abq.empty:
+                st.info("لا توجد اختبارات منشورة عبر موقع عبقري لمرحلتك حالياً.")
+            else:
+                for ab_i, ab_row in st_abq.iterrows():
+                    ab_title = ab_row["عنوان_الإمتحان"]
+                    ab_link = ab_row.get("رابط_الإمتحان", "")
+                    ab_html = str(ab_row.get("كود_HTML", "") or "").strip()
+                    res_link = ab_row.get("رابط_النتيجة", "")
+                    secret_code = str(ab_row.get("الرقم_السري_للنتيجة", "")).strip()
+
+                    st.markdown(f"""
+                        <div style="background:{card_bg}; border:2px solid #059669; border-radius:14px; padding:20px; margin-bottom:15px;">
+                            <h4 style="color:#059669; margin-top:0;">💡 امتحان عبقري: {ab_title}</h4>
+                            <p style="font-size:15px;">إليك امتحان موقع عبقري معروض بالكامل داخل المنصة:</p>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    # إذا كان المعلم قد أضاف كود HTML، يظهر الاختبار تفاعلياً داخل المنصة.
+                    if ab_html and ab_html.lower() != "nan":
+                        st.markdown("### 📝 الاختبار الإلكتروني")
+                        st.components.v1.html(ab_html, height=800, scrolling=True)
+                        st.write("")
+
+                    # الرابط القديم يظل موجوداً كما هو كخيار بديل.
+                    if ab_link and str(ab_link).lower() != "nan" and str(ab_link).strip() != "":
+                        st.components.v1.iframe(str(ab_link).strip(), height=650, scrolling=True)
+                        st.write("")
+                        st.link_button(f"🔗 فتح امتحان عبقري في نافذة جديدة 🚀", str(ab_link).strip(), use_container_width=True)
+
+                    st.write("")
+                    st.markdown("##### 🔍 استعلام عن نتيجة هذا الاختبار برقم سري:")
+                    with st.form(f"abqary_result_form_{ab_i}"):
+                        entered_pass = st.text_input("أدخل الرقم السري المخصص لإظهار النتيجة:", type="password", key=f"pass_input_{ab_i}")
+                        if st.form_submit_button("🔓 إظهار النتيجة"):
+                            if secret_code and entered_pass.strip() == secret_code:
+                                st.success("✓ الرقم السري صحيح!")
+                                if res_link and res_link != "nan":
+                                    st.link_button("📊 اضغط هنا لعرض نتيجة امتحان عبقري 🏆", res_link, use_container_width=True)
+                                else:
+                                    st.info("النتيجة متاحة وسيتم إضافتها قريباً.")
+                            else:
+                                st.error("❌ الرقم السري غير صحيح.")
+                    st.write("---")
+
+        # --- الفيديوهات بتصميم درسلي (Sidebar يمين، والفيديو شمال) ---
+        elif sub_page == "videos":
+            st.markdown(f"<h3 style='color: {text_color}; font-size: 22px;'>🎥 محتوى الشروحات والفيديوهات التعليمية</h3>", unsafe_allow_html=True)
+            v_df = st.session_state.videos_df
+            
+            # فلترة مرنة للفيديوهات حسب المرحلة
+            st_videos = v_df[v_df["المجموعة/الصف"].astype(str).str.strip().str.lower().apply(
+                lambda x: user_grade_clean in x or user_grade_raw.lower() in x or x in user_grade_clean
+            )]
+            if st_videos.empty:
+                st_videos = v_df.copy()
+
+            if st_videos.empty:
+                st.info("لا توجد فيديوهات مرفوعة لمرحلتك الدراسية حالياً.")
+            else:
+                if "selected_video_idx" not in st.session_state:
+                    st.session_state.selected_video_idx = 0
+
+                col_main_v, col_side_v = st.columns([2.5, 1])
+
+                with col_side_v:
+                    st.markdown(f"""
+                        <div style="background:{card_bg}; border:1px solid {card_border}; border-radius:12px; padding:15px; margin-bottom:15px;">
+                            <h4 style="margin:0 0 10px 0; color:#059669; font-size:18px;">📚 محتوى الدرس</h4>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    search_vid_query = st.text_input("🔍 ابحث في الحصص...", placeholder="اكتب اسم الدرس...")
+                    filtered_videos = st_videos
+                    if search_vid_query.strip():
+                        filtered_videos = st_videos[st_videos["عنوان_الفيديو"].astype(str).str.contains(search_vid_query, case=False, na=False)]
+
+                    if filtered_videos.empty:
+                        st.info("لا توجد نتائج مطابقة للبحث.")
+                    else:
+                        for v_i, v_row in filtered_videos.reset_index(drop=True).iterrows():
+                            v_title_btn = f"🟢 {v_row['عنوان_الفيديو']}"
+                            if st.button(v_title_btn, key=f"darssly_sidebar_v_{v_i}", use_container_width=True):
+                                st.session_state.selected_video_idx = v_i
+                                st.rerun()
+
+                with col_main_v:
+                    selected_row = filtered_videos.iloc[0] if filtered_videos.empty else (filtered_videos.iloc[st.session_state.selected_video_idx] if st.session_state.selected_video_idx < len(filtered_videos) else filtered_videos.iloc[0])
+
+                    st.markdown(f"""
+                        <div style="background:linear-gradient(135deg, #059669, #10b981); color:#ffffff; padding:15px 20px; border-radius:10px; margin-bottom:15px;">
+                            <h3 style="margin:0; color:#ffffff; font-size:20px;">📺 {selected_row['عنوان_الفيديو']}</h3>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    v_link = str(selected_row.get("رابط_الفيديو", "")).strip()
+                    v_bytes = selected_row.get("فيديو_base64", "")
+
+                    if v_link and v_link != "nan" and v_link != "":
+                        st.video(v_link)
+                    elif pd.notnull(v_bytes) and str(v_bytes).strip() and str(v_bytes) != "nan":
+                        try:
+                            vid_bytes_dec = base64.b64decode(v_bytes)
+                            st.video(vid_bytes_dec)
+                        except Exception:
+                            st.error("⚠️ يتعذر تشغيل ملف الفيديو.")
+                    else:
+                        st.info("لا يوجد فيديو متاح لهذا الدرس.")
+
+                    st.write("---")
+                    st.markdown(f"#### 📌 {selected_row['عنوان_الفيديو']}")
+                    st.caption(f"المرحلة الدراسية: {selected_row.get('المجموعة/الصف', '')} | أكملت هذه الحصة")
+
+                    st.write("---")
+                    current_vid_title = selected_row['عنوان_الفيديو']
+                    vc_df = st.session_state.video_comments_df
+                    vid_comments = vc_df[vc_df["عنوان_الفيديو"].astype(str).str.strip() == current_vid_title.strip()]
+
+                    st.markdown(f"<h4 style='font-size:18px;'>الأسئلة والتعليقات ({len(vid_comments)})</h4>", unsafe_allow_html=True)
+                    if not vid_comments.empty:
+                        for _, c_row in vid_comments.iterrows():
+                            st.markdown(f"""
+                                <div style="background:{card_bg}; border:1px solid {card_border}; border-radius:10px; padding:12px 15px; margin-bottom:10px;">
+                                    <p style="margin:0; font-size:14px; color:#0284c7;"><b>{c_row['اسم الطالب']}</b> — <span style="font-size:12px; opacity:0.7;">{c_row['التاريخ_والوقت']}</span></p>
+                                    <p style="margin:5px 0 0 0; font-size:16px;">{c_row['نص_التعليق']}</p>
+                                </div>
+                            """, unsafe_allow_html=True)
+
+                    with st.form(f"comment_form_{selected_row['معرف_الفيديو']}"):
+                        user_comment_text = st.text_area("أكتب سؤالك أو تعليقك هنا:", placeholder="اطرح سؤالك على المعلم...")
+                        if st.form_submit_button("إرسال التعليق"):
+                            if user_comment_text.strip():
+                                new_comment = {
+                                    "التاريخ_والوقت": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                    "عنوان_الفيديو": current_vid_title.strip(),
+                                    "اسم الطالب": st_user["اسم الطالب"],
+                                    "نص_التعليق": user_comment_text.strip()
+                                }
+                                st.session_state.video_comments_df = pd.concat([st.session_state.video_comments_df, pd.DataFrame([new_comment])], ignore_index=True)
+                                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                                st.success("✓ تم إرسال تعليقك بنجاح!")
+                                st.rerun()
+
+        # --- بنك الأسئلة والاشتراك والدفع عبر انستا باي ---
+        elif sub_page == "bank":
+            st.markdown(f"<h3 style='color: {text_color}; font-size: 22px;'>▤  بنك الأسئلة الشامل (مرحلتك الدراسية)</h3>", unsafe_allow_html=True)
+            
+            curr_user_row = st.session_state.users_df[st.session_state.users_df["رقم الهاتف"].astype(str).str.strip() == str(st_user.get("رقم الهاتف", "")).strip()]
+            sub_status = curr_user_row.iloc[0].get("حالة_الاشتراك_البنك", "غير مشترك") if not curr_user_row.empty else "غير مشترك"
+
+            if sub_status != "مشترك":
+                st.warning("🔒 عذراً، بنك الأسئلة مغلق ويحتاج إلى اشتراك خاص بمرحلتك الدراسية بقيمة **100 جنيه** فقط.")
+                st.markdown(f"""
+                    <div style="background:{card_bg}; border:2px solid #dc2626; border-radius:15px; padding:25px; margin-bottom:20px;">
+                        <h3 style="color:#dc2626; margin-top:0;">💳 تعليمات الاشتراك في بنك الأسئلة:</h3>
+                        <p style="font-size:18px;">1. قم بالدفع بقيمة <b>100 جنيه</b> عبر تطبيق InstaPay باستخدام زر الدفع السريع بالأسفل.</p>
+                        <p style="font-size:18px;">2. اكتب رقم هاتفك المحول منه، وكود التحقق (OTP)، وارفق صورة اسكرين (إيصال) الدفع لتأكيد طلبك.</p>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                with st.form("bank_subscription_form"):
+                    pay_phone = st.text_input("رقم الهاتف المحول منه:", placeholder="010XXXXXXXX")
+                    pay_otp = st.text_input("كود التحقق الخاص بـ InstaPay (OTP):", placeholder="مثال: 4589")
+                    pay_receipt = st.file_uploader("📷 رفع اسكرين (إيصال) الدفع:", type=["jpg", "png", "jpeg"])
+                    
+                    if st.form_submit_button("📤 إرسال طلب الاشتراك لتأكيد المعلم"):
+                        if not pay_phone.strip() or not pay_otp.strip() or pay_receipt is None:
+                            st.error("يرجى إدخال رقم الهاتف، وكود الـ OTP، وإرفاق صورة إيصال الدفع.")
+                        else:
+                            rcpt_str = base64.b64encode(pay_receipt.read()).decode()
+                            new_req = {
+                                "تاريخ_الطلب": str(date.today()),
+                                "اسم الطالب": st_user["اسم الطالب"],
+                                "رقم_الهاتف": pay_phone.strip(),
+                                "كود_OTP": pay_otp.strip(),
+                                "حالة_الدفع": "قيد المراجعة",
+                                "إيصال_الدفع_base64": rcpt_str
+                            }
+                            st.session_state.bank_requests_df = pd.concat([st.session_state.bank_requests_df, pd.DataFrame([new_req])], ignore_index=True)
+                            save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                            st.success("✓ تم إرسال طلب اشتراكك بنجاح! سيقوم المعلم بمراجعة الإيصال وتفعيل حسابك خلال دقائق.")
+                
+                st.link_button("📲 اضغط هنا للدفع من خلال انستا باي", "https://ipn.eg/S/moghonem2002/instapay/6EyvZs")
+            else:
+                st.success("🎉 أهلاً بك! حسابك مفعل ومسجل في بنك الأسئلة الخاص بمرحلتك الدراسية.")
+                qb_df = st.session_state.question_bank_df
+                st_qb = qb_df[qb_df["المجموعة/الصف"].astype(str).str.strip().str.lower().apply(
+                    lambda x: user_grade_clean in x or user_grade_raw.lower() in x or x in user_grade_clean
+                )]
+                if st_qb.empty: st_qb = qb_df.copy()
+
+                if st_qb.empty:
+                    st.info("لا توجد أسئلة مضافة في بنك الأسئلة لمرحلتك حالياً.")
+                else:
+                    for qb_i, qb_r in st_qb.iterrows():
+                        raw_json_data = qb_r.get("بيانات_السؤال_JSON", "{}")
+                        try:
+                            q_data = json.loads(raw_json_data) if pd.notnull(raw_json_data) and str(raw_json_data).strip() else {}
+                        except Exception:
+                            q_data = {}
+
+                        if not q_data: continue
+
+                        st.markdown(f"""
+                            <div style="background:{card_bg}; border:1px solid {card_border}; border-radius:12px; padding:20px; margin-bottom:15px;">
+                                <p style="font-size:18px; color:{text_color};"><b>سؤال ({qb_i+1}) — الدرجة: {q_data.get('points', 1.0)}</b></p>
+                                <p style="font-size:17px; color:{text_color};">{q_data.get('text', '')}</p>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        
+                        if q_data.get("q_img"):
+                            st.image(f"data:image/jpeg;base64,{q_data['q_img']}", use_container_width=True)
+
+                        q_type_val = q_data.get("type", "اختيار من متعدد")
+                        if "اختيار" in q_type_val or q_type_val == "موضوعي":
+                            opts = ["أ", "ب", "ج", "د"]
+                            ans_choice = st.radio(f"اختر الإجابة الصحيحة للسؤال ({qb_i+1}):", opts, key=f"qb_radio_{qb_i}")
+                            
+                            opt1 = q_data.get('opt1', '')
+                            opt2 = q_data.get('opt2', '')
+                            opt3 = q_data.get('opt3', '')
+                            opt4 = q_data.get('opt4', '')
+                            if opt1 or opt2 or opt3 or opt4:
+                                st.markdown(f"""
+                                    <div style="padding: 10px; background: #f1f5f9; border-radius: 8px; margin-bottom: 10px;">
+                                        أ) {opt1} &nbsp;&nbsp;|&nbsp;&nbsp; ب) {opt2} &nbsp;&nbsp;|&nbsp;&nbsp; ج) {opt3} &nbsp;&nbsp;|&nbsp;&nbsp; د) {opt4}
+                                    </div>
+                                """, unsafe_allow_html=True)
+
+                            if st.button(f"تحقق من إجابة السؤال ({qb_i+1})", key=f"check_qb_{qb_i}"):
+                                correct_idx = int(q_data.get("correct", 1))
+                                correct_letter = opts[correct_idx - 1] if 0 <= correct_idx - 1 < 4 else 'أ'
+                                if ans_choice == correct_letter:
+                                    st.success("إجابة صحيحة تماماً! أحسنت ✅")
+                                else:
+                                    st.error(f"إجابة خاطئة ❌. الإجابة الصحيحة هي: الخيار ({correct_letter})")
+
+        elif sub_page == "exams":
+            st.markdown(f"<h3 style='color: {text_color}; font-size: 22px;'>✍️ الاختبارات الإلكترونية التفاعلية</h3>", unsafe_allow_html=True)
+            st.info("لا توجد اختبارات تفاعلية نشطة حالياً.")
+
+        elif sub_page == "attendance":
+            st.markdown(f"<h3 style='color: {text_color}; font-size: 22px;'>📝 تسجيل حضور حصة اليوم</h3>", unsafe_allow_html=True)
+            with st.form("att_form"):
+                st.date_input("تاريخ الحصة:")
+                if st.form_submit_button("تأكيد الحضور"):
+                    st.success("تم تسجيل الحضور بنجاح!")
+
+        elif sub_page == "hw_grades":
+            st.markdown(f"<h3 style='color: {text_color}; font-size: 22px;'>📊 متابعة درجات الواجبات المنزلية</h3>", unsafe_allow_html=True)
+            my_ass = st.session_state.assessments_df[st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip() == st_user["اسم الطالب"].strip()]
+            if my_ass.empty: st.info("لا توجد درجات مرصودة.")
+            else: st.dataframe(my_ass, use_container_width=True)
+
+        elif sub_page == "exam_grades":
+            st.markdown(f"<h3 style='color: {text_color}; font-size: 22px;'>📈 متابعة درجات الاختبارات والكويزات</h3>", unsafe_allow_html=True)
+            st.info("لا توجد اختبارات سابقة.")
+
+        elif sub_page == "chat":
+            st.markdown(f"<h3 style='color: {text_color}; font-size: 22px;'>💬 مركز الدردشة والدعم المباشر</h3>", unsafe_allow_html=True)
+            st.info("تواصل مع البشمهندس مباشرة عبر مركز الدردشة.")
+
+    st.markdown("""
+        <div class="call-btn-container">
+            <a href="tel:01016361440" class="call-btn">
+                <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:#ffffff;"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+                <span>للتواصل مع م / محمد غنيم: 01016361440</span>
+            </a>
+        </div>
+        <div class="social-footer-box">
+            <div class="social-footer-container">
+                <a href="https://www.facebook.com/share/19fD41rV3H/" target="_blank" title="Facebook" class="social-btn-top facebook-bg"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+                <a href="https://wa.me/201016361440" target="_blank" title="WhatsApp" class="social-btn-top whatsapp-bg"><svg viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.599 2.669-.699c.971.53 1.77.822 2.791.823h.002c3.18 0 5.767-2.586 5.768-5.766 0-3.18-2.587-5.766-5.77-5.766zm9.969 5.828c0 5.519-4.481 10-10 10-1.761 0-3.424-.46-4.881-1.267l-5.619 1.474 1.499-5.485c-.911-1.516-1.43-3.285-1.43-5.176 0-5.519 4.481-10 10-10 5.519 0 10 4.481 10 10z"/></svg></a>
+                <a href="https://t.me/mrmaths22" target="_blank" title="Telegram" class="social-btn-top telegram-bg"><svg viewBox="0 0 24 24"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.121l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.832.942z"/></svg></a>
+                <a href="https://www.tiktok.com/@eng_mohamedghonaim?_r=1&_t=ZS-99VdklZPBUS" target="_blank" title="TikTok" class="social-btn-top tiktok-bg"><svg viewBox="0 0 24 24"><path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.068-.102a2.895 2.895 0 0 1 2.373-4.513c.277 0 .546.039.803.111V9.417a6.338 6.338 0 0 0-.803-.051C6.017 9.366 3.2 12.183 3.2 15.647 3.2 19.11 6.017 22 9.479 22c3.462 0 6.279-2.817 6.279-6.353V9.07c1.378.983 3.054 1.564 4.869 1.584V7.209a4.845 4.845 0 0 1-1.038-.523z"/></svg></a>
+                <a href="https://youtube.com/@engineermaths?si=8C6T808VuAU5OMOt" target="_blank" title="YouTube" class="social-btn-top youtube-bg"><svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+            </div>
+            <div class="rights-text">جميع الحقوق محفوظة لدي م / محمد غنيم 2026</div>
+         </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
+
+# ==============================================================================# 2. لوحة تحكم المعلم (الشاملة بجميع الأقسام وزوم الأونلاين والتقارير المالية)
+# ==============================================================================
+total_exams_count = len(st.session_state.exams_df)
+total_students_count = len(st.session_state.users_df)
+
+# ===== شريط المعلم العلوي =====
+_nav_open = st.session_state.teacher_sidebar_open
+_toggle_col, _brand_col, _pills_col = st.columns([1.0, 2.3, 8.7], vertical_alignment="center")
+with _toggle_col:
+    if st.button(("✕" if _nav_open else "☰"), key="teacher_sidebar_toggle", use_container_width=True, help="إظهار أو إخفاء شريط التنقل"):
+        st.session_state.teacher_sidebar_open = not st.session_state.teacher_sidebar_open
+        st.rerun()
+with _brand_col:
+    st.markdown("<div class='top-navigation-title'>البشمهندس x الرياضه</div><div class='top-navigation-subtitle'>لوحة تحكم المعلم • م/ محمد غنيم</div>", unsafe_allow_html=True)
+with _pills_col:
+    if _nav_open:
+        _teacher_nav = [("◉ الرئيسية","dashboard"), ("◫ Zoom","online_schedule"), ("▦ المواعيد","weekly_schedule"), ("▣ الامتحانات","exam_maker"), ("🤖 استوديو AI","ai_studio"), ("▤ بنك الأسئلة","question_bank"), ("▶ الفيديوهات","videos"), ("✦ عبقري","abqary"), ("▥ الدرجات","grades"), ("✎ المقالي","essays"), ("◌ الرسائل","chat"), ("♙ الطلاب","students"), ("＋ حصة","add_session"), ("＋ واجب","add_hw"), ("✎ تعديل السجلات","edit_records"), ("▥ السجلات","all_records"), ("📢 الإعلانات","ads"), ("▤ ولي الأمر","parent_report"), ("▰ المدفوعات","payments"), ("💾 النسخ الاحتياطية","online_backup"), ("◈ واجهة الطالب","student_interface")]
+        _teacher_cols = st.columns(5, gap="small")
+        for _ti, (_label, _target) in enumerate(_teacher_nav):
+            with _teacher_cols[_ti % 5]:
+                if st.button(_label, key=f"teacher_top_nav_btn_{_ti}", use_container_width=True, type="primary" if _target == st.session_state.teacher_page else "secondary"):
+                    st.session_state.teacher_page = _target
+                    st.rerun()
+    else:
+        st.markdown('<div class="top-navigation-collapsed"><span class="top-navigation-subtitle">شريط التنقل مخفي — اضغط ☰ لإظهاره</span></div>', unsafe_allow_html=True)
+
+# رابط دخول الطالب — ظاهر للمعلم دائمًا، وكتلة code تحتوي زر نسخ مدمج من Streamlit.
+_student_public_url = "https://engmohamedghonaim.streamlit.app/?role=student"
+st.markdown("### 🔗 رابط دخول الطلاب")
+st.caption("انسخ الرابط وأرسله للطلاب؛ الضغط على أيقونة النسخ داخل الخانة ينسخه مباشرة.")
+st.code(_student_public_url, language="text")
+
+t_page = st.session_state.teacher_page
+
+# زر رجوع موحد يظهر في أعلى أي قائمة/صفحة داخل لوحة المعلم
+if t_page != "dashboard":
+    _back_col, _ = st.columns([1, 5])
+    with _back_col:
+        if st.button("⬅️ رجوع", key="global_teacher_back", use_container_width=True):
+            st.session_state.teacher_page = "dashboard"
+            st.rerun()
+
+if t_page == "student_interface":
+    st.subheader("🎨 تصميم واجهة الطالب")
+    st.caption("قسم مستقل للتحكم المباشر في واجهة الطالب. أي صورة ترفعها هنا تُحفظ في بيانات واجهة الطالب وتُستخدم مباشرة في صفحة الطالب، والصورة المدمجة مجرد نسخة احتياطية.")
+    sidf = st.session_state.student_interface_df
+    si = sidf.iloc[0].to_dict() if not sidf.empty else {}
+    with st.container(border=True):
+        st.markdown("### 📝 نصوص الواجهة")
+        si_title = st.text_input("عنوان الواجهة:", value=str(si.get("عنوان_الواجهة", "أهلاً بيكم منورين المنصة! 🚀")), key="si_title")
+        si_badge = st.text_input("الشارة تحت العنوان:", value=str(si.get("الشارة", "البشمهندس x الرياضه")), key="si_badge")
+        si_hero_title = st.text_input("عنوان البطل الرئيسي:", value=str(si.get("عنوان_البطل", "رحلتك نحو التفوق في الرياضيات تبدأ من هنا")), key="si_hero_title")
+        si_hero_desc = st.text_area("وصف البطل الرئيسي:", value=str(si.get("وصف_البطل", "شرح مبسط، تدريب مستمر، اختبارات ومتابعة تساعدك توصل لهدفك.")), key="si_hero_desc")
+        f1,f2=st.columns(2)
+        with f1:
+            si_feature1=st.text_input("الميزة 1:",value=str(si.get("ميزة_1","شرح مبسط وتفاعلي")),key="si_feature1")
+            si_feature2=st.text_input("الميزة 2:",value=str(si.get("ميزة_2","اختبارات وتقييم مستمر")),key="si_feature2")
+        with f2:
+            si_feature3=st.text_input("الميزة 3:",value=str(si.get("ميزة_3","متابعة مستوى الطالب")),key="si_feature3")
+            si_feature4=st.text_input("الميزة 4:",value=str(si.get("ميزة_4","دعم فني ومساعدة")),key="si_feature4")
+        si_desc = st.text_area("وصف الواجهة:", value=str(si.get("الوصف", "")), height=110, key="si_desc")
+        a, b = st.columns(2)
+        with a:
+            si_sub_title = st.text_input("عنوان قسم الاشتراكات:", value=str(si.get("عنوان_الاشتراكات", "📢 اشتراكات درسلي")), key="si_sub_title")
+            si_sub_desc = st.text_input("وصف قسم الاشتراكات:", value=str(si.get("وصف_الاشتراكات", "")), key="si_sub_desc")
+        with b:
+            si_booking_title = st.text_input("عنوان قسم الحجز:", value=str(si.get("عنوان_الحجز", "📅 حجز دروس أونلاين مباشرة مع م / محمد غنيم")), key="si_booking_title")
+            si_booking_text = st.text_input("نص قسم الحجز:", value=str(si.get("نص_الحجز", "")), key="si_booking_text")
+        si_footer = st.text_input("نص أسفل الواجهة:", value=str(si.get("نص_الفوتر", "")), key="si_footer")
+    with st.container(border=True):
+        st.markdown("### 🖼️ صور واجهة الطالب")
+        c1, c2 = st.columns(2)
+        current_main = str(si.get("صورة_الواجهة_base64", "") or "").strip()
+        if not current_main or current_main.lower() == "nan":
+            current_main = STUDENT_FIXED_IMAGE_B64
+        current_sub = str(si.get("صورة_الاشتراكات_base64", "") or "").strip()
+        if not current_sub or current_sub.lower() == "nan":
+            current_sub = STUDENT_FIXED_IMAGE_B64
+        with c1:
+            st.markdown("**الصورة الرئيسية أعلى الصفحة**")
+            current_main_uri = teacher_image_data_uri(current_main)
+            if current_main_uri:
+                st.markdown(
+                    f"<div style='text-align:center;'><img src='{current_main_uri}' style='width:220px;height:220px;border-radius:18px;object-fit:cover;border:2px solid #ddd;display:block;margin:auto;'></div>",
+                    unsafe_allow_html=True
+                )
+            upload_main = st.file_uploader("رفع صورة الواجهة", type=["png","jpg","jpeg","webp"], key="si_upload_main")
+        with c2:
+            st.markdown("**صورة اشتراكات درسلي**")
+            current_sub_uri = teacher_image_data_uri(current_sub)
+            if current_sub_uri:
+                st.markdown(
+                    f"<div style='text-align:center;'><img src='{current_sub_uri}' style='width:180px;height:180px;border-radius:50%;object-fit:cover;border:2px solid #ddd;display:block;margin:auto;'></div>",
+                    unsafe_allow_html=True
+                )
+            upload_sub = st.file_uploader("رفع صورة الاشتراكات", type=["png","jpg","jpeg","webp"], key="si_upload_sub")
+        main_b64 = optimize_uploaded_image_to_b64(upload_main) if upload_main is not None else (current_main or STUDENT_FIXED_IMAGE_B64)
+        sub_b64 = optimize_uploaded_image_to_b64(upload_sub) if upload_sub is not None else (current_sub or STUDENT_FIXED_IMAGE_B64)
+        st.markdown("### 👀 معاينة")
+        preview_uri = teacher_image_data_uri(main_b64) if main_b64 else ""
+        if preview_uri: st.markdown(f"<div style='text-align:center;'><img src='{preview_uri}' style='width:180px;height:180px;border-radius:50%;object-fit:cover;border:5px solid #059669;'></div>", unsafe_allow_html=True)
+        st.markdown(f"<h2 style='text-align:center;color:#059669'>{si_title}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:center'><span style='background:#059669;color:white;padding:6px 14px;border-radius:20px;font-weight:900'>{si_badge}</span></div>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align:center;font-weight:800'>{si_desc}</p>", unsafe_allow_html=True)
+    st.markdown("### 👀 معاينة مباشرة للصفحة الرئيسية للطالب")
+    st.markdown(f"""<div class='landing-wrap'><div class='landing-hero'><div class='landing-copy'><div class='brand-pill'>{html.escape(si_badge)}</div><h1>منصة <span>البشمهندس x الرياضه</span></h1><div class='landing-welcome-row'><img class='landing-welcome-photo' src='{teacher_image_data_uri(main_b64) or STUDENT_FIXED_IMAGE_URI}'><h2>{html.escape(si_title)}</h2></div><h3>{html.escape(si_hero_title)}</h3><p>{html.escape(si_hero_desc)}</p><div class='landing-features'><div class='landing-feature'><div class='i'>▶</div><div>{html.escape(si_feature1)}</div></div><div class='landing-feature'><div class='i'>▣</div><div>{html.escape(si_feature2)}</div></div><div class='landing-feature'><div class='i'>↗</div><div>{html.escape(si_feature3)}</div></div><div class='landing-feature'><div class='i'>◉</div><div>{html.escape(si_feature4)}</div></div></div></div><img class='landing-photo' src='{teacher_image_data_uri(main_b64) or STUDENT_FIXED_IMAGE_URI}'><div class='landing-login'><h2>مرحباً بك في منصة</h2><h2>البشمهندس x الرياضه</h2><p>اختر ما يناسبك لبدء رحلتك التعليمية</p></div></div></div>""",unsafe_allow_html=True)
+    if st.button("💾 حفظ واجهة الطالب", key="save_student_interface", use_container_width=True):
+        st.session_state.student_interface_df = pd.DataFrame([{
+            "عنوان_الواجهة": si_title.strip(), "الشارة": si_badge.strip(), "عنوان_البطل": si_hero_title.strip(), "وصف_البطل": si_hero_desc.strip(), "ميزة_1": si_feature1.strip(), "ميزة_2": si_feature2.strip(), "ميزة_3": si_feature3.strip(), "ميزة_4": si_feature4.strip(), "الوصف": si_desc.strip(), "صورة_الواجهة_base64": main_b64,
+            "عنوان_الاشتراكات": si_sub_title.strip(), "وصف_الاشتراكات": si_sub_desc.strip(), "عنوان_الحجز": si_booking_title.strip(),            "نص_الحجز": si_booking_text.strip(), "نص_الفوتر": si_footer.strip(), "صورة_الاشتراكات_base64": sub_b64, "صورة_البانر_base64": str(si.get("صورة_البانر_base64", "") or "")
+        }], columns=COL_STUDENT_INTERFACE)
+        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+        interface_cloud_ok = _cloud_save_student_interface(st.session_state.student_interface_df)
+        if _cloud_storage_enabled() and not interface_cloud_ok:
+            st.error("⚠️ تم حفظ الواجهة محلياً، لكن لم يتم حفظها في التخزين الدائم. راجع إعدادات Supabase وجدول student_interface_storage.")
+        elif not _cloud_storage_enabled():
+            st.warning("⚠️ التخزين الدائم غير مفعّل حالياً؛ الصورة ستظل محفوظة في هذه النسخة فقط حتى يتم إعداد Supabase.")
+        else:
+            st.success("✓ تم حفظ واجهة الطالب والصور في التخزين الدائم بنجاح")
+        st.rerun()
+
+elif t_page == "dashboard":
+    dashboard_students = sorted(list(set([str(x).strip() for x in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(x).strip()] + [str(x).strip() for x in st.session_state.weekly_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()] + [str(x).strip() for x in st.session_state.online_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()])))
+    # الصورة الثابتة المدمجة هي الضمان الأساسي لظهور صورة المعلم دائماً أعلى لوحة التحكم.
+    profile_uri = STUDENT_FIXED_IMAGE_URI
+    total_due_all,total_paid_all,total_balance_all=get_all_financial_totals()
+    _teacher_notifs = _app_notifications("teacher")
+    _teacher_notif_count = len(_teacher_notifs)
+    _dash_head_a, _dash_head_b = st.columns([10, 1])
+    with _dash_head_a:
+        st.markdown(f"""
+        <div class="dashboard-banner">
+          <div><div style="font-size:12px;background:#1677ff;padding:5px 11px;border-radius:999px;display:inline-block">لوحة تحكم المعلم</div>
+          <h2>مرحباً بك يا م/ محمد غنيم 👋</h2><p>إدارة الطلاب والحصص والواجبات والاختبارات والمواعيد والحسابات من مكان واحد.</p></div>
+          <img src="{profile_uri}" alt="م/ محمد غنيم">
+        </div>
+        """,unsafe_allow_html=True)
+    with _dash_head_b:
+        if st.button(f"🔔 {_teacher_notif_count}", key="teacher_notifications_btn", use_container_width=True, help="عرض الإشعارات"):
+            st.session_state.teacher_notifications_open = not st.session_state.teacher_notifications_open
+            st.rerun()
+    if st.session_state.teacher_notifications_open:
+        _render_notification_box("teacher")
+    st.markdown("<div style='height:14px'></div>",unsafe_allow_html=True)
+    s1,s2,s3,s4=st.columns(4)
+    for c,icon,num,label,cls in [(s1,'♙',len(dashboard_students),'إجمالي الطلاب','stat-purple'),(s2,'▣',len(st.session_state.weekly_schedule_df),'المواعيد الأسبوعية','stat-green'),(s3,'◉',len(st.session_state.online_schedule_df),'مواعيد Zoom','stat-blue'),(s4,'✎',len(st.session_state.sessions_df),'الحصص المرصودة','stat-yellow')]:
+        with c: st.markdown(f"<div class='modern-stat {cls}'><div class='icon'>{icon}</div><div class='num'>{num}</div><div class='label'>{label}</div></div>",unsafe_allow_html=True)
+    st.markdown("### ⚡ أدوات سريعة")
+    quick=[('◉','إدارة الطلاب','بطاقات الطلاب والبيانات','students'),('◫','جداول Zoom','إدارة الحصص الأونلاين','online_schedule'),('▣','الامتحانات','إنشاء وإدارة الاختبارات','exam_maker'),('✦','عبقري','إدارة اختبارات عبقري','abqary'),('▤','الواجبات والحصص','رصد ومتابعة الطلاب','add_session'),('▰','المدفوعات','المستحق والمدفوع والرصيد','payments')]
+    for row in range(0,len(quick),3):
+        cols=st.columns(3)
+        for col,item in zip(cols,quick[row:row+3]):
+            icon,title,desc,page=item
+            with col:
+                st.markdown(f"<div class='quick-card'><div style='width:42px;height:42px;border-radius:12px;background:#eaf4ff;color:#1677ff;display:flex;align-items:center;justify-content:center;font-size:21px'>{icon}</div><h4>{title}</h4><p>{desc}</p></div>",unsafe_allow_html=True)
+                if st.button(f"فتح {title}",key=f"quick_{page}_{row}",use_container_width=True): st.session_state.teacher_page=page; st.rerun()
+    st.markdown("### 💳 الحالة المالية")
+    f1,f2,f3=st.columns(3)
+    f1.metric("إجمالي المستحق",f"{total_due_all:,.0f} جنيه")
+    f2.metric("إجمالي المدفوع",f"{total_paid_all:,.0f} جنيه")
+    f3.metric("الرصيد المتبقي",f"{max(total_balance_all,0):,.0f} جنيه")
+    with st.container(border=True):
+        st.markdown("### 📷 صورة المعلم")
+        st.markdown(f"<div style='text-align:center;margin:6px 0 14px;'><img src='{STUDENT_FIXED_IMAGE_URI}' style='width:130px;height:130px;border-radius:50%;object-fit:cover;border:4px solid #60a5fa;box-shadow:0 10px 25px rgba(0,0,0,.18);'></div>", unsafe_allow_html=True)
+        st.caption("صورتك محفوظة وتظهر في الواجهة والتقارير. يمكنك تغييرها من هنا دون التأثير على باقي البيانات.")
+        change_photo=st.checkbox("✏️ أريد تغيير الصورة",key="change_teacher_photo")
+        if change_photo:
+            teacher_photo=st.file_uploader("اختر صورة جديدة",type=["png","jpg","jpeg"],key="teacher_profile_upload")
+            if teacher_photo is not None and st.button("💾 حفظ صورتي الجديدة",key="save_teacher_photo",use_container_width=True):
+                b64=base64.b64encode(teacher_photo.getvalue()).decode("utf-8")
+                st.session_state.teacher_profile_df=pd.DataFrame([{"اسم المعلم":"م/ محمد غنيم","الصورة_base64":b64}])
+                save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df)
+                st.success("✓ تم حفظ الصورة الجديدة"); st.rerun()
+
+elif t_page == "payments":
+    st.markdown("<div class='vertical-section-header'>▰  المدفوعات</div>", unsafe_allow_html=True)
+    st.caption("سجل المبالغ المستحقة من الحصص، وأكد المدفوعات عند استلامها. كل دفعة تحفظ بتاريخها وطريقة الدفع في سجل مستقل.")
+
+    total_due_all, total_paid_all, total_balance_all = get_all_financial_totals()
+    pc1, pc2, pc3 = st.columns(3)
+    pc1.metric("💳 إجمالي المستحق", f"{total_due_all:,.0f} جنيه")
+    pc2.metric("✅ إجمالي المدفوع", f"{total_paid_all:,.0f} جنيه")
+    pc3.metric("💰 إجمالي الرصيد المتبقي", f"{max(total_balance_all, 0):,.0f} جنيه")
+
+    st.markdown("### 📆 ملخص الحساب حسب الشهر")
+    _months = set()
+    if not st.session_state.sessions_df.empty and "التاريخ" in st.session_state.sessions_df.columns:
+        _months.update([m for m in st.session_state.sessions_df["التاريخ"].apply(_month_from_value) if m])
+    if not st.session_state.payment_records_df.empty:
+        if "الشهر" in st.session_state.payment_records_df.columns:
+            _months.update([str(m).strip() for m in st.session_state.payment_records_df["الشهر"].dropna() if str(m).strip()])
+        elif "التاريخ" in st.session_state.payment_records_df.columns:
+            _months.update([m for m in st.session_state.payment_records_df["التاريخ"].apply(_month_from_value) if m])
+    _month_options = sorted(_months, reverse=True) or [date.today().strftime("%Y-%m")]
+    selected_fin_month = st.selectbox("اختر الشهر:", _month_options, key="financial_month_filter")
+    mdue, mpaid, mbal = get_monthly_financial_totals(selected_fin_month)
+    mc1, mc2, mc3 = st.columns(3)
+    mc1.metric("مستحق الشهر", f"{mdue:,.0f} جنيه")
+    mc2.metric("مدفوع الشهر", f"{mpaid:,.0f} جنيه")
+    mc3.metric("متبقي الشهر", f"{max(mbal,0):,.0f} جنيه")
+
+    payment_students = sorted(list(set(
+        [str(x).strip() for x in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(x).strip()] +
+        [str(x).strip() for x in st.session_state.sessions_df["اسم الطالب"].dropna().unique() if str(x).strip()] +
+        [str(x).strip() for x in st.session_state.weekly_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()]
+    )))
+
+    if not payment_students:
+        st.info("لا يوجد طلاب مسجلون أو حصص مرصودة حتى الآن.")
+    else:
+        st.markdown("### 👤 تسجيل دفعة جديدة")
+        pay_c1, pay_c2 = st.columns(2)
+        with pay_c1:
+            selected_pay_student = st.selectbox("اختر الطالب:", payment_students, key="payment_student_select")
+            due_now, paid_now, balance_now = get_student_financials(selected_pay_student)
+            st.markdown(f"<div style='background:{card_bg};border:2px solid #10b981;border-radius:14px;padding:14px;text-align:center'><b>المستحق: {due_now:,.0f} جنيه</b> &nbsp; | &nbsp; <b style='color:#059669'>المدفوع: {paid_now:,.0f} جنيه</b> &nbsp; | &nbsp; <b style='color:#dc2626'>المتبقي: {max(balance_now,0):,.0f} جنيه</b></div>", unsafe_allow_html=True)
+        with pay_c2:
+            pay_date = st.date_input("تاريخ الدفع:", value=date.today(), key="payment_date")
+            payment_month = pay_date.strftime("%Y-%m")
+            st.caption(f"📆 شهر الدفعة: {payment_month}")
+            pay_method = st.selectbox("طريقة الدفع:", ["محفظة كاش", "InstaPay"], key="payment_method")
+
+        max_pay = max(float(balance_now), 0.0)
+        pay_amount = st.number_input("المبلغ المدفوع (جنيه):", min_value=0.0, max_value=max_pay if max_pay > 0 else 1000000.0, value=0.0, step=50.0, key="payment_amount")
+        pay_note = st.text_input("ملاحظات الدفع (اختياري):", key="payment_note")
+
+        if st.button("✅ تأكيد استلام الدفع", key="confirm_payment", use_container_width=True):
+            if pay_amount <= 0:
+                st.error("اكتب قيمة الدفع أولاً.")
+            elif balance_now <= 0:
+                st.warning("الطالب لا يوجد عليه رصيد مستحق حالياً.")
+            else:
+                new_payment = {
+                    "التاريخ": str(pay_date),
+                    "الشهر": pay_date.strftime("%Y-%m"),
+                    "اسم الطالب": selected_pay_student,
+                    "المبلغ": float(pay_amount),
+                    "طريقة الدفع": pay_method,
+                    "حالة الدفع": "مؤكد",
+                    "ملاحظات": pay_note.strip(),
+                }
+                st.session_state.payment_records_df = pd.concat([st.session_state.payment_records_df, pd.DataFrame([new_payment])], ignore_index=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.success(f"✓ تم تأكيد دفع {pay_amount:,.0f} جنيه للطالب {selected_pay_student} عن طريق {pay_method}.")
+                st.rerun()
+
+    st.write("---")
+    st.markdown("### 📊 رصيد كل طالب")
+    financial_rows = []
+    for nm in payment_students:
+        due, paid, balance = get_student_financials(nm)
+        urow = st.session_state.users_df[st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == nm]
+        grade = str(urow.iloc[0].get("المجموعة/الصف", "")) if not urow.empty else ""
+        sess_count = int(len(st.session_state.sessions_df[st.session_state.sessions_df["اسم الطالب"].astype(str).str.strip() == nm]))
+        financial_rows.append({"اسم الطالب": nm, "المرحلة": grade, "إجمالي الحصص": sess_count, "إجمالي المستحق": round(due,2), "إجمالي المدفوع": round(paid,2), "الرصيد المتبقي": round(max(balance,0),2), "الحالة": "مدفوع بالكامل" if balance <= 0 else "عليه رصيد"})
+    financial_df = pd.DataFrame(financial_rows)
+    if not financial_df.empty:
+        st.dataframe(financial_df, use_container_width=True)
+
+    st.markdown("### 📜 سجل المدفوعات")
+    pay_log = st.session_state.payment_records_df.copy()
+    if pay_log.empty:
+        st.info("لا توجد دفعات مؤكدة مسجلة حتى الآن.")
+    else:
+        pay_log = pay_log.sort_values(by="التاريخ", ascending=False, kind="stable")
+        if "الشهر" in pay_log.columns:
+            pay_log = pay_log[pay_log["الشهر"].astype(str).str.strip() == selected_fin_month]
+        st.dataframe(pay_log, use_container_width=True)
+        st.caption("حذف سجل الدفع يعكس العملية من الرصيد، ولا يحذف الطالب أو الحصص.")
+        # نحتفظ بالفهرس الأصلي منفصلاً عن النص المعروض، حتى لا يعتمد التراجع
+        # على تحويل النص إلى رقم إذا تغير شكل الفهرس أو تنسيق السجل.
+        payment_log_indices = list(pay_log.index)
+        # نستخدم رقم الصف الحقيقي كقيمة للـ selectbox، ونستخدم format_func للعرض.
+        # بهذه الطريقة لا نعتمد على النص المعروض ولا يحدث خطأ إذا تغيّر ترتيب/شهر السجل.
+        payment_log_indices = list(pay_log.index)
+        def _payment_log_label(idx):
+            r = pay_log.loc[idx]
+            return f"{idx} — {r.get('اسم الطالب','')} — {float(r.get('المبلغ',0) or 0):,.0f} جنيه — {r.get('التاريخ','')} — {r.get('طريقة الدفع','')}"
+        chosen_idx = st.selectbox(
+            "اختر عملية لتراجعها:",
+            payment_log_indices,
+            format_func=_payment_log_label,
+            key="payment_delete_select_idx"
+        )
+        if st.button("↩️ تراجع عن عملية الدفع المحددة", key="reverse_payment"):
+            original_idx = chosen_idx
+            st.session_state.payment_records_df = st.session_state.payment_records_df.drop(index=original_idx).reset_index(drop=True)
+            save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+            st.success("✓ تم التراجع عن عملية الدفع وعاد المبلغ إلى الرصيد المستحق.")
+            st.rerun()
+
+    st.markdown("### 📥 تصدير الحسابات")
+    pay_export = io.BytesIO()
+    with pd.ExcelWriter(pay_export, engine="openpyxl") as writer:
+        financial_df.to_excel(writer, sheet_name="StudentBalances", index=False)
+        st.session_state.payment_records_df.to_excel(writer, sheet_name="PaymentRecords", index=False)
+    st.download_button("📥 تصدير كشف الحسابات والمدفوعات Excel", data=pay_export.getvalue(), file_name="حسابات_ومدفوعات_الطلاب.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="payment_export_excel")
+
+
+elif t_page == "weekly_schedule":
+    st.markdown("<div class='vertical-section-header'>▦  مواعيد الطلاب الأسبوعية</div>", unsafe_allow_html=True)
+    st.caption("لوحة مستقلة لإضافة الطلاب ومواعيدهم. كل طالب يظهر بلون مختلف، ويمكن إضافة أكثر من موعد للطالب نفسه.")
+
+    st.markdown("### 🔔 إشعارات الحصص على الهاتف")
+    if _telegram_configured():
+        st.success("✅ إشعارات Telegram مفعّلة — سيصل لك ملخص حصص اليوم على الهاتف يوميًا.")
+        if st.button("📲 إرسال إشعار تجريبي الآن", key="teacher_schedule_test_telegram"):
+            _day_names = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+            _today_name = _day_names[datetime.now().weekday()]
+            _today_rows = st.session_state.weekly_schedule_df[
+                (st.session_state.weekly_schedule_df["اليوم"].astype(str).str.strip() == _today_name) &
+                (st.session_state.weekly_schedule_df["حالة الموعد"].astype(str).str.strip() != "متوقف")
+            ].sort_values(by="الموعد", kind="stable") if not st.session_state.weekly_schedule_df.empty else pd.DataFrame()
+            if _today_rows.empty:
+                _msg = f"🔔 <b>جدول اليوم</b>\nلا توجد حصص مسجلة اليوم ({_today_name})."
+            else:
+                _lines = [f"🔔 <b>حصص اليوم — {_today_name}</b>", ""]
+                for _, _rr in _today_rows.iterrows():
+                    _lines.append(f"🕐 <b>{html.escape(format_schedule_time_ampm(_rr.get('الموعد','')))}</b> — {html.escape(str(_rr.get('اسم الطالب','')))} — {html.escape(str(_rr.get('المجموعة/الصف','')))}")
+                _msg = "\n".join(_lines)
+            _ok, _err = _telegram_send_message(_msg)
+            if _ok: st.success("تم إرسال الإشعار التجريبي إلى الهاتف عبر Telegram.")
+            else: st.error(f"تعذر إرسال الإشعار: {_err}")
+    else:
+        st.info("📱 لتفعيل إشعار الهاتف اليومي: اربط المنصة مع Telegram. بعد ضبط الأسرار سيعمل الإشعار تلقائيًا كل يوم صباحًا.")
+        st.caption("يتم الضبط بأسماء الأسرار فقط: TELEGRAM_BOT_TOKEN و TELEGRAM_CHAT_ID — لا تضع القيم داخل الكود أو GitHub.")
+
+
+
+    ws_df = st.session_state.weekly_schedule_df
+    known_students = sorted(list(set(
+        [str(x).strip() for x in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(x).strip()] +
+        [str(x).strip() for x in ws_df["اسم الطالب"].dropna().unique() if str(x).strip()]
+    )))
+
+    # ألوان جاهزة ومتعددة للطلاب
+    palette = ["#2563eb", "#16a34a", "#dc2626", "#9333ea", "#ea580c", "#0891b2", "#db2777", "#65a30d", "#7c3aed", "#0f766e"]
+    # لون ثابت لكل طالب، ومختلف تلقائياً عن لون أي طالب آخر.
+    # إذا كانت البيانات القديمة أعطت أكثر من طالب نفس اللون، نعيد توزيع الألوان مرة واحدة.
+    color_map = {}
+    used_colors = set()
+    if not ws_df.empty:
+        for i, name in enumerate(known_students):
+            old_colors = [str(x).strip() for x in ws_df.loc[ws_df["اسم الطالب"].astype(str).str.strip() == name, "اللون"].dropna().tolist()]
+            old_color = next((c for c in old_colors if c.startswith("#")), "")
+            if old_color and old_color not in used_colors:
+                chosen = old_color
+            else:
+                chosen = palette[i % len(palette)]
+                # ضمان عدم تكرار اللون حتى لو عدد الطلاب أكبر من الألوان الجاهزة
+                if chosen in used_colors:
+                    chosen = palette[next(j for j in range(len(palette)) if palette[j] not in used_colors)] if len(used_colors) < len(palette) else f"hsl({(i*47)%360}, 75%, 48%)"
+            color_map[name] = chosen
+            used_colors.add(chosen)
+    else:
+        color_map = {name: palette[i % len(palette)] for i, name in enumerate(known_students)}
+
+    # تحديث ألوان الصفوف الموجودة لضمان أن كل اسم طالب له لون مختلف في الجدول والحفظ.
+    if not ws_df.empty and color_map:
+        ws_df = ws_df.copy()
+        ws_df["اللون"] = ws_df["اسم الطالب"].astype(str).str.strip().map(color_map).fillna(ws_df["اللون"])
+        st.session_state.weekly_schedule_df = ws_df
+
+    st.markdown("### 👥 إدارة طلاب لوحة المواعيد")
+    wm1,wm2,wm3=st.columns(3)
+    with wm1:
+        with st.expander("➕ إضافة طالب جديد", expanded=False):
+            # اختيار المنهج والمرحلة خارج الفورم حتى تتغير قائمة المراحل فوراً عند تغيير المنهج
+            ms_curr=st.selectbox("المنهج",list(CURRICULUM_DATA.keys()),key="wm_curr")
+            ms_grade=st.selectbox("المرحلة",CURRICULUM_DATA[ms_curr],key="wm_grade")
+            with st.form("weekly_manual_student_form", clear_on_submit=True):
+                ms_name=st.text_input("اسم الطالب")
+                ms_phone=st.text_input("رقم الطالب")
+                ms_parent=st.text_input("اسم ولي الأمر")
+                ms_parent_phone=st.text_input("رقم ولي الأمر")
+                ms_pass=st.text_input("كلمة المرور",value="123456")
+                if st.form_submit_button("💾 إضافة الطالب"):
+                    target=ms_name.strip()
+                    if not target: st.error("اكتب اسم الطالب.")
+                    elif target in known_students: st.warning("الطالب موجود بالفعل.")
+                    else:
+                        row={"اسم الطالب":target,"رقم الهاتف":ms_phone.strip(),"كلمة المرور":ms_pass.strip() or "123456","المنهج/الدولة":ms_curr,"المجموعة/الصف":ms_grade,"اسم ولي الأمر":ms_parent.strip(),"رقم ولي الأمر":ms_parent_phone.strip(),"تاريخ التسجيل":str(date.today()),"الحالة_حظر":"نشط","حالة_الاشتراك_البنك":"غير مشترك"}
+                        st.session_state.users_df=pd.concat([st.session_state.users_df,pd.DataFrame([row])],ignore_index=True)
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.success("✓ تمت إضافة الطالب لكشف المسجلين وبطاقات الطلاب والسجلات.")
+                        st.rerun()
+    with wm2:
+        if known_students:
+            wd=st.selectbox("اختر طالباً",known_students,key="weekly_delete_student")
+            if st.button("🗑️ حذف الطالب نهائياً",key="weekly_delete_student_btn"):
+                delete_student_completely(wd); st.success(f"تم حذف {wd} من جميع السجلات."); st.rerun()
+    with wm3:
+        wh=build_student_roster_html(known_students,"كشف طلاب لوحة المواعيد")
+        wp=html_to_pdf_bytes(wh)
+        if wp: st.download_button("📄 طباعة الطلاب PDF",wp,file_name="كشف_طلاب_لوحة_المواعيد.pdf",mime="application/pdf",key="weekly_students_pdf")
+        else: st.download_button("🖨️ طباعة الطلاب",wh.encode("utf-8"),file_name="كشف_طلاب_لوحة_المواعيد.html",mime="text/html",key="weekly_students_html")
+    st.write("---")
+    # بيانات الموعد السابق: عند اختيار "إضافة موعد آخر" لنفس الطالب، يتم الاحتفاظ بكل بياناته
+    # ونحتاج فقط لتغيير اليوم والساعة (ويمكن تعديل أي بيان قبل الحفظ).
+    prefill_student = st.session_state.pop("schedule_prefill_student", "")
+    prefill_record = st.session_state.pop("schedule_prefill_record", None)
+    prefill_student = str(prefill_student).strip()
+
+    with st.expander("➕ إضافة موعد طالب جديد / إضافة موعد آخر", expanded=True):
+        # اختيار الطالب خارج الفورم حتى تتحدث بياناته المرتبطة فوراً عند تغييره
+        if known_students:
+            default_student_idx = known_students.index(prefill_student) if prefill_student in known_students else 0
+            ws_student = st.selectbox("اسم الطالب:", known_students, index=default_student_idx, key="weekly_student")
+        else:
+            ws_student = st.text_input("اسم الطالب:", value=prefill_student, key="weekly_student_text")
+
+        # بيانات الطالب الأساسية تؤخذ تلقائياً من سجل الطالب الذي أضافه المعلم سابقاً
+        student_clean_for_lookup = str(ws_student).strip()
+        registered_student = st.session_state.users_df[
+            st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == student_clean_for_lookup
+        ] if student_clean_for_lookup else pd.DataFrame()
+
+        # نستخدم سجل الطالب الرئيسي أولاً، ثم آخر موعد له كاحتياط للبيانات القديمة
+        student_existing = pd.DataFrame()
+        if student_clean_for_lookup and not ws_df.empty:
+            student_existing = ws_df[ws_df["اسم الطالب"].astype(str).str.strip() == student_clean_for_lookup]
+        base_record = prefill_record if isinstance(prefill_record, dict) else (student_existing.iloc[-1].to_dict() if not student_existing.empty else {})
+
+        if not registered_student.empty:
+            user_record = registered_student.iloc[0]
+            ws_curr = str(user_record.get("المنهج/الدولة", "")).strip()
+            ws_grade = str(user_record.get("المجموعة/الصف", "")).strip()
+            if not ws_curr or ws_curr.lower() == "nan":
+                ws_curr = str(base_record.get("المنهج/الدولة", list(CURRICULUM_DATA.keys())[0]))
+            if not ws_grade or ws_grade.lower() == "nan":
+                ws_grade = str(base_record.get("المجموعة/الصف", "")).strip()
+            registered_phone = str(user_record.get("رقم الهاتف", "")).strip()
+        else:
+            ws_curr = str(base_record.get("المنهج/الدولة", list(CURRICULUM_DATA.keys())[0]))
+            ws_grade = str(base_record.get("المجموعة/الصف", "")).strip()
+            registered_phone = ""
+
+        if ws_curr.lower() == "nan":
+            ws_curr = list(CURRICULUM_DATA.keys())[0]
+        if ws_grade.lower() == "nan":
+            ws_grade = ""
+
+        with st.form("weekly_schedule_add_form", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                ws_academy = st.text_input("اسم الأكاديمية:", value=str(base_record.get("اسم الأكاديمية", "أكاديمية البشمهندس")))
+                st.text_input("المنهج الدراسي / الدولة (تلقائي):", value=ws_curr, disabled=True)
+                st.text_input("المرحلة / الصف (تلقائي):", value=ws_grade, disabled=True)
+                ws_phone = st.text_input("رقم الطالب:", value=registered_phone or str(base_record.get("رقم الطالب", "")))
+            with c2:
+                ws_sup = st.text_input("رقم مشرف الأكاديمية:", value=str(base_record.get("رقم مشرف الأكاديمية", "")))
+                try:
+                    base_price = float(base_record.get("سعر الحصة", 100.0))
+                except Exception:
+                    base_price = 100.0
+                ws_price = st.number_input("سعر الحصة (جنيه):", min_value=0.0, step=10.0, value=base_price)
+                days_options = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"]
+                base_day = str(base_record.get("اليوم", "السبت"))
+                day_index = days_options.index(base_day) if base_day in days_options else 0
+                ws_day = st.selectbox("يوم الحصة:", days_options, index=day_index)
+                # اختيار موعد الحصة بنظام 12 ساعة مع AM / PM بشكل واضح
+                try:
+                    base_time = datetime.strptime(str(base_record.get("الموعد", "18:00"))[:5], "%H:%M").time()
+                except Exception:
+                    base_time = time(18, 0)
+                base_hour_12 = base_time.hour % 12 or 12
+                base_ampm = "AM" if base_time.hour < 12 else "PM"
+                base_minute = (base_time.minute // 15) * 15
+                if base_minute not in [0, 15, 30, 45]:
+                    base_minute = 0
+                th1, th2, th3 = st.columns(3)
+                with th1:
+                    ws_hour = st.selectbox("ساعة الحصة:", list(range(1, 13)), index=list(range(1, 13)).index(base_hour_12))
+                with th2:
+                    ws_minute = st.selectbox("الدقائق:", [0, 15, 30, 45], index=[0, 15, 30, 45].index(base_minute), format_func=lambda x: f"{x:02d}")
+                with th3:
+                    ws_ampm = st.selectbox("الفترة:", ["AM", "PM"], index=0 if base_ampm == "AM" else 1)
+                hour24 = ws_hour % 12 + (12 if ws_ampm == "PM" else 0)
+                ws_time = time(hour24, ws_minute)
+                st.caption(f"🕐 الموعد المختار: **{ws_hour}:{ws_minute:02d} {ws_ampm}**")
+
+            st.caption("🔗 المنهج والمرحلة مرتبطان تلقائياً ببيانات الطالب المسجلة في حسابه، ولا يحتاجان لإعادة الاختيار هنا.")
+            if prefill_student:
+                st.info(f"📌 يتم الآن إضافة موعد آخر للطالب: **{prefill_student}** — غيّر اليوم والساعة ثم اضغط حفظ.")
+
+            if st.form_submit_button("💾 إضافة الموعد إلى الجدول"):
+                if not str(ws_student).strip():
+                    st.error("يرجى اختيار أو كتابة اسم الطالب.")
+                else:
+                    student_clean = str(ws_student).strip()
+                    new_ws = {
+                        "اسم الطالب": student_clean,
+                        "اسم الأكاديمية": ws_academy.strip(),
+                        "المنهج/الدولة": ws_curr,
+                        "المجموعة/الصف": ws_grade,
+                        "رقم الطالب": ws_phone.strip(),
+                        "رقم مشرف الأكاديمية": ws_sup.strip(),
+                        "سعر الحصة": ws_price,
+                        "اليوم": ws_day,
+                        "الموعد": ws_time.strftime("%H:%M"),                        "اللون": color_map.get(student_clean, palette[len(color_map) % len(palette)]),
+                        "حالة الموعد": "نشط"
+                    }
+                    # ربط الموعد بسجل الطالب الرئيسي حتى يظهر تلقائياً في كشف المسجلين والبطاقات والسجلات والتقارير والواجبات
+                    existing_user = st.session_state.users_df[st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == student_clean]
+                    if existing_user.empty:
+                        auto_user = {"اسم الطالب":student_clean,"رقم الهاتف":ws_phone.strip(),"كلمة المرور":"123456","المنهج/الدولة":ws_curr,"المجموعة/الصف":ws_grade,"اسم ولي الأمر":"","رقم ولي الأمر":"","تاريخ التسجيل":str(date.today()),"الحالة_حظر":"نشط","حالة_الاشتراك_البنك":"غير مشترك"}
+                        st.session_state.users_df = pd.concat([st.session_state.users_df, pd.DataFrame([auto_user])], ignore_index=True)
+                    else:
+                        ui = existing_user.index[0]
+                        if not str(st.session_state.users_df.at[ui,"رقم الهاتف"]).strip() and ws_phone.strip(): st.session_state.users_df.at[ui,"رقم الهاتف"] = ws_phone.strip()
+                        st.session_state.users_df.at[ui,"المنهج/الدولة"] = ws_curr
+                        st.session_state.users_df.at[ui,"المجموعة/الصف"] = ws_grade
+                    st.session_state.weekly_schedule_df = pd.concat([st.session_state.weekly_schedule_df, pd.DataFrame([new_ws])], ignore_index=True)
+                    save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                    st.success(f"✓ تم إضافة موعد {student_clean} يوم {ws_day} الساعة {ws_time.strftime('%I:%M %p').lstrip('0')}.")
+                    st.rerun()
+
+    # جدول أسبوعي حقيقي: الأيام أعمدة والطلاب داخل الخلايا حسب الموعد
+    st.markdown("### 📅 الجدول الأسبوعي")
+    days = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"]
+    if ws_df.empty:
+        st.info("لا توجد مواعيد مضافة حتى الآن.")
+    else:
+        rows = []
+        times = sorted([str(x) for x in ws_df["الموعد"].dropna().unique()])
+        for tm in times:
+            row = {"الساعة": format_schedule_time_ampm(tm)}
+            for d in days:
+                matches = ws_df[(ws_df["الموعد"].astype(str) == tm) & (ws_df["اليوم"].astype(str) == d) & (ws_df["حالة الموعد"].astype(str) != "متوقف")]
+                parts = []
+                for _, r in matches.iterrows():
+                    col = str(r.get("اللون", "#2563eb"))
+                    parts.append(f"<div style='background:{col};color:#fff;padding:7px;border-radius:8px;margin:2px 0;font-weight:900;'>👤 {r['اسم الطالب']}<br><small>{r['المجموعة/الصف']} | {r['اسم الأكاديمية']}</small></div>")
+                row[d] = "".join(parts) if parts else "—"
+            rows.append(row)
+        schedule_html = "<table style='width:100%;border-collapse:collapse;text-align:center;direction:rtl'><tr style='background:#f1f5f9'><th style='padding:10px;border:1px solid #cbd5e1'>الساعة</th>" + "".join([f"<th style='padding:10px;border:1px solid #cbd5e1'>{d}</th>" for d in days]) + "</tr>"
+        for row in rows:
+            schedule_html += f"<tr><td style='padding:10px;border:1px solid #cbd5e1;font-weight:900'>{row['الساعة']}</td>" + "".join([f"<td style='padding:5px;border:1px solid #cbd5e1;vertical-align:top'>{row[d]}</td>" for d in days]) + "</tr>"
+        schedule_html += "</table>"
+        st.markdown(schedule_html, unsafe_allow_html=True)
+
+        st.write("---")
+        st.markdown("### 👥 تفاصيل المواعيد وإدارتها")
+        for ws_idx, r in ws_df.iterrows():
+            student_nm = str(r.get("اسم الطالب", ""))
+            with st.expander(f"{student_nm} — {r.get('اليوم','')} {r.get('الموعد','')} | {r.get('اسم الأكاديمية','')}"):
+                c1, c2, c3 = st.columns(3)
+                c1.write(f"**المنهج:** {r.get('المنهج/الدولة','')}\n\n**المرحلة:** {r.get('المجموعة/الصف','')}")
+                c2.write(f"**سعر الحصة:** {r.get('سعر الحصة',0)} جنيه\n\n**مشرف الأكاديمية:** {r.get('رقم مشرف الأكاديمية','')}")
+                c3.write(f"**رقم الطالب:** {r.get('رقم الطالب','')}\n\n**الحالة:** {r.get('حالة الموعد','نشط')}")
+                b1, b2, b3, b4 = st.columns(4)
+                with b1:
+                    if st.button("➕ إضافة موعد آخر", key=f"ws_add_another_{ws_idx}"):
+                        st.session_state.schedule_prefill_student = student_nm
+                        st.session_state.schedule_prefill_record = r.to_dict()
+                        st.rerun()
+                with b2:
+                    if st.button("📝 رصد حصة الطالب", key=f"ws_session_{ws_idx}"):
+                        st.session_state.prefill_student = student_nm
+                        st.session_state.prefill_schedule_idx = ws_idx
+                        st.session_state.teacher_page = "add_session"
+                        st.rerun()
+                with b3:
+                    if st.button("📚 رصد واجب الطالب", key=f"ws_hw_{ws_idx}"):
+                        st.session_state.prefill_student = student_nm
+                        st.session_state.teacher_page = "add_hw"
+                        st.rerun()
+                with b4:
+                    if st.button("🗑️ حذف الموعد", key=f"ws_del_{ws_idx}"):
+                        st.session_state.weekly_schedule_df = ws_df.drop(ws_idx).reset_index(drop=True)
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.success("تم حذف الموعد فقط، ولن يتم حذف الطالب أو سجلاته.")
+                        st.rerun()
+
+    st.write("---")
+    st.markdown("### 📋 كشف المواعيد القابل للطباعة والتصدير")
+    st.dataframe(st.session_state.weekly_schedule_df, use_container_width=True)
+    # نسخة الطباعة تكون بنفس شكل الجدول الأسبوعي: الأيام أعمدة والطلاب داخل الخلايا بألوانهم.
+    ws_html=build_weekly_schedule_print_html(st.session_state.weekly_schedule_df, "الجدول الأسبوعي لمواعيد الطلاب")
+    ws_pdf=html_to_pdf_bytes(ws_html)
+    e1,e2,e3=st.columns(3)
+    with e1:
+        if ws_pdf: st.download_button("📄 طباعة الجدول الأسبوعي PDF",ws_pdf,file_name="الجدول_الأسبوعي_للطلاب.pdf",mime="application/pdf",key="weekly_schedule_pdf")
+        else: st.download_button("🖨️ طباعة الجدول الأسبوعي",ws_html.encode("utf-8"),file_name="الجدول_الأسبوعي_للطلاب.html",mime="text/html",key="weekly_schedule_html")
+    with e2:
+        # كشف تفصيلي منفصل لمن يريد طباعته كقائمة
+        detail_rows="".join(f"<tr><td>{r.get('اسم الطالب','')}</td><td>{r.get('اليوم','')}</td><td>{r.get('الموعد','')}</td><td>{r.get('اسم الأكاديمية','')}</td><td>{r.get('المنهج/الدولة','')}</td><td>{r.get('المجموعة/الصف','')}</td><td>{r.get('سعر الحصة','')}</td></tr>" for _,r in st.session_state.weekly_schedule_df.iterrows())
+        detail_html=make_print_html("كشف مواعيد الطلاب",detail_rows,"<th>الطالب</th><th>اليوم</th><th>الموعد</th><th>الأكاديمية</th><th>المنهج</th><th>المرحلة</th><th>السعر</th>")
+        detail_pdf=html_to_pdf_bytes(detail_html)
+        if detail_pdf: st.download_button("📋 طباعة كشف المواعيد PDF",detail_pdf,file_name="كشف_مواعيد_الطلاب.pdf",mime="application/pdf",key="weekly_schedule_detail_pdf")
+        else: st.download_button("🖨️ طباعة كشف المواعيد",detail_html.encode("utf-8"),file_name="كشف_مواعيد_الطلاب.html",mime="text/html",key="weekly_schedule_detail_html")
+    with e3:
+        buf_ws=io.BytesIO()
+        with pd.ExcelWriter(buf_ws,engine="openpyxl") as writer: st.session_state.weekly_schedule_df.to_excel(writer,sheet_name="WeeklySchedule",index=False)
+        st.download_button("📥 تصدير جدول المواعيد Excel",data=buf_ws.getvalue(),file_name="جدول_مواعيد_الطلاب.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+elif t_page == "online_schedule":
+    st.subheader("💻 إدارة جدول حصص الأونلاين (Zoom) وتحديد مواعيد الطلاب:")
+
+    all_registered_names = sorted(list(set(
+        [str(s).strip() for s in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [str(s).strip() for s in st.session_state.sessions_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [str(s).strip() for s in st.session_state.weekly_schedule_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [str(s).strip() for s in st.session_state.online_schedule_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+    )))
+
+    st.markdown("### 👥 إدارة طلاب Zoom")
+    zm1,zm2,zm3=st.columns(3)
+    with zm1:
+        with st.expander("➕ إضافة طالب",expanded=False):
+            # اختيار المنهج والمرحلة خارج الفورم حتى تتغير قائمة المراحل فوراً عند تغيير المنهج
+            zc=st.selectbox("المنهج",list(CURRICULUM_DATA.keys()),key="zm_curr")
+            zg=st.selectbox("المرحلة",CURRICULUM_DATA[zc],key="zm_grade")
+            with st.form("zoom_manual_student_form",clear_on_submit=True):
+                zn=st.text_input("اسم الطالب"); zp=st.text_input("رقم الطالب"); zpn=st.text_input("اسم ولي الأمر"); zpp=st.text_input("رقم ولي الأمر")
+                zpass=st.text_input("كلمة المرور",value="123456")
+                if st.form_submit_button("💾 إضافة الطالب"):
+                    target=zn.strip()
+                    if not target: st.error("اكتب اسم الطالب.")
+                    elif target in all_registered_names: st.warning("الطالب موجود بالفعل.")
+                    else:
+                        row={"اسم الطالب":target,"رقم الهاتف":zp.strip(),"كلمة المرور":zpass.strip() or "123456","المنهج/الدولة":zc,"المجموعة/الصف":zg,"اسم ولي الأمر":zpn.strip(),"رقم ولي الأمر":zpp.strip(),"تاريخ التسجيل":str(date.today()),"الحالة_حظر":"نشط","حالة_الاشتراك_البنك":"غير مشترك"}
+                        st.session_state.users_df=pd.concat([st.session_state.users_df,pd.DataFrame([row])],ignore_index=True)
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.success("✓ تمت إضافة الطالب لكشف المسجلين وبطاقات الطلاب."); st.rerun()
+    with zm2:
+        if all_registered_names:
+            zd=st.selectbox("اختر طالباً",all_registered_names,key="zoom_delete_student")
+            if st.button("🗑️ حذف الطالب نهائياً",key="zoom_delete_student_btn"):
+                delete_student_completely(zd); st.success(f"تم حذف {zd} من جميع السجلات."); st.rerun()
+    with zm3:
+        zh=build_student_roster_html(all_registered_names,"كشف طلاب Zoom"); zpdata=html_to_pdf_bytes(zh)
+        if zpdata: st.download_button("📄 طباعة الطلاب PDF",zpdata,file_name="كشف_طلاب_Zoom.pdf",mime="application/pdf",key="zoom_roster_pdf")
+        else: st.download_button("🖨️ طباعة الطلاب",zh.encode("utf-8"),file_name="كشف_طلاب_Zoom.html",mime="text/html",key="zoom_roster_html")
+    # المنهج والمرحلة خارج الفورم لأن Streamlit لا يعيد تشغيل widgets داخل form عند تغييرها
+    os_curr = st.selectbox("المنهج الدراسي / الدولة:", list(CURRICULUM_DATA.keys()), key="zoom_schedule_curr")
+    os_grade = st.selectbox("المرحلة / الصف الدراسي:", CURRICULUM_DATA[os_curr], key="zoom_schedule_grade")
+    with st.form("add_online_sched_form", clear_on_submit=True):
+        col_os1, col_os2 = st.columns(2)
+        with col_os1:
+            os_student = st.selectbox("اختر الطالب أو اكتبه:", all_registered_names) if all_registered_names else st.text_input("اسم الطالب:")
+            os_academy = st.text_input("اسم الأكاديمية:", value="أكاديمية البشمهندس")
+            os_phone = st.text_input("رقم الهاتف المحمول للطالب:")
+        with col_os2:
+            os_sup_phone = st.text_input("رقم مشرف الأكاديمية:")
+            os_price = st.number_input("سعر الحصة (جنيه):", min_value=0.0, step=10.0, value=100.0)
+            os_date = st.date_input("تقويم موعد الحصة:", value=date.today())
+            os_time = st.time_input("ساعة الحصة:", value=time(18, 0))
+            os_zoom = st.text_input("رابط زوم المخصص:", value="https://us05web.zoom.us/j/83526892910?pwd=2jWRgATgBRPbXttdnm0QpLwBApsZL4.1")
+
+        if st.form_submit_button("💾 حفظ وإدراج الطالب في جدول الأونلاين"):
+            if not str(os_student).strip() or not os_phone.strip():
+                st.error("يرجى كتابة اسم الطالب ورقم الهاتف.")
+            else:
+                new_sched_row = {
+                    "اسم الطالب": str(os_student).strip(),
+                    "اسم الأكاديمية": os_academy.strip(),
+                    "المنهج/الدولة": os_curr,
+                    "المجموعة/الصف": os_grade,
+                    "رقم الطالب": os_phone.strip(),
+                    "رقم مشرف الأكاديمية": os_sup_phone.strip(),
+                    "سعر الحصة": os_price,
+                    "تاريخ الحصة": str(os_date),
+                    "ساعة الحصة": os_time.strftime("%H:%M"),
+                    "رابط زوم": os_zoom.strip(),
+                    "حالة فتح الحصة": "مغلقة"
+                }
+                online_student_clean = str(os_student).strip()
+                existing_user = st.session_state.users_df[st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == online_student_clean]
+                if existing_user.empty:
+                    auto_user = {"اسم الطالب":online_student_clean,"رقم الهاتف":os_phone.strip(),"كلمة المرور":"123456","المنهج/الدولة":os_curr,"المجموعة/الصف":os_grade,"اسم ولي الأمر":"","رقم ولي الأمر":"","تاريخ التسجيل":str(date.today()),"الحالة_حظر":"نشط","حالة_الاشتراك_البنك":"غير مشترك"}
+                    st.session_state.users_df = pd.concat([st.session_state.users_df, pd.DataFrame([auto_user])], ignore_index=True)
+                st.session_state.online_schedule_df = pd.concat([st.session_state.online_schedule_df, pd.DataFrame([new_sched_row])], ignore_index=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.success(f"✓ تم إضافة الطالب ({os_student}) إلى جدول الأونلاين بنجاح!")
+
+    st.write("---")
+    st.markdown("### 📋 جدول الطلاب المسجلين أونلاين والتحكم بحالة الحصة (فتح/إغلاق):")
+    os_state = st.session_state.online_schedule_df
+    if os_state.empty:
+        st.info("لا توجد حصص أونلاين مسجلة حتى الآن.")
+    else:
+        for os_idx, os_row in os_state.iterrows():
+            st_n = os_row["اسم الطالب"]
+            ac_n = os_row.get("اسم الأكاديمية", "أكاديمية")
+            dt_n = os_row.get("تاريخ الحصة", "")
+            tm_n = os_row.get("ساعة الحصة", "")
+            cur_status = os_row["حالة فتح الحصة"]
+
+            with st.expander(f"طالب: {st_n} — أكاديمية: ({ac_n}) | الموعد: {dt_n} {tm_n} | الحالة: [{cur_status}]"):
+                with st.form(f"update_zoom_status_{os_idx}"):
+                    new_status = st.selectbox("تغيير حالة الحصة (ليراها الطالب زر فتح):", ["مغلقة", "مفتوحة"], index=0 if cur_status == "مغلقة" else 1)
+                    edit_zoom_link = st.text_input("تحديث رابط زوم:", value=str(os_row["رابط زوم"]))
+                    
+                    c_os1, c_os2 = st.columns(2)
+                    with c_os1:
+                        update_sub = st.form_submit_button("🔄 تحديث حالة الحصة ولينك زوم")
+                    with c_os2:
+                        del_sub = st.form_submit_button("🗑️ حذف من جدول الأونلاين")
+
+                    if update_sub:
+                        os_state.at[os_idx, "حالة فتح الحصة"] = new_status
+                        os_state.at[os_idx, "رابط زوم"] = edit_zoom_link.strip()
+                        st.session_state.online_schedule_df = os_state
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.success("✓ تم تحديث حالة الحصة بنجاح وسيظهر للطالب فوراً!")
+                        st.rerun()
+
+                    if del_sub:
+                        st.session_state.online_schedule_df = os_state.drop(os_idx).reset_index(drop=True)
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.warning("تم حذف السجل.")
+                        st.rerun()
+                oa,ob,oc=st.columns(3)
+                with oa:
+                    if st.button("📝 رصد حصة الطالب",key=f"zoom_session_{os_idx}"):
+                        st.session_state.prefill_student=str(st_n); st.session_state.teacher_page="add_session"; st.rerun()
+                with ob:
+                    if st.button("📚 رصد واجب الطالب",key=f"zoom_hw_{os_idx}"):
+                        st.session_state.prefill_student=str(st_n); st.session_state.teacher_page="add_hw"; st.rerun()
+                with oc:
+                    if st.button("➕ إضافة موعد آخر",key=f"zoom_add_other_{os_idx}"):
+                        st.session_state.schedule_prefill_student=str(st_n); st.session_state.schedule_prefill_record=os_row.to_dict(); st.session_state.teacher_page="weekly_schedule"; st.rerun()
+
+elif t_page == "exam_maker":
+    st.markdown("<div class='exam-builder-header'>➕ إضافة امتحان جديد / محرر وقص الصور وميزة الطباعة PDF</div>", unsafe_allow_html=True)
+
+    if "temp_questions" not in st.session_state: st.session_state.temp_questions = []
+    if "q_img_ver" not in st.session_state: st.session_state.q_img_ver = 0
+    if "opt1_ver" not in st.session_state: st.session_state.opt1_ver = 0
+    if "opt2_ver" not in st.session_state: st.session_state.opt2_ver = 0
+    if "opt3_ver" not in st.session_state: st.session_state.opt3_ver = 0
+    if "opt4_ver" not in st.session_state: st.session_state.opt4_ver = 0
+
+    if "pasted_q_img" not in st.session_state: st.session_state.pasted_q_img = ""
+    if "pasted_opt1_img" not in st.session_state: st.session_state.pasted_opt1_img = ""
+    if "pasted_opt2_img" not in st.session_state: st.session_state.pasted_opt2_img = ""
+    if "pasted_opt3_img" not in st.session_state: st.session_state.pasted_opt3_img = ""
+    if "pasted_opt4_img" not in st.session_state: st.session_state.pasted_opt4_img = ""
+
+    with st.expander("⚙️ 1. الإعدادات الرئيسية للامتحان", expanded=True):
+        c_ex1, c_ex2 = st.columns(2)
+        with c_ex1:
+            ex_title_input = st.text_input("عنوان الامتحان:*", placeholder="مثال: اختبار الجبر المصور - شهر أكتوبر")
+            ex_desc_input = st.text_area("وصف الامتحان:*", placeholder="تعليمات هامة للطلاب قبل البدء...")
+            ex_pass_input = st.text_input("كلمة المرور (اختياري):", placeholder="اتركه فارغاً إن لم ترغب بكلمة سر")
+        with c_ex2:
+            ex_curr_input = st.selectbox("اختر الدولة / المنهج:*", list(CURRICULUM_DATA.keys()), key="mk_c")
+            ex_grade_input = st.selectbox("اختر الصف الدراسي:*", CURRICULUM_DATA[ex_curr_input], key="mk_g")
+            ex_subject_input = st.selectbox("اختر مادة الامتحان:*", ["الرياضيات (عام)", "الجبر والإحصاء", "الهندسة وحساب المثلثات", "التفاضل والتكامل", "الاستاتيكا والديناميكا", "الرياضيات التطبيقية"])
+            ex_term_input = st.selectbox("اختر الفصل الدراسي:*", ["الفصل الدراسي الأول", "الفصل الدراسي الثاني", "مراجعة نهائية"])
+            ex_time_input = st.number_input("مدة الامتحان بالدقائق:", min_value=5, max_value=180, value=45, step=5)
+
+    with st.expander("📐 2. إدخال الأسئلة وتحرير وقص الصور", expanded=True):
+        q_count = len(st.session_state.temp_questions) + 1
+        st.markdown(f"#### إضافة سؤال رقم {q_count}")
+
+        q_type_choice = st.selectbox("نوع السؤال:", ["سؤال موضوعي (اختيار من متعدد)", "سؤال مقالي (خطوات حل ورفع صورة)"])
+        is_mcq = "موضوعي" in q_type_choice
+
+        st.markdown("##### 📌 أ) صورة السؤال:")
+        col_qp1, col_qp2 = st.columns([1, 1])
+        with col_qp1:
+            if paste_image_button:
+                paste_res = paste_image_button("📋 لصق صورة السؤال من الحافظة", key=f"paste_q_{q_count}_{st.session_state.q_img_ver}")
+                if paste_res.image_data is not None:
+                    st.session_state.pasted_q_img = pil_to_base64(paste_res.image_data)
+        with col_qp2:
+            q_file_up = st.file_uploader("أو اسحب صورة السؤال هنا:", type=["jpg", "png", "jpeg"], key=f"upload_q_{q_count}_{st.session_state.q_img_ver}")
+            if q_file_up is not None:
+                st.session_state.pasted_q_img = base64.b64encode(q_file_up.read()).decode()
+
+        if st.session_state.pasted_q_img:
+            st.write("---")
+            col_preview, col_del = st.columns([3, 1])
+            with col_preview:
+                st.markdown("**المعاينة الحالية لصورة السؤال:**")
+                st.image(f"data:image/jpeg;base64,{st.session_state.pasted_q_img}", width=400)
+            with col_del:
+                st.write("")
+                st.write("")
+                if st.button("🗑️ مسح الصورة بالكامل", key=f"del_q_main_btn_{q_count}_{st.session_state.q_img_ver}"):
+                    st.session_state.pasted_q_img = ""
+                    st.session_state.q_img_ver += 1
+                    st.rerun()
+
+            st.markdown("##### ✂️ أداة قص الصورة بالماوس مباشرة:")
+            pil_q = base64_to_pil(st.session_state.pasted_q_img)
+            if pil_q:
+                st.markdown('<div class="crop-container">', unsafe_allow_html=True)
+                st.info("👇 حرّك المربع بالماوس لتحديد الجزء المطلوب قصه ثم اضغط زر 'اعتماد القص':")
+                if st_cropper:
+                    cropped_img = st_cropper(pil_q, realtime_update=True, box_color='#0052cc', aspect_ratio=None, key=f"cropper_q_{q_count}_{st.session_state.q_img_ver}")
+                    if st.button("✂️ اعتماد وحفظ الجزء المقصوص", key=f"btn_confirm_crop_{q_count}"):
+                        st.session_state.pasted_q_img = pil_to_base64(cropped_img)
+                        st.session_state.q_img_ver += 1
+                        st.success("✓ تم قص وتحديث صورة السؤال!")
+                        st.rerun()
+                else:
+                    st.warning("يرجى التأكد من إضافة `streamlit-cropper` في requirements.txt.")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        q_text_input = st.text_area("نص السؤال المكتوب (اختياري):", placeholder="مثال: أوجد قيمة س الموضحة بالرسم:")
+
+        opt1_txt, opt2_txt, opt3_txt, opt4_txt = "", "", "", ""
+        correct_num = 1
+
+        if is_mcq:
+            st.write("---")
+            st.markdown("##### 🎯 ب) خيارات الإجابة الأربعة ومسح صورها:")
+
+            st.markdown("**الخيار الأول (أ):**")
+            co1_a, co1_b, co1_c = st.columns([3, 2, 1])
+            with co1_a: opt1_txt = st.text_input("نص الخيار (أ):", key=f"t_opt1_{q_count}")
+            with co1_b:
+                if paste_image_button:
+                    p1 = paste_image_button("📋 لصق صورة (أ)", key=f"p_opt1_{q_count}_{st.session_state.opt1_ver}")
+                    if p1.image_data is not None: st.session_state.pasted_opt1_img = pil_to_base64(p1.image_data)
+                f1 = st.file_uploader("ارفع صورة (أ):", type=["jpg", "png", "jpeg"], key=f"u_opt1_{q_count}_{st.session_state.opt1_ver}")
+                if f1 is not None: st.session_state.pasted_opt1_img = base64.b64encode(f1.read()).decode()
+            with co1_c:
+                st.write("")
+                if st.session_state.pasted_opt1_img and st.button("🗑️ مسح", key=f"del_o1_{q_count}_{st.session_state.opt1_ver}"):
+                    st.session_state.pasted_opt1_img = ""
+                    st.session_state.opt1_ver += 1
+                    st.rerun()
+            if st.session_state.pasted_opt1_img: st.image(f"data:image/jpeg;base64,{st.session_state.pasted_opt1_img}", width=180)
+
+            st.markdown("**الخيار الثاني (ب):**")
+            co2_a, co2_b, co2_c = st.columns([3, 2, 1])
+            with co2_a: opt2_txt = st.text_input("نص الخيار (ب):", key=f"t_opt2_{q_count}")
+            with co2_b:
+                if paste_image_button:
+                    p2 = paste_image_button("📋 لصق صورة (ب)", key=f"p_opt2_{q_count}_{st.session_state.opt2_ver}")
+                    if p2.image_data is not None: st.session_state.pasted_opt2_img = pil_to_base64(p2.image_data)
+                f2 = st.file_uploader("ارفع صورة (ب):", type=["jpg", "png", "jpeg"], key=f"u_opt2_{q_count}_{st.session_state.opt2_ver}")
+                if f2 is not None: st.session_state.pasted_opt2_img = base64.b64encode(f2.read()).decode()
+            with co2_c:
+                st.write("")
+                if st.session_state.pasted_opt2_img and st.button("🗑️ مسح", key=f"del_o2_{q_count}_{st.session_state.opt2_ver}"):
+                    st.session_state.pasted_opt2_img = ""
+                    st.session_state.opt2_ver += 1
+                    st.rerun()
+            if st.session_state.pasted_opt2_img: st.image(f"data:image/jpeg;base64,{st.session_state.pasted_opt2_img}", width=180)
+
+            st.markdown("**الخيار الثالث (ج):**")
+            co3_a, co3_b, co3_c = st.columns([3, 2, 1])
+            with co3_a: opt3_txt = st.text_input("نص الخيار (ج):", key=f"t_opt3_{q_count}")
+            with co3_b:
+                if paste_image_button:
+                    p3 = paste_image_button("📋 لصق صورة (ج)", key=f"p_opt3_{q_count}_{st.session_state.opt3_ver}")
+                    if p3.image_data is not None: st.session_state.pasted_opt3_img = pil_to_base64(p3.image_data)
+                f3 = st.file_uploader("ارفع صورة (ج):", type=["jpg", "png", "jpeg"], key=f"u_opt3_{q_count}_{st.session_state.opt3_ver}")
+                if f3 is not None: st.session_state.pasted_opt3_img = base64.b64encode(f3.read()).decode()
+            with co3_c:
+                st.write("")
+                if st.session_state.pasted_opt3_img and st.button("🗑️ مسح", key=f"del_o3_{q_count}_{st.session_state.opt3_ver}"):
+                    st.session_state.pasted_opt3_img = ""
+                    st.session_state.opt3_ver += 1
+                    st.rerun()
+            if st.session_state.pasted_opt3_img: st.image(f"data:image/jpeg;base64,{st.session_state.pasted_opt3_img}", width=180)
+
+            st.markdown("**الخيار الرابع (د):**")
+            co4_a, co4_b, co4_c = st.columns([3, 2, 1])
+            with co4_a: opt4_txt = st.text_input("نص الخيار (د):", key=f"t_opt4_{q_count}")
+            with co4_b:
+                if paste_image_button:
+                    p4 = paste_image_button("📋 لصق صورة (د)", key=f"p_opt4_{q_count}_{st.session_state.opt4_ver}")
+                    if p4.image_data is not None: st.session_state.pasted_opt4_img = pil_to_base64(p4.image_data)
+                f4 = st.file_uploader("ارفع صورة (د):", type=["jpg", "png", "jpeg"], key=f"u_opt4_{q_count}_{st.session_state.opt4_ver}")
+                if f4 is not None: st.session_state.pasted_opt4_img = base64.b64encode(f4.read()).decode()
+            with co4_c:
+                st.write("")
+                if st.session_state.pasted_opt4_img and st.button("🗑️ مسح", key=f"del_o4_{q_count}_{st.session_state.opt4_ver}"):
+                    st.session_state.pasted_opt4_img = ""
+                    st.session_state.opt4_ver += 1
+                    st.rerun()
+            if st.session_state.pasted_opt4_img: st.image(f"data:image/jpeg;base64,{st.session_state.pasted_opt4_img}", width=180)
+
+            st.write("---")
+            correct_num = st.selectbox("الإجابة الصحيحة هي:*", [1, 2, 3, 4], format_func=lambda x: f"الخيار ({['أ', 'ب', 'ج', 'د'][x-1]})", key=f"cor_{q_count}")
+
+        st.write("---")
+        q_pts_val = st.selectbox("علامة هذا السؤال (الدرجة):*", [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 10.0], index=1, key=f"pts_{q_count}")
+
+        if st.button(f"➕ حفظ وإدراج السؤال رقم {q_count} في الامتحان"):
+            if not q_text_input.strip() and not st.session_state.pasted_q_img:
+                st.error("يرجى كتابة نص السؤال أو لصق صورة للسؤال أولاً.")
+            else:
+                st.session_state.temp_questions.append({
+                    "type": "موضوعي" if is_mcq else "مقالي",
+                    "text": q_text_input.strip(),
+                    "q_img": st.session_state.pasted_q_img,
+                    "opt1": opt1_txt.strip(), "opt1_img": st.session_state.pasted_opt1_img,
+                    "opt2": opt2_txt.strip(), "opt2_img": st.session_state.pasted_opt2_img,
+                    "opt3": opt3_txt.strip(), "opt3_img": st.session_state.pasted_opt3_img,
+                    "opt4": opt4_txt.strip(), "opt4_img": st.session_state.pasted_opt4_img,
+                    "correct": correct_num,
+                    "points": q_pts_val,
+                })
+                st.session_state.pasted_q_img = ""
+                st.session_state.pasted_opt1_img = ""
+                st.session_state.pasted_opt2_img = ""
+                st.session_state.pasted_opt3_img = ""
+                st.session_state.pasted_opt4_img = ""
+                st.session_state.q_img_ver += 1
+                st.session_state.opt1_ver += 1
+                st.session_state.opt2_ver += 1
+                st.session_state.opt3_ver += 1
+                st.session_state.opt4_ver += 1
+                st.success(f"✓ تم حفظ السؤال رقم {q_count} بنجاح!")
+                st.rerun()
+
+        if st.session_state.temp_questions:
+            st.write(f"**الأسئلة الجاهزة في هذا الاختبار: ({len(st.session_state.temp_questions)}) سؤال**")
+            for idx_q, q_item in enumerate(st.session_state.temp_questions):
+                st.markdown(f"- **س {idx_q+1} ({q_item['type']}):** {q_item['text'] if q_item['text'] else '[سؤال مصور]'} — *(الدرجة: {q_item['points']})*")
+            if st.button("🗑️ مسح كل الأسئلة والبدء من جديد"):
+                st.session_state.temp_questions = []
+                st.rerun()
+
+    st.write("---")
+    if st.button("🚀 حفظ ونشر الامتحان للطلاب"):
+        if not ex_title_input.strip():
+            st.error("يرجى كتابة عنوان الامتحان أولاً.")
+        elif not st.session_state.temp_questions:
+            st.error("يرجى إضافة سؤال واحد على الأقل قبل النشر.")
+        else:
+            new_ex = {
+                "معرف_الامتحان": f"EX_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                "عنوان الامتحان": ex_title_input.strip(),
+                "وصف الامتحان": ex_desc_input.strip(),
+                "كلمة المرور": str(ex_pass_input).strip(),
+                "المنهج/الدولة": ex_curr_input,
+                "المجموعة/الصف": ex_grade_input,
+                "المادة": ex_subject_input,
+                "الفصل الدراسي": ex_term_input,
+                "مدة الامتحان بالدقائق": int(ex_time_input),
+                "الأسئلة_JSON": json.dumps(st.session_state.temp_questions, ensure_ascii=False),
+                "تاريخ الإنشاء": str(date.today()),
+            }
+            st.session_state.exams_df = pd.concat([st.session_state.exams_df, pd.DataFrame([new_ex])], ignore_index=True)
+            save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+            st.session_state.temp_questions = []
+            st.success(f"✓ تم نشر امتحان ({ex_title_input}) بنجاح لصف ({ex_grade_input})!")
+            st.rerun()
+
+elif t_page == "ai_studio":
+    if render_ai_studio is None:
+        st.error("تعذر تحميل وحدة الذكاء الاصطناعي. تأكد من وجود ai_studio.py.")
+    else:
+        def _ai_save_all():
+            save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df, st.session_state.get("weekly_schedule_df"), st.session_state.get("payment_records_df"), st.session_state.get("ads_df"))
+        render_ai_studio(save_callback=_ai_save_all)
+
+elif t_page == "question_bank":
+    if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
+    st.subheader("▤  بنك الأسئلة الشامل (إضافة أسئلة اختر ومقالي بصور ومواصفات كاملة):")
+
+    if "qb_q_img" not in st.session_state: st.session_state.qb_q_img = ""
+    if "qb_ver" not in st.session_state: st.session_state.qb_ver = 0
+
+    qb_curr = st.selectbox("المنهج الدراسي / الدولة:", list(CURRICULUM_DATA.keys()), key="qbc_c")
+    qb_grade = st.selectbox("المرحلة / الصف الدراسي المستهدف:", CURRICULUM_DATA[qb_curr], key="qbc_g")
+    qb_subject = st.selectbox("المادة:", ["الرياضيات (عام)", "الجبر والإحصاء", "الهندسة وحساب المثلثات", "التفاضل والتكامل", "الاستاتيكا والديناميكا"], key="qbc_s")
+    
+    qb_type = st.selectbox("نوع السؤال:", ["اختيار من متعدد", "مقالي"], key="qbc_t", on_change=lambda: st.rerun())
+    is_qbank_mcq = (qb_type == "اختيار من متعدد")
+
+    with st.form("add_qbank_form"):
+        st.markdown("##### 📌 أ) صورة السؤال (اختياري):")
+        qb_file_up = st.file_uploader("رفع صورة السؤال:", type=["jpg", "png", "jpeg"], key=f"qbc_img_up_{st.session_state.qb_ver}")
+        if qb_file_up is not None:
+            st.session_state.qb_q_img = base64.b64encode(qb_file_up.read()).decode()
+
+        if st.session_state.qb_q_img:
+            st.image(f"data:image/jpeg;base64,{st.session_state.qb_q_img}", width=350)
+            if st.form_submit_button("🗑️ مسح صورة السؤال"):
+                st.session_state.qb_q_img = ""
+                st.session_state.qb_ver += 1
+                st.rerun()
+
+        qb_text = st.text_area("نص السؤال المكتوب:", key="qbc_txt", placeholder="أكتب نص السؤال هنا...")
+
+        qb_opt1, qb_opt2, qb_opt3, qb_opt4 = "", "", "", ""
+        qb_correct = 1
+
+        if is_qbank_mcq:
+            st.markdown("---")
+            st.markdown("##### 🎯 ب) خيارات الاختيار من متعدد:")
+            qb_opt1 = st.text_input("الخيار (أ):", key="qbc_o1")
+            qb_opt2 = st.text_input("الخيار (ب):", key="qbc_o2")
+            qb_opt3 = st.text_input("الخيار (ج):", key="qbc_o3")
+            qb_opt4 = st.text_input("الخيار (د):", key="qbc_o4")
+            qb_correct = st.selectbox("الإجابة الصحيحة هي:*", [1, 2, 3, 4], format_func=lambda x: f"الخيار ({['أ', 'ب', 'ج', 'د'][x-1]})", key="qbc_cor")
+
+        st.write("---")
+        qb_points = st.number_input("درجة السؤال:", min_value=0.5, max_value=10.0, value=1.0, step=0.5, key="qbc_pts")
+        if st.form_submit_button("💾 حفظ وإدراج السؤال في بنك الأسئلة"):
+            if not qb_text.strip() and not st.session_state.qb_q_img:
+                st.error("يرجى كتابة نص السؤال أو رفع صورة السؤال على الأقل.")
+            else:
+                q_payload = {
+                    "type": qb_type,
+                    "text": qb_text.strip(),
+                    "q_img": st.session_state.qb_q_img,
+                    "opt1": qb_opt1.strip() if is_qbank_mcq else "",
+                    "opt2": qb_opt2.strip() if is_qbank_mcq else "",
+                    "opt3": qb_opt3.strip() if is_qbank_mcq else "",
+                    "opt4": qb_opt4.strip() if is_qbank_mcq else "",
+                    "correct": qb_correct if is_qbank_mcq else 1,
+                    "points": qb_points
+                }
+                new_qbank_row = {
+                    "معرف_السؤال": f"QB_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    "المنهج/الدولة": qb_curr,
+                    "المجموعة/الصف": qb_grade,
+                    "المادة": qb_subject,
+                    "نوع_السؤال": qb_type,
+                    "بيانات_السؤال_JSON": json.dumps(q_payload, ensure_ascii=False)
+                }
+                st.session_state.question_bank_df = pd.concat([st.session_state.question_bank_df, pd.DataFrame([new_qbank_row])], ignore_index=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.session_state.qb_q_img = ""
+                st.session_state.qb_ver += 1
+                st.success("✓ تم حفظ وإدراج السؤال في بنك الأسئلة بنجاح!")
+
+    st.write("---")
+    st.markdown("### 📋 الأسئلة الحالية في بنك الأسئلة:")
+    qbf_df = st.session_state.question_bank_df
+    if qbf_df.empty:
+        st.info("لا توجد أسئلة مضافة في بنك الأسئلة بعد.")
+    else:
+        for qbi, qbr in qbf_df.iterrows():
+            raw_json_data = qbr.get("بيانات_السؤال_JSON", "{}")
+            try:
+                q_data = json.loads(raw_json_data) if pd.notnull(raw_json_data) and str(raw_json_data).strip() else {}
+            except Exception:
+                q_data = {}
+
+            if not q_data:
+                continue
+
+            with st.expander(f"[{qbr['المجموعة/الصف']}] — {q_data.get('type', 'اختيار من متعدد')} (الدرجة: {q_data.get('points', 1.0)})"):
+                st.write(f"**نص السؤال:** {q_data.get('text', '')}")
+                if q_data.get("q_img"):
+                    st.image(f"data:image/jpeg;base64,{q_data['q_img']}", width=300)
+                if q_data.get("type") == "اختيار من متعدد":
+                    st.write(f"أ) {q_data.get('opt1','')} | ب) {q_data.get('opt2','')} | ج) {q_data.get('opt3','')} | د) {q_data.get('opt4','')}")
+                    corr_idx = int(q_data.get('correct', 1)) - 1
+                    corr_letter = ['أ', 'ب', 'ج', 'د'][corr_idx] if 0 <= corr_idx < 4 else 'أ'
+                    st.write(f"<b>الإجابة الصحيحة:</b> الخيار ({corr_letter})")
+                
+                if st.button(f"حذف هذا السؤال 🗑️", key=f"del_qb_{qbi}"):
+                    st.session_state.question_bank_df = qbf_df.drop(qbi).reset_index(drop=True)
+                    save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                    st.warning("تم حذف السؤال.")
+                    st.rerun()
+
+elif t_page == "videos":
+    if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
+    st.subheader("🎥 إدارة ورفع الفيديوهات التعليمية للطلاب:")
+    with st.form("upload_video_form", clear_on_submit=True):
+        vid_title = st.text_input("عنوان الفيديو / الدرس:")
+        vid_curr = st.selectbox("المنهج الدراسي / الدولة:", list(CURRICULUM_DATA.keys()), key="vid_c")
+        vid_grade = st.selectbox("المرحلة / الصف الدراسي المستهدف:", CURRICULUM_DATA[vid_curr], key="vid_g")
+        
+        vid_upload_file = st.file_uploader("رفع ملف الفيديو (MP4 أو ما شابه):", type=["mp4", "mov", "avi", "mkv", "webm"])
+        vid_link_input = st.text_input("أو ضع رابط فيديو (يوتيوب أو رابط مباشر):", placeholder="https://www.youtube.com/watch?v=...")
+
+        if st.form_submit_button("💾 حفظ ونشر الفيديو للطالب"):
+            if not vid_title.strip():
+                st.error("يرجى كتابة عنوان الفيديو.")
+            else:
+                v_bytes_str = ""
+                if vid_upload_file is not None:
+                    file_bytes = vid_upload_file.read()
+                    v_bytes_str = base64.b64encode(file_bytes).decode()
+
+                new_vid = {
+                    "معرف_الفيديو": f"VID_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    "عنوان_الفيديو": vid_title.strip(),
+                    "المنهج/الدولة": vid_curr,
+                    "المجموعة/الصف": vid_grade,
+                    "رابط_الفيديو": vid_link_input.strip() if vid_link_input else "",
+                    "فيديو_base64": v_bytes_str,
+                    "تاريخ_الرفع": str(date.today())
+                }
+                st.session_state.videos_df = pd.concat([st.session_state.videos_df, pd.DataFrame([new_vid])], ignore_index=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.success(f"✓ تم نشر الفيديو ({vid_title}) بنجاح للمرحلة ({vid_grade})!")
+
+    st.write("---")
+    st.markdown("### 📋 الفيديوهات المنشورة مسبقاً:")
+    v_df_state = st.session_state.videos_df
+    if v_df_state.empty:
+        st.info("لا توجد فيديوهات منشورة حالياً.")
+    else:
+        st.dataframe(v_df_state[["عنوان_الفيديو", "المنهج/الدولة", "المجموعة/الصف", "تاريخ_الرفع"]], use_container_width=True)
+        with st.expander("🗑️ حذف فيديو منشور"):
+            del_vid_opts = {vi: f"[{vr['المجموعة/الصف']}] {vr['عنوان_الفيديو']}" for vi, vr in v_df_state.iterrows()}
+            sel_del_vid = st.selectbox("اختر الفيديو المراد حذفه:", options=list(del_vid_opts.keys()), format_func=lambda x: del_vid_opts[x], key="sel_del_vid")
+            if st.button("🚨 تأكيد حذف الفيديو المختار"):
+                st.session_state.videos_df = v_df_state.drop(sel_del_vid).reset_index(drop=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.success("✓ تم حذف الفيديو بنجاح!")
+                st.rerun()
+
+    # --- قسم متابعة تعليقات وأسئلة الطلاب على الفيديوهات ---
+    st.write("---")
+    st.markdown("### 💬 متابعة تعليقات وأسئلة الطلاب على الفيديوهات:")
+    vc_state = st.session_state.video_comments_df
+    if vc_state.empty:
+        st.info("لا توجد تعليقات أو أسئلة من الطلاب على الفيديوهات حتى الآن.")
+    else:
+        for c_idx, c_row in vc_state.iterrows():
+            st.markdown(f"""
+                <div style="background:{card_bg}; border:1px solid {card_border}; border-radius:10px; padding:15px; margin-bottom:12px;">
+                    <p style="margin:0; color:#10b981; font-size:16px;"><b>درس: {c_row['عنوان_الفيديو']}</b></p>
+                    <p style="margin:4px 0; color:#0284c7; font-size:14px;">الطالب: <b>{c_row['اسم الطالب']}</b> — <span style="font-size:12px; opacity:0.7;">{c_row['التاريخ_والوقت']}</span></p>
+                    <p style="margin:8px 0 0 0; font-size:16px;">{c_row['نص_التعليق']}</p>
+                </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"🗑️ حذف هذا التعليق", key=f"del_vcomm_{c_idx}"):
+                st.session_state.video_comments_df = vc_state.drop(c_idx).reset_index(drop=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.success("تم حذف التعليق.")
+                st.rerun()
+
+elif t_page == "abqary":
+    if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
+    st.subheader("💡 إدارة امتحانات ونتائج موقع عبقري:")
+    with st.form("upload_abqary_form", clear_on_submit=True):
+        ab_title = st.text_input("عنوان امتحان عبقري:")
+        ab_curr = st.selectbox("المنهج الدراسي / الدولة:", list(CURRICULUM_DATA.keys()), key="ab_c")
+        ab_grade = st.selectbox("المرحلة / الصف الدراسي المستهدف:", CURRICULUM_DATA[ab_curr], key="ab_g")
+        ab_link = st.text_input("رابط الامتحان على موقع عبقري (اختياري):", placeholder="https://abqary.com/exam/...")
+        ab_html = st.text_area(
+            "كود HTML للاختبار الإلكتروني (اختياري):",
+            height=280,
+            placeholder="الصق هنا كود HTML الكامل للاختبار الذي تريد أن يظهر للطالب داخل المنصة..."
+        )
+        st.caption("يمكنك استخدام الرابط أو كود HTML أو الاثنين معاً. إذا وضعت كود HTML سيظهر الاختبار تفاعلياً داخل صفحة الطالب.")
+        res_link = st.text_input("رابط النتيجة (اختياري):", placeholder="https://abqary.com/result/...")
+        secret_pass = st.text_input("الرقم السري لإظهار النتيجة للطالب:", placeholder="مثال: 1234 أو كود خاص")
+
+        if st.form_submit_button("💾 حفظ ونشر امتحان عبقري للطالب"):
+            if not ab_title.strip() or (not ab_link.strip() and not ab_html.strip()):
+                st.error("يرجى كتابة عنوان الامتحان وإضافة رابط عبقري أو كود HTML للاختبار على الأقل.")
+            else:
+                new_ab = {
+                    "معرف_عبقري": f"ABQ_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    "عنوان_الإمتحان": ab_title.strip(),
+                    "المنهج/الدولة": ab_curr,
+                    "المجموعة/الصف": ab_grade,
+                    "رابط_الإمتحان": ab_link.strip() if ab_link else "",
+                    "كود_HTML": ab_html.strip() if ab_html else "",
+                    "رابط_النتيجة": res_link.strip() if res_link else "",
+                    "الرقم_السري_للنتيجة": secret_pass.strip(),
+                    "تاريخ_النشر": str(date.today())
+                }
+                st.session_state.abqary_df = pd.concat([st.session_state.abqary_df, pd.DataFrame([new_ab])], ignore_index=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.success(f"✓ تم نشر امتحان عبقري ({ab_title}) بنجاح!")
+
+    st.write("---")
+    st.markdown("### 📋 امتحانات عبقري المنشورة مسبقاً:")
+    ab_df_state = st.session_state.abqary_df
+    if ab_df_state.empty:
+        st.info("لا توجد امتحانات عبقري منشورة حالياً.")
+    else:
+        ab_display = ab_df_state.copy()
+        ab_display["نوع الاختبار"] = ab_display.apply(
+            lambda r: "HTML تفاعلي + رابط" if str(r.get("كود_HTML", "") or "").strip() and str(r.get("رابط_الإمتحان", "") or "").strip() else ("HTML تفاعلي" if str(r.get("كود_HTML", "") or "").strip() else "رابط عبقري"),
+            axis=1
+        )
+        st.dataframe(ab_display[["عنوان_الإمتحان", "المجموعة/الصف", "نوع الاختبار", "تاريخ_النشر"]], use_container_width=True)
+        with st.expander("🗑️ حذف امتحان عبقري"):
+            del_ab_opts = {ai: f"[{ar['المجموعة/الصف']}] {ar['عنوان_الإمتحان']}" for ai, ar in ab_df_state.iterrows()}
+            sel_del_ab = st.selectbox("اختر الامتحان المراد حذفه:", options=list(del_ab_opts.keys()), format_func=lambda x: del_ab_opts[x], key="sel_del_ab")
+            if st.button("🚨 تأكيد حذف امتحان عبقري المختار"):
+                st.session_state.abqary_df = ab_df_state.drop(sel_del_ab).reset_index(drop=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.success("✓ تم حذف الامتحان بنجاح!")
+                st.rerun()
+
+elif t_page == "grades":
+    if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
+    st.subheader("📈 سجل درجات ونقاط اختبارات الطلاب:")
+    exam_assessments = st.session_state.assessments_df[
+        st.session_state.assessments_df["النوع"].astype(str).str.contains("اختبار|كويز", na=False)
+    ].copy()
+
+    if exam_assessments.empty:
+        st.info("لا توجد نتائج اختبارات مرصودة للطلاب حتى الآن.")
+    else:
+        st.dataframe(exam_assessments[["التاريخ", "اسم الطالب", "عنوان التكليف", "الدرجة المحصلة", "الدرجة العظمى", "حالة التسليم", "ملاحظات وتوجيهات"]], use_container_width=True)
+
+        with st.expander("🗑️ حذف نتيجة امتحان لطالب محدد"):
+            del_exam_opts = {i: f"{r['اسم الطالب']} - {r['عنوان التكليف']} ({r['التاريخ']})" for i, r in exam_assessments.iterrows()}
+            sel_del_exam_idx = st.selectbox("اختر السجل المراد حذفه:", options=list(del_exam_opts.keys()), format_func=lambda x: del_exam_opts[x], key="sel_del_exam")
+            if st.button("🚨 تأكيد حذف سجل الامتحان المختار"):
+                real_idx = exam_assessments.loc[sel_del_exam_idx].name
+                st.session_state.assessments_df = st.session_state.assessments_df.drop(real_idx).reset_index(drop=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.success("✓ تم حذف النتيجة بنجاح!")
+                st.rerun()
+
+        buf_grades = io.BytesIO()
+        with pd.ExcelWriter(buf_grades, engine="openpyxl") as writer:
+            exam_assessments.to_excel(writer, sheet_name="Exam_Grades", index=False)
+        
+        c_ex_dl1, c_ex_dl2 = st.columns(2)
+        with c_ex_dl1:
+            st.download_button(
+                label="📥 تصدير درجات الطلاب لملف Excel",
+                data=buf_grades.getvalue(),
+                file_name="درجات_الاختبارات_للطلاب.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        with c_ex_dl2:
+            grades_pdf_html = """<!DOCTYPE html>
+            <html dir="rtl" lang="ar">
+            <head><meta charset="utf-8"><title>سجل درجات الاختبارات</title></head>
+            <body style="font-family: Arial; padding: 25px;" onload="window.print()">
+                <h2>سجل درجات ونقاط اختبارات الطلاب - م/ محمد غنيم</h2>
+                <table border="1" style="width:100%; border-collapse:collapse; text-align:center; margin-top:20px;">
+                    <tr style="background:#f1f5f9;">
+                        <th style="padding:10px;">التاريخ</th>
+                        <th style="padding:10px;">اسم الطالب</th>
+                        <th style="padding:10px;">عنوان الاختبار</th>
+                        <th style="padding:10px;">الدرجة</th>
+                        <th style="padding:10px;">الحالة</th>
+                    </tr>
+            """
+            for _, r in exam_assessments.iterrows():
+                grades_pdf_html += f"""
+                    <tr>
+                        <td style="padding:8px;">{r['التاريخ']}</td>
+                        <td style="padding:8px;">{r['اسم الطالب']}</td>
+                        <td style="padding:8px;">{r['عنوان التكليف']}</td>
+                        <td style="padding:8px;">{r['الدرجة المحصلة']} / {r['الدرجة العظمى']}</td>
+                        <td style="padding:8px;">{r['حالة التسليم']}</td>
+                    </tr>
+                """
+            grades_pdf_html += "</table></body></html>"
+
+            st.download_button(
+                label="🖨️ طباعة وتصدير درجات الطلاب PDF",
+                data=grades_pdf_html.encode("utf-8"),
+                file_name="سجل_درجات_الاختبارات.html",
+                mime="application/octet-stream"
+            )
+
+elif t_page == "essays":
+    if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
+    st.subheader("📝 كنترول تصحيح إجابات الطلاب المقالية وصور الحل:")
+    essays = st.session_state.essays_df
+
+    if essays.empty:
+        st.info("لا توجد إجابات مقالية مرسلة من الطلاب بعد.")
+    else:
+        for es_idx, es_row in essays.iterrows():
+            st_name = str(es_row.get("اسم الطالب", ""))
+            ex_name = str(es_row.get("عنوان الامتحان", ""))
+            q_num = es_row.get("رقم السؤال", 1)
+            q_text = str(es_row.get("نص السؤال", ""))
+            ans_txt = es_row.get("إجابة الطالب النصية", "")
+            img_b64_ans = es_row.get("صورة الحل_base64", "")
+            q_max = float(es_row.get("درجة السؤال", 1.0))
+            status = str(es_row.get("حالة التصحيح", "قيد التصحيح من المعلم"))
+            
+            raw_fb = es_row.get("ملاحظات المعلم", "")
+            t_feedback = str(raw_fb) if pd.notnull(raw_fb) and str(raw_fb) != "nan" else ""
+
+            with st.expander(f"📌 حل الطالب: {st_name} — {ex_name} (س {q_num}) | [{status}]"):
+                st.markdown(f"**نص السؤال:** {q_text}")
+                st.markdown(f"**إجابة الطالب المكتوبة:**")
+                st.write(str(ans_txt) if pd.notnull(ans_txt) and str(ans_txt).strip() and str(ans_txt) != "nan" else "لم يكتب نصاً (أرفق صورة بالأسفل)")
+
+                if pd.notnull(img_b64_ans) and str(img_b64_ans).strip() and str(img_b64_ans) != "nan":
+                    st.markdown("**📷 صورة خطوات الحل المرفوعة من الطالب:**")
+                    st.image(f"data:image/jpeg;base64,{img_b64_ans}", use_container_width=True)
+
+                with st.form(f"grade_essay_form_{es_idx}"):
+                    c_g1, c_g2 = st.columns(2)
+                    with c_g1:
+                        awarded_score = st.number_input("الدرجة المستحقة:*", min_value=0.0, max_value=q_max, value=float(es_row.get("الدرجة المرصودة", 0.0)) if pd.notnull(es_row.get("الدرجة المرصودة")) else 0.0, step=0.5)
+                    with c_g2:
+                        teacher_feedback = st.text_input("ملاحظات المعلم وتوجيهه للطالب:", value=t_feedback)
+
+                    c_sub1, c_sub2 = st.columns(2)
+                    with c_sub1:
+                        submit_grade = st.form_submit_button("💾 اعتماد ورصد الدرجة للطالب")
+                    with c_sub2:
+                        delete_essay = st.form_submit_button("🗑️ مسح وإلغاء هذه الإجابة المقالية")
+
+                    if submit_grade:
+                        essays.at[es_idx, "الدرجة المرصودة"] = awarded_score
+                        essays.at[es_idx, "حالة التصحيح"] = "تم التصحيح والاعتماد"
+                        essays.at[es_idx, "ملاحظات المعلم"] = str(teacher_feedback).strip()
+
+                        match_ass = st.session_state.assessments_df[
+                            (st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip() == st_name.strip())
+                            & (st.session_state.assessments_df["عنوان التكليف"].astype(str).str.contains(ex_name, na=False))
+                        ]
+                        if not match_ass.empty:
+                            ass_idx = match_ass.index[-1]
+                            current_score = float(st.session_state.assessments_df.at[ass_idx, "الدرجة المحصلة"])
+                            st.session_state.assessments_df.at[ass_idx, "الدرجة المحصلة"] = current_score + awarded_score
+                            st.session_state.assessments_df.at[ass_idx, "ملاحظات وتوجيهات"] = f"تم تصحيح المقالي: +{awarded_score} درجة. {teacher_feedback}"
+
+                        st.session_state.essays_df = essays
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.success(f"✓ تم رصد درجة الطالب ({st_name}) بنجاح!")
+                        st.rerun()
+
+                    if delete_essay:
+                        st.session_state.essays_df = essays.drop(es_idx).reset_index(drop=True)
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.warning("⚠️ تم مسح إجابة المقالي بنجاح.")
+                        st.rerun()
+
+elif t_page == "chat":
+    if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
+    st.subheader("💬 صندوق محادثات الطلاب والرد على الأسئلة:")
+    all_students_with_chat = sorted(list(set(
+        [s for s in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [s for s in st.session_state.messages_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+    )))
+
+    if not all_students_with_chat:
+        st.info("لا توجد رسائل واردة بعد.")
+    else:
+        selected_chat_student = st.selectbox("اختر الطالب لمشاهدة محادثته والرد عليه:", all_students_with_chat)
+        if selected_chat_student:
+            student_thread = st.session_state.messages_df[st.session_state.messages_df["اسم الطالب"].astype(str).str.strip() == selected_chat_student.strip()].copy()
+            st.write(f"### سجل المحادثة مع الطالب: **{selected_chat_student}**")
+
+            with st.container():
+                if not student_thread.empty:
+                    for _, m in student_thread.iterrows():
+                        sender = m["المرسل"]
+                        t_stamp = m.get("التاريخ_والوقت", "")
+                        content = m.get("نص الرسالة", "")
+                        img_data = m.get("الصورة_base64", "")
+                        if sender == "student":
+                            st.markdown(f"<div class='chat-bubble-student'><b>الطالب ({t_stamp}):</b><br>{content}</div>", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"<div class='chat-bubble-teacher'><b>أنت (البشمهندس) ({t_stamp}):</b><br>{content}</div>", unsafe_allow_html=True)
+                        if pd.notnull(img_data) and str(img_data).strip():
+                            st.image(f"data:image/jpeg;base64,{img_data}", width=350)
+
+            with st.form("teacher_reply_form", clear_on_submit=True):
+                reply_text = st.text_area("اكتب ردك أو التوجيه للطالب:")
+                if st.form_submit_button("📤 إرسال الرد إلى الطالب"):
+                    if reply_text.strip():
+                        new_rep = {
+                            "التاريخ_والوقت": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                            "اسم الطالب": selected_chat_student.strip(),
+                            "المرسل": "teacher", "نص الرسالة": reply_text.strip(), "الصورة_base64": "",
+                        }
+                        st.session_state.messages_df = pd.concat([st.session_state.messages_df, pd.DataFrame([new_rep])], ignore_index=True)
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.success("تم إرسال الرد للبشمهندس بنجاح!")
+                        st.rerun()
+
+elif t_page == "students":
+    if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
+    st.subheader("♙  الطلاب المسجلين والتحكم الكامل:")
+    
+    bookings_df_state = st.session_state.bookings_df
+    if not bookings_df_state.empty:
+        st.markdown("#### 📅 طلبات حجز الدروس أونلاين الواردة:")
+        st.dataframe(bookings_df_state, use_container_width=True)
+        with st.expander("🗑️ حذف أو إدارة طلب حجز"):
+            del_book_opts = {bi: f"{br['اسم الطالب']} - {br['المرحلة_الصف']} ({br['رقم_الهاتف']})" for bi, br in bookings_df_state.iterrows()}
+            sel_del_book = st.selectbox("اختر الطلب:", options=list(del_book_opts.keys()), format_func=lambda x: del_book_opts[x], key="sel_del_book")
+            if st.button("🚨 تأكيد حذف طلب الحجز المختار"):
+                st.session_state.bookings_df = bookings_df_state.drop(sel_del_book).reset_index(drop=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.success("✓ تم حذف طلب الحجز بنجاح!")
+                st.rerun()
+        st.write("---")
+
+    bank_req_state = st.session_state.bank_requests_df
+    if not bank_req_state.empty:
+        st.markdown("#### 💳 طلبات اشتراكات بنك الأسئلة الواردة (تأكيد الدفع):")
+        for br_idx, br_row in bank_req_state.iterrows():
+            st_req_name = br_row["اسم الطالب"]
+            req_phone = br_row["رقم_الهاتف"]
+            req_otp = br_row["كود_OTP"]
+            req_status = br_row["حالة_الدفع"]
+            req_receipt = br_row["إيصال_الدفع_base64"]
+
+            with st.expander(f"طلب اشتراك بنك الأسئلة: الطالب ({st_req_name}) — الهاتف: ({req_phone}) — كود OTP: ({req_otp}) | الحالة: [{req_status}]"):
+                if pd.notnull(req_receipt) and str(req_receipt).strip() and str(req_receipt) != "nan":
+                    st.markdown("**📷 صورة إيصال التحويل المرفق:**")
+                    st.image(f"data:image/jpeg;base64,{req_receipt}", width=350)
+                
+                c_bk1, c_bk2 = st.columns(2)
+                with c_bk1:
+                    if st.button(f"✅ تأكيد وتفعيل الاشتراك للطالب {st_req_name}", key=f"confirm_bank_{br_idx}"):
+                        bank_req_state.at[br_idx, "حالة_الدفع"] = "مؤكد ومفعل"
+                        st.session_state.users_df.loc[st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == str(st_req_name).strip(), "حالة_الاشتراك_البنك"] = "مشترك"
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.success(f"✓ تم تفعيل اشتراك بنك الأسئلة للطالب {st_req_name} بنجاح!")
+                        st.rerun()
+                with c_bk2:
+                    if st.button(f"🗑️ حذف طلب الاشتراك", key=f"del_bank_req_{br_idx}"):
+                        st.session_state.bank_requests_df = bank_req_state.drop(br_idx).reset_index(drop=True)
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.warning("تم حذف طلب الاشتراك.")
+                        st.rerun()
+        st.write("---")
+
+    all_known_students = sorted(list(set(
+        [s for s in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [s for s in st.session_state.sessions_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [s for s in st.session_state.assessments_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [s for s in st.session_state.weekly_schedule_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [s for s in st.session_state.online_schedule_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+    )))
+
+    if all_known_students:
+        st.markdown("### 📒 كشف الطلاب المسجلين")
+        roster_html = build_student_roster_html(all_known_students, "كشف الطلاب المسجلين - م/ محمد غنيم")
+        roster_pdf = html_to_pdf_bytes(roster_html)
+        rc1, rc2 = st.columns(2)
+        with rc1:
+            if roster_pdf:
+                st.download_button("📄 طباعة كشف المسجلين PDF", roster_pdf, file_name="كشف_الطلاب_المسجلين.pdf", mime="application/pdf", key="students_roster_pdf")
+            else:
+                st.download_button("🖨️ طباعة كشف المسجلين", roster_html.encode("utf-8"), file_name="كشف_الطلاب_المسجلين.html", mime="text/html", key="students_roster_html")
+        with rc2:
+            roster_buf = io.BytesIO()
+            with pd.ExcelWriter(roster_buf, engine="openpyxl") as writer:
+                st.session_state.users_df.to_excel(writer, sheet_name="Students", index=False)
+            st.download_button("📥 تصدير كشف المسجلين Excel", roster_buf.getvalue(), file_name="كشف_الطلاب_المسجلين.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="students_roster_excel")
+        st.write("---")
+        with st.expander("🗑️ حذف طالب محدد نهائياً من كافة السجلات"):
+            del_selected_st = st.selectbox("اختر الطالب المراد حذفه نهائياً:", all_known_students, key="del_box_select")
+            if st.button("🚨 تأكيد حذف هذا الطالب نهائياً", key="btn_confirm_del_box"):
+                delete_student_completely(del_selected_st)
+                st.success(f"✓ تم مسح الطالب ({del_selected_st}) نهائياً!")
+                st.rerun()
+
+    st.write("---")
+    if not all_known_students:
+        st.info("لا توجد طلاب مسجلون حالياً.")
+    else:
+        for idx, st_name in enumerate(all_known_students):
+            u_row = st.session_state.users_df[st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == st_name.strip()]
+            s_row = st.session_state.sessions_df[st.session_state.sessions_df["اسم الطالب"].astype(str).str.strip() == st_name.strip()]
+
+            st_curr = u_row.iloc[0].get("المنهج/الدولة", "-") if not u_row.empty else (s_row.iloc[-1].get("المنهج/الدولة", "-") if not s_row.empty else "-")
+            st_grade = u_row.iloc[0].get("المجموعة/الصف", "-") if not u_row.empty else (s_row.iloc[-1].get("المجموعة/الصف", "-") if not s_row.empty else "-")
+            st_date = u_row.iloc[0].get("تاريخ التسجيل", "-") if not u_row.empty else "-"
+            st_pass = u_row.iloc[0].get("كلمة المرور", "-") if not u_row.empty else "-"
+            st_phone = u_row.iloc[0].get("رقم الهاتف", "-") if not u_row.empty else "-"
+            is_banned = u_row.iloc[0].get("الحالة_حظر") == "محظور" if not u_row.empty else False
+            bank_sub_state = u_row.iloc[0].get("حالة_الاشتراك_البنك", "غير مشترك") if not u_row.empty else "غير مشترك"
+
+            status_badge = "🚫 محظور" if is_banned else "✅ نشط"
+            badge_color = "#dc2626" if is_banned else "#16a34a"
+            bank_badge = "📚 مشترك بالبنك" if bank_sub_state == "مشترك" else "🔒 غير مشترك بالبنك"
+
+            st_sessions_card = st.session_state.sessions_df[st.session_state.sessions_df["اسم الطالب"].astype(str).str.strip() == st_name.strip()]
+            total_st_sessions = len(st_sessions_card)
+            attended_st_sessions = len(st_sessions_card[st_sessions_card["الحالة"] == "حاضر"])
+            total_st_cost = st_sessions_card["سعر الحصة"].astype(float, errors="ignore").sum(numeric_only=True) if not st_sessions_card.empty else 0.0
+
+            with st.container():
+                col_c1, col_c2, col_c3, col_c4 = st.columns([3, 2, 2, 2])
+                with col_c1:
+                    st.markdown(f"""
+                        <h4 style="margin: 0; color: #0052cc;">{st_name}</h4>
+                        <p style="margin: 3px 0; font-size: 14px; font-weight: 900;">{st_curr} — {st_grade}</p>
+                        <p style="margin: 0; font-size: 13px; color: #64748b;">الهاتف: {st_phone} | كلمة المرور: <b>{st_pass}</b></p>
+                        <p style="margin: 2px 0 0 0; font-size: 13px; color: #0284c7;"><b>{bank_badge}</b></p>
+                    """, unsafe_allow_html=True)
+                with col_c2:
+                    st.markdown(f"""
+                        <p style="margin:0; font-size:14px; font-weight:900;">حضور: <b>{attended_st_sessions}/{total_st_sessions}</b></p>
+                        <p style="margin:0; font-size:14px; font-weight:900; color:#b91c1c;">إجمالي السعر: <b>{total_st_cost:,.1f}</b></p>
+                    """, unsafe_allow_html=True)
+                with col_c3:
+                    st_sessions_html = f"""<!DOCTYPE html>
+                    <html dir="rtl" lang="ar">
+                    <head><meta charset="utf-8"><title>تقرير الحضور والأسعار - {st_name}</title></head>
+                    <body style="font-family: Arial; padding: 25px;" onload="window.print()">
+                        <h2>تقرير الحضور وحساب الحصص - م/ محمد غنيم</h2>
+                        <p><b>اسم الطالب:</b> {st_name} | <b>المجموعة/الصف:</b> {st_grade}</p>
+                        <p><b>إجمالي الحصص الحضورية:</b> {attended_st_sessions} من {total_st_sessions} | <b>المبلغ الإجمالي المستحق:</b> {total_st_cost:,.1f}</p>
+                        <hr>
+                        <table border="1" style="width:100%; border-collapse:collapse; text-align:center; margin-top:15px;">
+                            <tr style="background:#f1f5f9;">
+                                <th style="padding:8px;">التاريخ</th>
+                                <th style="padding:8px;">الحالة</th>                                <th style="padding:8px;">سعر الحصة</th>
+                                <th style="padding:8px;">المستوى</th>
+                                <th style="padding:8px;">ملاحظات</th>
+                            </tr>
+                    """
+                    for _, s_row in st_sessions_card.iterrows():
+                        st_sessions_html += f"""
+                            <tr>
+                                <td style="padding:6px;">{s_row['التاريخ']}</td>
+                                <td style="padding:6px;">{s_row['الحالة']}</td>
+                                <td style="padding:6px;">{s_row['سعر الحصة']}</td>
+                                <td style="padding:6px;">{s_row['مستوى الطالب']}</td>
+                                <td style="padding:6px;">{s_row['ملاحظات']}</td>
+                            </tr>
+                        """
+                    st_sessions_html += "</table></body></html>"
+
+                    st.download_button(
+                        label="🖨️ طباعة الحضور والأسعار",
+                        data=st_sessions_html.encode("utf-8"),
+                        file_name=f"حضور_وأسعار_{st_name}.html",
+                        mime="application/octet-stream",
+                        key=f"print_att_{idx}"
+                    )
+                with col_c4:
+                    if st.button("📊 درجات الطالب", key=f"btn_grades_{idx}"):
+                        st.session_state[f"show_grades_{idx}"] = not st.session_state.get(f"show_grades_{idx}", False)
+
+                # بيانات ولي الأمر قابلة للتعديل وتظهر في التقرير والكشوف
+                if not u_row.empty:
+                    with st.expander("👨‍👩‍👦 بيانات ولي الأمر", expanded=False):
+                        with st.form(f"parent_data_form_{idx}"):
+                            p_name = st.text_input("اسم ولي الأمر", value=str(u_row.iloc[0].get("اسم ولي الأمر", "")), key=f"parent_name_{idx}")
+                            p_phone = st.text_input("رقم ولي الأمر", value=str(u_row.iloc[0].get("رقم ولي الأمر", "")), key=f"parent_phone_{idx}")
+                            if st.form_submit_button("💾 حفظ بيانات ولي الأمر"):
+                                ui = u_row.index[0]
+                                st.session_state.users_df.at[ui, "اسم ولي الأمر"] = p_name.strip()
+                                st.session_state.users_df.at[ui, "رقم ولي الأمر"] = p_phone.strip()
+                                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                                st.success("✓ تم حفظ بيانات ولي الأمر")
+                                st.rerun()
+
+                if st.session_state.get(f"show_grades_{idx}", False):
+                    st.markdown(f"**سجل درجات الطالب: {st_name}**")
+                    st_grades_df = st.session_state.assessments_df[st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip() == st_name.strip()]
+                    if st_grades_df.empty:
+                        st.info("لا توجد درجات مرصودة لهذا الطالب حتى الآن.")
+                    else:
+                        st.dataframe(st_grades_df[["التاريخ", "النوع", "عنوان التكليف", "الدرجة المحصلة", "الدرجة العظمى", "حالة التسليم", "ملاحظات وتوجيهات"]], use_container_width=True)
+
+                        with st.form(f"clear_st_grades_form_{idx}"):
+                            del_grade_choice = st.selectbox("اختر النتيجة المراد مسحها لهذا الطالب:", options=list(st_grades_df.index), format_func=lambda x: f"{st_grades_df.loc[x, 'عنوان التكليف']} ({st_grades_df.loc[x, 'التاريخ']})")
+                            if st.form_submit_button("🗑️ مسح هذه الدرجة المحددة للطالب"):
+                                st.session_state.assessments_df = st.session_state.assessments_df.drop(del_grade_choice).reset_index(drop=True)
+                                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                                st.success("✓ تم مسح الدرجة بنجاح!")
+                                st.rerun()
+
+                if is_banned:
+                    if st.button("فك الحظر 🔓", key=f"unban_{idx}"):
+                        st.session_state.users_df.loc[st.session_state.users_df["اسم الطالب"] == st_name, "الحالة_حظر"] = "نشط"
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.success(f"تم فك حظر {st_name}!")
+                        st.rerun()
+                else:
+                    if st.button("حظر 🚫", key=f"ban_{idx}"):
+                        if not u_row.empty:
+                            st.session_state.users_df.loc[st.session_state.users_df["اسم الطالب"] == st_name, "الحالة_حظر"] = "محظور"
+                            save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                            st.warning(f"تم حظر {st_name}.")
+                            st.rerun()
+                
+                if st.button("حذف نهائي للطالب 🗑️", key=f"del_card_btn_{idx}"):
+                    delete_student_completely(st_name)
+                    st.success(f"✓ تم مسح الطالب ({st_name}) نهائياً!")
+                    st.rerun()
+                st.write("---")
+
+elif t_page == "add_session":
+    if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
+    st.subheader("إدخال بيانات الحصة")
+    t_curriculum = st.selectbox("اختر المنهج الدراسي:", list(CURRICULUM_DATA.keys()), key="teacher_curr_select")
+    t_grades = CURRICULUM_DATA[t_curriculum]
+
+    with st.form("teacher_entry_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            session_date = st.date_input("تاريخ الحصة", value=date.today())
+            session_names = sorted(list(set([str(x).strip() for x in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(x).strip()] + [str(x).strip() for x in st.session_state.weekly_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()] + [str(x).strip() for x in st.session_state.online_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()])))
+            prefill_session = str(st.session_state.get("prefill_student", "")).strip()
+            if session_names:
+                student_name = st.selectbox("اسم الطالب", session_names, index=(session_names.index(prefill_session) if prefill_session in session_names else 0), key="session_student_select")
+            else:
+                student_name = st.text_input("اسم الطالب", value=prefill_session, placeholder="مثال: أحمد محمد")
+            group_name = st.selectbox("المرحلة / الصف الدراسي:", t_grades)
+            status = st.selectbox("حالة الحضور", ["حاضر", "غائب", "متأخر", "بعذر"])
+        with col2:
+            price = st.number_input("سعر الحصة", min_value=0.0, step=10.0, value=100.0)
+            total_sessions = st.number_input("الحصص المنفذة حتى الآن", min_value=1, step=1, value=1)
+            payment_type = st.selectbox("نظام الدفع", ["اشتراك شهري", "مقدم", "مؤخر (بعد الحصة)", "مؤجل"])
+            student_level = st.selectbox("المستوى الدراسي", ["ممتاز ⭐⭐⭐", "جيد جداً ⭐⭐", "جيد ⭐", "متوسط", "يحتاج متابعة"])
+
+        notes = st.text_area("ملاحظات الأداء والالتزام بالحصة", placeholder="أداء الطالب في الحصة...")
+        if st.form_submit_button("💾 رصد وحفظ الحصة"):
+            if not student_name.strip():
+                st.error("يرجى كتابة اسم الطالب أولاً.")
+            else:
+                new_row = {
+                    "التاريخ": str(session_date), "اسم الطالب": student_name.strip(),
+                    "المنهج/الدولة": t_curriculum, "المجموعة/الصف": group_name,
+                    "الحالة": status, "سعر الحصة": price, "عدد الحصص الكلي": total_sessions,
+                    "نظام الدفع": payment_type, "مستوى الطالب": student_level, "ملاحظات": notes.strip(),
+                }
+                st.session_state.sessions_df = pd.concat([st.session_state.sessions_df, pd.DataFrame([new_row])], ignore_index=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.success(f"✓ تم حفظ سجل الحصة للطالب ({student_name}) بنجاح!")
+                st.session_state.pop("prefill_student", None)
+                st.session_state.pop("prefill_schedule_idx", None)
+
+elif t_page == "add_hw":
+    if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
+    st.subheader("إضافة درجات الواجبات المنزلية والاختبارات يدوياً")
+    all_registered_names = sorted(list(set(
+        [s for s in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [s for s in st.session_state.sessions_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [s for s in st.session_state.weekly_schedule_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [s for s in st.session_state.online_schedule_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+    )))
+
+    with st.form("assessment_form", clear_on_submit=True):
+        col_a1, col_a2 = st.columns(2)
+        with col_a1:
+            if all_registered_names:
+                prefill_hw = str(st.session_state.get("prefill_student", ""))
+                hw_index = all_registered_names.index(prefill_hw) if prefill_hw in all_registered_names else 0
+                ass_student = st.selectbox("اختر الطالب:", all_registered_names, index=hw_index)
+            else:
+                ass_student = st.text_input("اسم الطالب:")
+            ass_type = st.selectbox("نوع التكليف الأكاديمي:", ["واجب منزلي", "اختبار دوري", "كويز سريع", "مهمة إضافية"])
+            ass_title = st.text_input("عنوان الدرس / التكليف:", placeholder="مثال: تمارين الهندسة صـ 25")
+            ass_date = st.date_input("تاريخ الرصد:", value=date.today())
+        with col_a2:
+            ass_status = st.selectbox("حالة التسليم والحل:", ["تم التسليم كاملاً وبشكل ممتاز", "تم التسليم مع بعض الأخطاء", "تسليم جزئي / ناقص", "لم يتم التسليم (مقصّر)", "غائب عن الاختبار"])
+            ass_score = st.number_input("الدرجة المحصلة:", min_value=0.0, step=0.5, value=10.0)
+            ass_max = st.number_input("الدرجة العظمى:", min_value=1.0, step=1.0, value=10.0)
+            ass_notes = st.text_input("ملاحظة وتوجيه ولي الأمر:", placeholder="توجيه مباشر يظهر في تقرير ولي الأمر...")
+
+        if st.form_submit_button("💾 رصد التقييم وحفظه"):
+            if not str(ass_student).strip() or not ass_title.strip():
+                st.error("يرجى التأكد من اختيار اسم الطالب وكتابة عنوان التكليف.")
+            else:
+                new_ass = {
+                    "التاريخ": str(ass_date), "اسم الطالب": str(ass_student).strip(),
+                    "النوع": ass_type, "عنوان التكليف": ass_title.strip(),
+                    "الدرجة المحصلة": ass_score, "الدرجة العظمى": ass_max,
+                    "حالة التسليم": ass_status, "ملاحظات وتوجيهات": ass_notes.strip(),
+                }
+                st.session_state.assessments_df = pd.concat([st.session_state.assessments_df, pd.DataFrame([new_ass])], ignore_index=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.success(f"✓ تم رصد {ass_type} بنجاح للطالب ({ass_student})!")
+                st.session_state.pop("prefill_student", None)
+
+    st.write("---")
+    st.markdown("### 🗑️ حذف رصد واجب / تقييم")
+    assessments_current = st.session_state.assessments_df.copy()
+    if assessments_current.empty:
+        st.info("لا توجد سجلات واجبات أو تقييمات مسجلة للحذف.")
+    else:
+        assessment_indices = list(assessments_current.index)
+        assessment_choices = []
+        for idx, row in assessments_current.iterrows():
+            assessment_choices.append(
+                f"{idx} — {row.get('اسم الطالب','')} — {row.get('النوع','')} — {row.get('عنوان التكليف','')} — {row.get('التاريخ','')}"
+            )
+        selected_assessment = st.selectbox(
+            "اختر الرصد الذي تريد مسحه:",
+            assessment_choices,
+            key="delete_assessment_select"
+        )
+        if st.button("🗑️ مسح الرصد المحدد", key="delete_assessment_button", type="secondary"):
+            selected_pos = assessment_choices.index(selected_assessment)
+            original_assessment_idx = assessment_indices[selected_pos]
+            st.session_state.assessments_df = st.session_state.assessments_df.drop(index=original_assessment_idx).reset_index(drop=True)
+            save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+            st.success("✓ تم مسح رصد الواجب / التقييم المحدد بنجاح.")
+            st.rerun()
+
+    st.dataframe(st.session_state.assessments_df, use_container_width=True)
+
+elif t_page == "edit_records":
+    if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
+    st.subheader("مراجعة وتعديل بيانات الحصص")
+    df = st.session_state.sessions_df
+
+    if df.empty:
+        st.info("لا توجد سجلات حصص مسجلة بعد.")
+    else:
+        record_options = {idx: f"[{row['التاريخ']}] - {row['اسم الطالب']} ({row.get('المنهج/الدولة', '')} | {row['المجموعة/الصف']}) - {row['الحالة']}" for idx, row in df.iterrows()}
+        selected_idx = st.selectbox("اختر السجل المراد تعديله:", options=list(record_options.keys()), format_func=lambda x: record_options[x])
+        selected_row = df.loc[selected_idx]
+
+        try: curr_date = datetime.strptime(str(selected_row["التاريخ"]), "%Y-%m-%d").date()
+        except Exception: curr_date = date.today()
+
+        with st.form("edit_record_form"):
+            c1, c2 = st.columns(2)
+            with c1:
+                edit_name = st.text_input("اسم الطالب:", value=str(selected_row["اسم الطالب"]))
+                saved_curr = selected_row.get("المنهج/الدولة", "")
+                curr_list = list(CURRICULUM_DATA.keys())
+                curr_idx = curr_list.index(saved_curr) if saved_curr in curr_list else 0
+                edit_curr = st.selectbox("المنهج / الدولة:", curr_list, index=curr_idx)
+                edit_group = st.text_input("المرحلة / الصف الدراسي:", value=str(selected_row["المجموعة/الصف"]))
+                edit_date = st.date_input("التاريخ:", value=curr_date)
+                s_opts = ["حاضر", "غائب", "متأخر", "بعذر"]
+                edit_status = st.selectbox("الحالة:", s_opts, index=(s_opts.index(selected_row["الحالة"]) if selected_row["الحالة"] in s_opts else 0))
+            with c2:
+                edit_price = st.number_input("سعر الحصة:", min_value=0.0, step=10.0, value=float(selected_row["سعر الحصة"]) if pd.notnull(selected_row["سعر الحصة"]) else 0.0)
+                edit_sessions = st.number_input("عدد الحصص الكلي:", min_value=1, step=1, value=int(selected_row["عدد الحصص الكلي"]) if pd.notnull(selected_row["عدد الحصص الكلي"]) else 1)
+                p_opts = ["اشتراك شهري", "مقدم", "مؤخر (بعد الحصة)", "مؤجل"]
+                edit_pay = st.selectbox("نظام الدفع:", p_opts, index=(p_opts.index(selected_row["نظام الدفع"]) if selected_row["نظام الدفع"] in p_opts else 0))
+                l_opts = ["ممتاز ⭐⭐⭐", "جيد جداً ⭐⭐", "جيد ⭐", "متوسط", "يحتاج متابعة", "قيد التقييم"]
+                edit_level = st.selectbox("المستوى:", l_opts, index=(l_opts.index(selected_row["مستوى الطالب"]) if selected_row["مستوى الطالب"] in l_opts else 0))
+
+            edit_notes = st.text_area("الملاحظات والتقييم:", value=str(selected_row["ملاحظات"]))
+            b1, b2 = st.columns([1, 4])
+            with b1: update_btn = st.form_submit_button("💾 تحديث البيانات")
+            with b2: delete_btn = st.form_submit_button("🗑️ حذف السجل")
+
+            if update_btn:
+                df.at[selected_idx, "التاريخ"] = str(edit_date)
+                df.at[selected_idx, "اسم الطالب"] = edit_name.strip()
+                df.at[selected_idx, "المنهج/الدولة"] = edit_curr
+                df.at[selected_idx, "المجموعة/الصف"] = edit_group.strip()
+                df.at[selected_idx, "الحالة"] = edit_status
+                df.at[selected_idx, "سعر الحصة"] = edit_price
+                df.at[selected_idx, "عدد الحصص الكلي"] = edit_sessions
+                df.at[selected_idx, "نظام الدفع"] = edit_pay
+                df.at[selected_idx, "مستوى الطالب"] = edit_level
+                df.at[selected_idx, "ملاحظات"] = edit_notes.strip()
+                st.session_state.sessions_df = df
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.success("✓ تم تحديث بيانات الحصة بنجاح!")
+                st.rerun()
+
+            if delete_btn:
+                df = df.drop(selected_idx).reset_index(drop=True)
+                st.session_state.sessions_df = df
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                st.warning("⚠️ تم حذف السجل.")
+                st.rerun()
+
+elif t_page == "all_records":
+    if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
+    st.subheader("📊 نظرة شاملة على السجلات وإحصائيات الطلاب")
+    
+    all_students_master = sorted(list(set(
+        [str(s).strip() for s in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [str(s).strip() for s in st.session_state.sessions_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [str(s).strip() for s in st.session_state.assessments_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [str(s).strip() for s in st.session_state.weekly_schedule_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+        + [str(s).strip() for s in st.session_state.online_schedule_df["اسم الطالب"].dropna().unique() if str(s).strip()]
+    )))
+
+    if not all_students_master:
+        st.info("لا توجد بيانات طلاب مسجلة حتى الآن.")
+    else:
+        selected_master_student = st.selectbox("🔍 اختر طالباً لعرض بياناته التفصيلية:", options=all_students_master, key="master_student_sel")
+        
+        if selected_master_student:
+            u_r = st.session_state.users_df[st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == selected_master_student]
+            s_r = st.session_state.sessions_df[st.session_state.sessions_df["اسم الطالب"].astype(str).str.strip() == selected_master_student]
+            a_r = st.session_state.assessments_df[st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip() == selected_master_student]
+
+            reg_state = "نعم (مسجل على المنصة)" if not u_r.empty else "لا (مسجل يدويًا)"
+            
+            grade_val = "-"
+            curr_val = "-"
+            if not u_r.empty:
+                grade_val = str(u_r.iloc[0].get("المجموعة/الصف", "-"))
+                curr_val = str(u_r.iloc[0].get("المنهج/الدولة", "-"))
+            elif not s_r.empty:
+                grade_val = str(s_r.iloc[-1].get("المجموعة/الصف", "-"))
+                curr_val = str(s_r.iloc[-1].get("المنهج/الدولة", "-"))
+
+            total_sess = len(s_r)
+            attended_sess = len(s_r[s_r["الحالة"] == "حاضر"])
+            total_due = s_r["سعر الحصة"].astype(float, errors="ignore").sum(numeric_only=True) if not s_r.empty else 0.0
+
+            st.markdown(f"""
+                <div style="background:{card_bg}; border:2px solid #10b981; border-radius:12px; padding:20px; margin-bottom:10px;">
+                    <h4 style="color:#059669; margin-top:0;">👤 ملف الطالب: {selected_master_student}</h4>
+                    <p style="font-size:16px; margin:5px 0; color:#0f172a;"><b>حالة التسجيل:</b> {reg_state} | <b>المرحلة/الصف:</b> {grade_val} ({curr_val})</p>
+                    <p style="font-size:16px; margin:5px 0; color:#0f172a;"><b>إجمالي الحصص:</b> {total_sess} (حاضر: {attended_sess}) | <b>إجمالي المبلغ المستحق:</b> <span style="color:#dc2626;">{total_due:,.1f} جنيه</span></p>
+                </div>
+            """, unsafe_allow_html=True)
+
+            st_sessions_pdf = st.session_state.sessions_df[st.session_state.sessions_df["اسم الطالب"].astype(str).str.strip() == selected_master_student].copy()
+            st_assessments_pdf = st.session_state.assessments_df[st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip() == selected_master_student].copy()
+
+            sess_rows_html = ""
+            for _, sr in st_sessions_pdf.iterrows():
+                sess_rows_html += f"<tr><td>{sr['التاريخ']}</td><td>{sr['الحالة']}</td><td>{sr['سعر الحصة']}</td><td>{sr['مستوى الطالب']}</td><td>{sr['ملاحظات']}</td></tr>"
+
+            ass_rows_html = ""
+            for _, ar in st_assessments_pdf.iterrows():
+                ass_rows_html += f"<tr><td>{ar['التاريخ']}</td><td>{ar['النوع']}</td><td>{ar['عنوان التكليف']}</td><td>{ar['الدرجة المحصلة']} / {ar['الدرجة العظمى']}</td><td>{ar['حالة التسليم']}</td></tr>"
+
+            single_student_pdf_html = f"""<!DOCTYPE html>
+            <html dir="rtl" lang="ar">
+            <head><meta charset="utf-8"><title>تقرير الطالب - {selected_master_student}</title></head>
+            <body style="font-family: Arial; padding: 25px;" onload="window.print()">
+                <h2>تقرير متابعة الطالب: {selected_master_student}</h2>
+                <p><b>المرحلة / الصف:</b> {grade_val} | <b>المنهج:</b> {curr_val}</p>
+                <p><b>إجمالي الحصص:</b> {total_sess} | <b>إجمالي الرصيد المستحق:</b> {total_due:,.1f} جنيه</p>
+                <hr>
+                <h3>سجل الحصص والحضور:</h3>
+                <table border="1" style="width:100%; border-collapse:collapse; text-align:center; margin-bottom:20px;">
+                    <tr style="background:#f1f5f9;"><th style="padding:8px;">التاريخ</th><th>الحالة</th><th>السعر</th><th>المستوى</th><th>ملاحظات</th></tr>
+                    {sess_rows_html if sess_rows_html else "<tr><td colspan='5'>لا توجد حصص مسجلة</td></tr>"}
+                </table>
+                <h3>سجل الاختبارات والواجبات:</h3>
+                <table border="1" style="width:100%; border-collapse:collapse; text-align:center;">
+                    <tr style="background:#f1f5f9;"><th style="padding:8px;">التاريخ</th><th>النوع</th><th>العنوان</th><th>الدرجة</th><th>الحالة</th></tr>
+                    {ass_rows_html if ass_rows_html else "<tr><td colspan='5'>لا توجد اختبارات مسجلة</td></tr>"}
+                </table>
+            </body>
+            </html>"""
+
+            st.download_button(
+                label=f"🖨️ طباعة وتصدير ملف PDF خاص بالطالب ({selected_master_student})",
+                data=single_student_pdf_html.encode("utf-8"),
+                file_name=f"تقرير_الطالب_{selected_master_student}.html",
+                mime="application/octet-stream",
+                key=f"dl_single_pdf_{selected_master_student}"
+            )
+
+        st.write("---")
+        st.markdown("### 📋 جدول ملخص الطلاب الشامل:")
+        
+        master_data_list = []
+        for st_name in all_students_master:
+            u_r = st.session_state.users_df[st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == st_name]
+            s_r = st.session_state.sessions_df[st.session_state.sessions_df["اسم الطالب"].astype(str).str.strip() == st_name]
+            a_r = st.session_state.assessments_df[st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip() == st_name]
+            
+            is_registered = "نعم (مسجل على المنصة)" if not u_r.empty else "لا (مسجل يدويًا)"
+            
+            grade_val = "-"
+            if not u_r.empty:
+                grade_val = str(u_r.iloc[0].get("المجموعة/الصف", "-"))
+            elif not s_r.empty:
+                grade_val = str(s_r.iloc[-1].get("المجموعة/الصف", "-"))
+
+            total_sess = len(s_r)
+            attended_sess = len(s_r[s_r["الحالة"] == "حاضر"])
+            avg_price = s_r["سعر الحصة"].astype(float, errors="ignore").mean() if not s_r.empty else 0.0
+            total_due = s_r["سعر الحصة"].astype(float, errors="ignore").sum(numeric_only=True) if not s_r.empty else 0.0
+            _, total_paid_student, balance_student = get_student_financials(st_name)
+            
+            exams_count = len(a_r[a_r["النوع"].astype(str).str.contains("اختبار|كويز", na=False)])
+            hws_count = len(a_r[a_r["النوع"].astype(str).str.contains("واجب", na=False)])
+
+            master_data_list.append({
+                "اسم الطالب": st_name,
+                "حالة التسجيل": is_registered,
+                "ولي الأمر": str(u_r.iloc[0].get("اسم ولي الأمر", "")) if not u_r.empty else "",
+                "المرحلة/الصف": grade_val,
+                "إجمالي الحصص": total_sess,
+                "الحصص الحاضرة": attended_sess,
+                "متوسط سعر الحصة": f"{avg_price:,.1f}",
+                "إجمالي الحساب المستحق": f"{total_due:,.1f}",
+                "إجمالي المدفوع": f"{total_paid_student:,.1f}",
+                "الرصيد المتبقي": f"{max(balance_student,0):,.1f}",
+                "عدد الاختبارات": exams_count,
+                "عدد الواجبات": hws_count
+            })
+
+        master_df = pd.DataFrame(master_data_list)
+        st.dataframe(master_df, use_container_width=True)
+
+        all_students_pdf_html = """<!DOCTYPE html>
+        <html dir="rtl" lang="ar">
+        <head><meta charset="utf-8"><title>تقرير السجلات الشاملة لجميع الطلاب</title></head>
+        <body style="font-family: Arial; padding: 25px;" onload="window.print()">
+            <h2>تقرير السجلات الشاملة وإحصائيات جميع الطلاب - م/ محمد غنيم</h2>
+            <table border="1" style="width:100%; border-collapse:collapse; text-align:center; margin-top:15px;">
+                <tr style="background:#f1f5f9;">
+                    <th style="padding:8px;">اسم الطالب</th>
+                    <th>حالة التسجيل</th><th>ولي الأمر</th>
+                    <th>المرحلة/الصف</th>
+                    <th>إجمالي الحصص</th>
+                    <th>الحصص الحاضرة</th>
+                    <th>إجمالي الحساب</th><th>إجمالي المدفوع</th><th>الرصيد المتبقي</th>
+                    <th>الاختبارات</th>
+                    <th>الواجبات</th>
+                </tr>
+        """
+        for item in master_data_list:
+            all_students_pdf_html += f"""
+                <tr>
+                    <td style="padding:6px;">{item['اسم الطالب']}</td>
+                    <td>{item['حالة التسجيل']}</td><td>{item['ولي الأمر']}</td>
+                    <td>{item['المرحلة/الصف']}</td>
+                    <td>{item['إجمالي الحصص']}</td>
+                    <td>{item['الحصص الحاضرة']}</td>
+                    <td>{item['إجمالي الحساب المستحق']}</td><td>{item['إجمالي المدفوع']}</td><td>{item['الرصيد المتبقي']}</td>
+                    <td>{item['عدد الاختبارات']}</td>
+                    <td>{item['عدد الواجبات']}</td>
+                </tr>
+            """
+        all_students_pdf_html += "</table></body></html>"
+
+        c_dl1, c_dl2 = st.columns(2)
+        with c_dl1:
+            buf = io.BytesIO()
+            with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                master_df.to_excel(writer, sheet_name="Master_Students_Report", index=False)
+                st.session_state.users_df.to_excel(writer, sheet_name="Users", index=False)
+                st.session_state.sessions_df.to_excel(writer, sheet_name="Sessions", index=False)
+                st.session_state.assessments_df.to_excel(writer, sheet_name="Assessments", index=False)
+                st.session_state.exams_df.to_excel(writer, sheet_name="Exams", index=False)
+                st.session_state.videos_df.to_excel(writer, sheet_name="Videos", index=False)
+
+            st.download_button(
+                label="📥 تصدير تقرير السجلات الشاملة للطلاب (Excel)",
+                data=buf.getvalue(), file_name="تقرير_السجلات_الشاملة_للطلاب.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        with c_dl2:
+            st.download_button(
+                label="🖨️ طباعة وتصدير تقرير السجلات الشاملة لجميع الطلاب (PDF)",
+                data=all_students_pdf_html.encode("utf-8"),
+                file_name="تقرير_السجلات_الشاملة_لجميع_الطلاب.html",
+                mime="application/octet-stream"
+            )
+
+elif t_page == "online_backup":
+    st.subheader("💾 النسخ الاحتياطية — على الموقع + على جهازك")
+    st.info("بيانات المنصة محفوظة سحابياً، ويمكنك أيضاً تنزيل نسخة كاملة على اللاب ثم رفعها لاحقاً لاسترجاع الموقع إذا حدثت مشكلة.")
+    st.markdown("### 💻 1) تنزيل نسخة كاملة على اللاب")
+    try:
+        _backup_bytes=_backup_zip_bytes()
+        st.download_button("📦 تنزيل النسخة الاحتياطية الكاملة جداً (كل البيانات + الصور + الفيديوهات + الإيصالات)",_backup_bytes,file_name=f"alhandasa_COMPLETE_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",mime="application/zip",use_container_width=True,type="primary",key="download_full_local_backup_zip")
+        st.caption("النسخة ZIP هي النسخة المعتمدة للاسترجاع. تحتوي Excel للقراءة + ملف بيانات دقيق + كل الوسائط والإيصالات والفيديوهات كملفات مستقلة، لتجنب قص البيانات داخل Excel.")
+    except Exception as e: st.error(f"تعذر إنشاء النسخة: {e}")
+    st.markdown("### ♻️ 2) رفع نسخة واسترجاعها للموقع")
+    st.caption("قبل الاسترجاع تُحفظ نسخة أمان من البيانات الحالية في Supabase، ثم تُعاد كل الجداول والوسائط والإيصالات والفيديوهات من النسخة.")
+    _up=st.file_uploader("اختر النسخة الكاملة (.zip) أو النسخة القديمة (.xlsx)",type=["zip","xlsx"],key="full_backup_restore_upload")
+    if _up is not None:
+        try:
+            _up_bytes=_up.getvalue(); _is_zip=str(_up.name).lower().endswith(".zip")
+            st.success("✓ تم التعرف على النسخة الكاملة ZIP." if _is_zip else "✓ تم التعرف على نسخة Excel القديمة.")
+            if st.button("🚨 استرجاع هذه النسخة إلى الموقع",use_container_width=True,type="primary",key="restore_full_backup_to_cloud"):
+                try:
+                    _n=_restore_complete_zip(_up_bytes) if _is_zip else _restore_complete_backup(_up_bytes)
+                    st.success(f"✅ تم الاسترجاع بنجاح وتحديث الموقع وSupabase. السجلات المسترجعة: {_n}.")
+                    st.rerun()
+                except Exception as e: st.error(f"❌ فشل الاسترجاع: {e}")
+        except Exception as e: st.error(f"ملف النسخة غير صالح: {e}")
+    st.markdown("### ☁️ 3) النسخ السحابية داخل Supabase")
+    st.caption("كل حفظ ناجح ينشئ Snapshot مستقل قبل تحديث النسخة الرئيسية، لذلك لديك طبقة حماية سحابية أيضاً.")
+    st.markdown("---")
+    st.subheader("💾 النسخ الاحتياطية و Excel Online")
+    st.caption("يتم رفع نفس ملف بيانات المنصة إلى Excel Online/OneDrive بعد كل حفظ آمن، ويمكن تنزيله أو استرجاعه.")
+    if not _onedrive_enabled():
+        st.warning("⚠️ Excel Online غير مُفعّل. أضف إعدادات Microsoft Graph في Streamlit Secrets.")
+    else:
+        meta=_onedrive_metadata()
+        if meta:
+            st.success(f"✅ ملف Excel Online متصل: {meta.get('name', MS_EXCEL_PATH)}")
+            if meta.get('webUrl'): st.link_button("📊 فتح ملف Excel Online", meta['webUrl'], use_container_width=True)
+            st.caption(f"آخر تعديل: {meta.get('lastModifiedDateTime','غير متاح')}")
+        else:
+            st.info("سيتم إنشاء ملف Excel Online تلقائياً عند أول حفظ ناجح.")
+        if st.button("🔄 تنزيل آخر نسخة من Excel Online", use_container_width=True, key="download_online_excel_btn"):
+            b=_onedrive_download_excel()
+            if b: st.session_state['online_excel_download']=b
+            else: st.error(f"تعذر التحميل: {st.session_state.get('onedrive_last_error','')}")
+        if st.session_state.get('online_excel_download'):
+            st.download_button("📥 حفظ Excel على الجهاز", st.session_state['online_excel_download'], file_name="سجل_الغياب_والحصص_Excel_Online.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="save_excel_device_btn")
+        st.markdown("### ♻️ استرجاع البيانات من Excel Online")
+        st.warning("لن يتم الكتابة فوق Supabase أثناء الاسترجاع. سيتم تحميل البيانات في الجلسة الحالية أولاً.")
+        if st.button("♻️ استرجاع آخر نسخة من Excel Online", use_container_width=True, type="primary", key="restore_excel_online_btn"):
+            b=_onedrive_download_excel()
+            if not b:
+                st.error(f"تعذر الاسترجاع: {st.session_state.get('onedrive_last_error','')}")
+            else:
+                try:
+                    rec=load_all_data_from_excel_bytes(b)
+                    core_total=len(rec[0])+len(rec[1])+len(rec[2])+len(rec[6])+len(rec[7])+len(rec[8])+len(rec[9])+len(rec[10])+len(rec[12])+len(rec[13])+len(rec[14])
+                    total=sum(len(x) for x in rec)
+                    if core_total == 0: st.error("❌ ملف Excel صالح لكنه لا يحتوي على بيانات أساسية للطلاب/الحصص؛ تم إلغاء الاسترجاع لحماية بيانات الموقع.")
+                    else:
+                        names=["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df"]
+                        for n,df in zip(names,rec): st.session_state[n]=df
+                        st.session_state['ads_df']=load_ads()
+                        st.session_state['_last_autosave_signature']=_autosave_signature()
+                        st.success(f"✅ تم استرجاع {total} سجل من Excel Online داخل المنصة. راجع البيانات ثم احفظها.")
+                except Exception as exc: st.error(str(exc))
+        st.markdown("### 🔐 ضع هذه القيم في Streamlit Secrets")
+        st.code('''MS_TENANT_ID = "Tenant ID"
+MS_CLIENT_ID = "App Registration Client ID"
+MS_CLIENT_SECRET = "Client Secret"
+MS_ONEDRIVE_USER = "حساب Microsoft/OneDrive"
+MS_EXCEL_PATH = "سجل_الغياب_والحصص.xlsx"''', language="toml")
+        st.info("لا تضع Client Secret داخل app.py أو GitHub. يجب منح تطبيق Microsoft Graph صلاحية الوصول إلى ملفات OneDrive للحساب المحدد.")
+
+elif t_page == "ads":
+    st.subheader("📢 إدارة الإعلانات")
+    st.caption("أنشئ إعلاناً من لوحة المعلم وسيظهر مباشرة في الصفحة الرئيسية للطالب. يمكنك نشر صورة + بوست، فيديو برابط، رابط مباشر أو واتساب.")
+    ads_df = st.session_state.get("ads_df", pd.DataFrame(columns=COL_ADS)).copy()
+    with st.container(border=True):
+        with st.form("create_ad_form", clear_on_submit=True):
+            ad_title = st.text_input("عنوان الإعلان", placeholder="مثال: مراجعة ليلة الامتحان")
+            ad_type = st.selectbox("نوع الإعلان", ["صورة + بوست", "فيديو", "رابط", "واتساب", "نص"])
+            ad_text = st.text_area("نص / محتوى الإعلان", placeholder="اكتب البوست أو وصف الإعلان هنا")
+            ad_link = st.text_input("الرابط (فيديو / موقع / واتساب)", placeholder="https://...")
+            ad_button = st.text_input("نص زر الرابط", value="افتح الإعلان")
+            ad_file = None
+            if ad_type in ["صورة + بوست", "فيديو"]:
+                ad_file = st.file_uploader("ارفع الصورة أو الفيديو", type=["png","jpg","jpeg","webp","mp4","webm","mov"], key="ad_media_upload")
+            ad_active = st.checkbox("الإعلان ظاهر للطلاب", value=True)
+            ad_submit = st.form_submit_button("🚀 نشر الإعلان", use_container_width=True, type="primary")
+            if ad_submit:
+                media_b64 = ""
+                media_mime = ""
+                if ad_file is not None:
+                    raw = ad_file.getvalue()
+                    media_b64 = base64.b64encode(raw).decode("utf-8")
+                    media_mime = str(getattr(ad_file, "type", "") or "application/octet-stream")
+                final_link = ad_link.strip()
+                if ad_type == "واتساب" and final_link and not final_link.startswith("http"):
+                    final_link = "https://wa.me/" + final_link.replace("+", "").replace(" ", "")
+                new_ad = {
+                    "معرف_الإعلان": datetime.now().strftime("%Y%m%d%H%M%S%f"),
+                    "تاريخ_النشر": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "العنوان": ad_title.strip() or "إعلان جديد",
+                    "نوع_الإعلان": ad_type,
+                    "النص": ad_text.strip(),
+                    "الوسائط_base64": media_b64,
+                    "نوع_الوسائط": media_mime,
+                    "الرابط": final_link,
+                    "نص_الزر": ad_button.strip() or "افتح الإعلان",
+                    "الحالة": "نشط" if ad_active else "متوقف",
+                }
+                st.session_state.ads_df = pd.concat([ads_df, pd.DataFrame([new_ad])], ignore_index=True)
+                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df, st.session_state.get("weekly_schedule_df"), st.session_state.get("payment_records_df"), st.session_state.ads_df)
+                st.success("✓ تم نشر الإعلان وحفظه، وسيظهر في الصفحة الرئيسية للطالب.")
+                st.rerun()
+
+    # ------------------------------------------------------------------
+    # تعديل إعلان موجود
+    # ------------------------------------------------------------------
+    editing_ad_idx = st.session_state.get("editing_ad_idx", None)
+
+    if editing_ad_idx is not None and not ads_df.empty and editing_ad_idx in ads_df.index:
+        edit_row = ads_df.loc[editing_ad_idx].copy()
+
+        st.markdown("### ✏️ تعديل الإعلان")
+        st.info("عدّل بيانات الإعلان ثم اضغط «💾 حفظ التعديلات». إذا لم ترفع ملفًا جديدًا ستظل الصورة/الفيديو الحالي كما هو.")
+
+        with st.container(border=True):
+            with st.form(f"edit_ad_form_{editing_ad_idx}"):
+                edit_title = st.text_input(
+                    "عنوان الإعلان",
+                    value=str(edit_row.get("العنوان", "") or ""),
+                    key=f"edit_ad_title_{editing_ad_idx}"
+                )
+
+                current_type = str(edit_row.get("نوع_الإعلان", "نص") or "نص")
+                ad_types = ["صورة + بوست", "فيديو", "رابط", "واتساب", "نص"]
+                edit_type = st.selectbox(
+                    "نوع الإعلان",
+                    ad_types,
+                    index=ad_types.index(current_type) if current_type in ad_types else 0,
+                    key=f"edit_ad_type_{editing_ad_idx}"
+                )
+
+                edit_text = st.text_area(
+                    "نص / محتوى الإعلان",
+                    value=str(edit_row.get("النص", "") or ""),
+                    key=f"edit_ad_text_{editing_ad_idx}"
+                )
+
+                edit_link = st.text_input(
+                    "الرابط (فيديو / موقع / واتساب)",
+                    value=str(edit_row.get("الرابط", "") or ""),
+                    key=f"edit_ad_link_{editing_ad_idx}"
+                )
+
+                edit_button = st.text_input(
+                    "نص زر الرابط",
+                    value=str(edit_row.get("نص_الزر", "افتح الإعلان") or "افتح الإعلان"),
+                    key=f"edit_ad_button_{editing_ad_idx}"
+                )
+
+                current_media = str(edit_row.get("الوسائط_base64", "") or "").strip()
+                current_mime = str(edit_row.get("نوع_الوسائط", "") or "").strip()
+
+                if current_media:
+                    st.caption("📎 يوجد حاليًا ملف صورة/فيديو مرتبط بهذا الإعلان.")
+
+                edit_file = None
