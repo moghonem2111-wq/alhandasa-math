@@ -943,7 +943,6 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
     body = {
         "contents":[{"role":"user","parts":parts}],
         "generationConfig":{
-            "responseMimeType":"application/json",
             "maxOutputTokens":4096
         }
     }
