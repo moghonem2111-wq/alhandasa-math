@@ -113,7 +113,7 @@ jobs:
               zoom = first(row, ["رابط زووم","رابط Zoom","Zoom","zoom_link","zoom","لينك زووم","رابط الحصة"]) or DEFAULT_ZOOM
               link = escape(zoom, quote=True)
 
-              if 5 <= delta <= 10:
+              if 7.5 <= delta <= 10.5:
                   send("⏳ <b>استعد للحصة بعد 10 دقائق</b>\n\n"
                        "👤 <b>الطالب:</b> " + student + "\n"
                        "🎓 <b>الصف:</b> " + grade + "\n"
@@ -121,7 +121,7 @@ jobs:
                        "🕐 <b>الموعد:</b> " + tm + "\n\n"
                        "🔗 <a href=\"" + link + "\">دخول حصة Zoom</a>\n<code>" +
                        escape(zoom) + "</code>")
-              elif -1 <= delta < 5:
+              elif -2.5 <= delta < 2.5:
                   send("🚨 <b>حان الآن موعد الحصة</b> 🔔\n\n"
                        "👤 <b>الطالب:</b> " + student + "\n"
                        "🎓 <b>الصف:</b> " + grade + "\n"
