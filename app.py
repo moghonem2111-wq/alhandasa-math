@@ -942,9 +942,9 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
         "generationConfig":{
             "responseMimeType":"application/json",
             "responseSchema":{
-                "type":"OBJECT",
+                "type":"object",
                 "properties":{
-                    "answer":{"type":"STRING"},
+                    "answer":{"type":"string"},
                     "final_answer":{"type":"STRING"},
                     "topic":{"type":"STRING"}
                 },
@@ -1014,6 +1014,46 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
                 # قد يرفض موديل معيّن JSON المهيكل أو يكون غير متاح للحساب؛
                 # ننتقل مباشرة للموديل التالي بدل إظهار فشل الصورة للطالب.
                 if status in (400, 401, 403, 404):
+                    # بعض إصدارات Gemini قد ترفض JSON Schema مع مدخلات الصور/الملفات.
+                    # نجرب نفس الطلب مرة واحدة بدون responseSchema بدل إظهار فشل عام للطالب.
+                    if status == 400 and "responseSchema" in body.get("generationConfig", {}):
+                        fallback_body = json.loads(json.dumps(body, ensure_ascii=False))
+                        fallback_body["generationConfig"].pop("responseSchema", None)
+                        try:
+                            fallback_req = urllib.request.Request(
+                                url,
+                                data=json.dumps(fallback_body, ensure_ascii=False).encode("utf-8"),
+                                headers={"Content-Type":"application/json","x-goog-api-key":key},
+                                method="POST"
+                            )
+                            with urllib.request.urlopen(fallback_req, timeout=90) as fallback_resp:
+                                fallback_raw = json.loads(fallback_resp.read().decode("utf-8"))
+                            fallback_candidates = fallback_raw.get("candidates") or []
+                            if fallback_candidates:
+                                fallback_content = fallback_candidates[0].get("content") or {}
+                                fallback_parts = fallback_content.get("parts") or []
+                                fallback_text = "".join(
+                                    str(p.get("text","")) for p in fallback_parts
+                                    if p.get("text") is not None
+                                ).strip()
+                                if fallback_text:
+                                    fallback_text = fallback_text.replace(chr(96)*3+"json","").replace(chr(96)*3,"").strip()
+                                    try:
+                                        fallback_data = json.loads(fallback_text)
+                                    except Exception:
+                                        s = fallback_text.find("{")
+                                        e = fallback_text.rfind("}")
+                                        if s >= 0 and e > s:
+                                            fallback_data = json.loads(fallback_text[s:e+1])
+                                        else:
+                                            fallback_data = {
+                                                "answer": fallback_text,
+                                                "final_answer":"",
+                                                "topic":"رياضيات"
+                                            }
+                                    return fallback_data
+                        except Exception as fallback_ex:
+                            last_error = str(fallback_ex)
                     break
 
                 if attempt < 2:
