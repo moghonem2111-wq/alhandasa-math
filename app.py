@@ -962,11 +962,13 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
             }
         })
 
+    # نستخدم GenerateContent بشكل بسيط ومتوافق: بدون responseSchema/JSON mode.
+    # حمصا يطلب JSON من النموذج ونقوم بتحليله محلياً، مع إبقاء الصور/PDF كما هي.
     body = {
         "contents": [{"role": "user", "parts": parts}],
         "generationConfig": {
-            "responseMimeType": "application/json",
-            "maxOutputTokens": 4096
+            "maxOutputTokens": 4096,
+            "temperature": 0.2
         }
     }
 
