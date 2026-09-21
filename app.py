@@ -1036,35 +1036,55 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
     raise RuntimeError("AI_ERROR:" + last_error)
 
 def _hamza_render_solution(text):
-    """عرض حل حمصا بتنسيق منظم مع دعم LaTeX واتجاه المعادلات."""
+    """عرض حل حمصا بخطوات معنونة واتجاه صحيح للرياضيات."""
     raw = str(text or "").strip()
     if not raw:
         return
 
-    blocks = [b.strip() for b in re.split(r"\n\s*\n", raw) if b.strip()]
-    for block in blocks:
-        # المعادلات المحاطة بـ $ تعرض كمعادلة مستقلة من اليسار لليمين.
-        if block.startswith("$") and block.endswith("$"):
-            formula = block[2:-2].strip()
-            st.latex(formula)
+    lines = [x.strip() for x in raw.replace("\\r\\n", "\\n").replace("\\n", "\\n").split("\\n")]
+    for line in lines:
+        if not line:
+            st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
             continue
 
-        # لو السطر رياضي بوضوح، اعرضه كمعادلة مستقلة.
-        lines = [x.strip() for x in block.splitlines() if x.strip()]
-        if len(lines) == 1:
-            line = lines[0]
-            math_like = (
-                bool(re.search(r"\\frac|\\sqrt|\\sum|\\int|[=<>≤≥≠±×÷^]", line))
-                and bool(re.search(r"[0-9A-Za-z]", line))
+        # عنوان خطوة: 1. ... / 2) ... / 3- ...
+        step = re.match(r"^(?:الخطوة\\s*)?(\\d+)\\s*[\\.\\)\\-:]\\s*(.+)$", line)
+        if step and not re.search(r"[=<>≤≥≠±×÷^]|\\\\frac|\\\\sqrt", step.group(2)):
+            title = html.escape(step.group(2))
+            st.markdown(
+                f"<div dir='rtl' style='margin-top:14px;margin-bottom:7px;"
+                f"padding:9px 13px;border-right:5px solid #1677ff;"
+                f"background:#eef6ff;border-radius:10px;color:#0b5ed7;"
+                f"font-size:17px;font-weight:900;'>{step.group(1)}. {title}</div>",
+                unsafe_allow_html=True,
             )
-            if math_like and not re.search(r"[ء-ي]", line):
-                formula = line.strip("$ ")
-                st.latex(formula)
-                continue
+            continue
 
-        # نترك Markdown/LaTeX الأصلي لـ Streamlit حتى تظهر الكسور والجذور والأسس بصورة صحيحة.
-        # المعادلات المختلطة داخل الشرح تبقى LTR، والنص العربي يظل RTL بطبيعته.
-        st.markdown(block)
+        # المعادلة المستقلة: دائماً LTR وتظهر بعرض رياضي صحيح.
+        formula = line.strip()
+        if formula.startswith("$$") and formula.endswith("$$"):
+            st.latex(formula[2:-2].strip())
+            continue
+        if formula.startswith("$") and formula.endswith("$"):
+            st.latex(formula[1:-1].strip())
+            continue
+
+        math_like = (
+            bool(re.search(r"\\\\frac|\\\\dfrac|\\\\tfrac|\\\\sqrt|\\\\sum|\\\\int|[=<>≤≥≠±×÷^]", formula))
+            and bool(re.search(r"[0-9A-Za-z]", formula))
+        )
+        has_arabic = bool(re.search(r"[ء-ي]", formula))
+
+        if math_like and not has_arabic:
+            st.latex(formula.strip("$ "))
+        elif not has_arabic:
+            st.markdown(
+                f"<div dir='ltr' style='text-align:left;line-height:1.9;margin:4px 0;'>"
+                f"{html.escape(formula)}</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(formula)
 
 def _hamza_math_html(value):
     """تنسيق رياضيات حمصا للطباعة: كسور وجذور وأسُس ورموز واتجاه نص صحيح."""
@@ -1147,6 +1167,14 @@ def _hamza_math_html(value):
         if not line:
             continue
 
+        step = re.match(r"^(?:الخطوة\\s*)?(\\d+)\\s*[\\.\\)\\-:]\\s*(.+)$", line)
+        if step and not re.search(r"[=<>≤≥≠±×÷^]|\\\\frac|\\\\sqrt", step.group(2)):
+            out.append(
+                f"<div dir='rtl' class='step-title'><span>{step.group(1)}.</span> "
+                f"{step.group(2)}</div>"
+            )
+            continue
+
         plain = re.sub(r"<[^>]+>", "", line).strip()
         has_arabic = bool(re.search(r"[ء-ي]", plain))
         has_math = bool(re.search(r"[A-Za-z0-9=<>≤≥≠≈±×÷√πθαλβγδλμσω∞+\-*/^_()]", plain))
@@ -1178,6 +1206,10 @@ body{{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#102a52;background:#fff;
 .header h1{{margin:0;font-size:27px;font-weight:900}} .header p{{margin:5px 0 0;color:#dbeafe}}
 .card{{border:1px solid #dbe7f5;border-radius:16px;padding:18px 20px;margin:12px 0;background:#fff}}
 .title{{font-size:19px;color:#126be6;font-weight:900;margin-bottom:10px}}
+.step-title{{margin:14px 0 7px;padding:9px 13px;border-right:5px solid #1677ff;background:#eef6ff;border-radius:10px;color:#0b5ed7;font-size:16px;font-weight:900;direction:rtl;text-align:right}}
+.step-title span{{display:inline-block;min-width:24px}}
+.math-line{{direction:ltr;text-align:left;unicode-bidi:embed;margin:6px 0;font-family:'Cairo',Tahoma,Arial,sans-serif;font-weight:700}}
+.text-line{{direction:rtl;text-align:right;margin:4px 0}}
 .answer{{background:#f3f8ff;border-right:5px solid #1677ff;direction:rtl;text-align:right}}
 .final{{background:#ecfdf5;border-right:5px solid #10b981;font-size:18px;direction:rtl;text-align:right}}.frac{{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;margin:0 3px}}.frac .num{{border-bottom:1.5px solid #102a52;padding:0 4px}}.frac .den{{padding:0 4px}}.sqrt{{display:inline-flex;align-items:flex-start;font-size:1.08em}}.sqrt .radicand{{border-top:1.5px solid #102a52;padding:0 3px;margin-top:2px}}
 .footer{{margin-top:22px;border-top:1px solid #dbe7f5;padding-top:10px;text-align:center;color:#64748b;font-size:11px}}
