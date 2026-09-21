@@ -1041,14 +1041,14 @@ def _hamza_render_solution(text):
     if not raw:
         return
 
-    raw = raw.replace("\\r\\n", "\\n").replace("\\r", "\\n")
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
     lines = [x.strip() for x in raw.split("\\n")]
 
     def has_arabic(value):
         return any(
-            ("\\u0600" <= ch <= "\\u06ff")
-            or ("\\u0750" <= ch <= "\\077f")
-            or ("\\u08a0" <= ch <= "\\08ff")
+            ("\u0600" <= ch <= "\u06ff")
+            or ("\u0750" <= ch <= "\u077f")
+            or ("\u08a0" <= ch <= "\u08ff")
             for ch in str(value)
         )
 
