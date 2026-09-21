@@ -497,8 +497,7 @@ def teacher_image_data_uri(b64_str):
         xs, ys = [], []
         for y in range(im.height):
             for x in range(im.width):
-                r, g, b, a = pix[x, y]
-                if a > 18 and not (r > 245 and g > 245 and b > 245):
+                r, g, b, a = pix[x, y]                if a > 18 and not (r > 245 and g > 245 and b > 245):
                     xs.append(x)
                     ys.append(y)
         if xs and ys:
@@ -908,34 +907,149 @@ def format_schedule_time_ampm(value):
         return str(value)
 
 
+def _telegram_configured():
+    try:
+        token = str(st.secrets.get("TELEGRAM_BOT_TOKEN", "")).strip()
+        chat_id = str(st.secrets.get("TELEGRAM_CHAT_ID", "")).strip()
+        return bool(token and chat_id)
+    except Exception:
+        return False
+
+
+def _telegram_send_message(message):
+    """إرسال إشعار للهاتف عبر Telegram، بدون تخزين أي مفتاح داخل الكود."""
+    try:
+        token = str(st.secrets.get("TELEGRAM_BOT_TOKEN", "")).strip()
+        chat_id = str(st.secrets.get("TELEGRAM_CHAT_ID", "")).strip()
+        if not token or not chat_id:
+            return False, "لم يتم ضبط Telegram في Secrets."
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        body = urllib.parse.urlencode({
+            "chat_id": chat_id,
+            "text": str(message),
+            "parse_mode": "HTML",
+            "disable_web_page_preview": "true",
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        if payload.get("ok"):
+            return True, ""
+        return False, str(payload.get("description", "تعذر إرسال إشعار Telegram."))
+    except Exception as exc:
+        return False, str(exc)
+
+
 def build_weekly_schedule_print_html(df, title="الجدول الأسبوعي لمواعيد الطلاب"):
-    """إنشاء نسخة طباعة/PDF مطابقة للجدول الأسبوعي بالأيام أعمدة، مع لون مستقل لكل طالب."""
+    """نسخة طباعة احترافية A4 Landscape للجدول الأسبوعي، مع بطاقات واضحة لكل طالب."""
     days = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"]
+    teacher_name, teacher_photo_b64, teacher_phone = _get_print_profile()
+    today_text = datetime.now().strftime("%Y-%m-%d")
+
     if df is None or df.empty:
-        return make_print_html(title, "<tr><td colspan='8'>لا توجد مواعيد</td></tr>", "<th>الساعة</th>" + "".join(f"<th>{d}</th>" for d in days))
-    work = df.copy()
-    work["_time"] = work["الموعد"].astype(str).str[:5]
-    work["_day"] = work["اليوم"].astype(str)
-    times = sorted([t for t in work["_time"].dropna().unique() if t and t != "nan"])
-    rows=[]
-    for tm in times:
-        cells=[f"<td class='time'>{tm}</td>"]
-        for d in days:
-            matches=work[(work["_time"]==tm) & (work["_day"]==d) & (work["حالة الموعد"].astype(str)!="متوقف")]
-            parts=[]
-            for _,r in matches.iterrows():
-                color=str(r.get("اللون","#2563eb"))
-                if not color.startswith("#"): color="#2563eb"
-                student=str(r.get("اسم الطالب",""))
-                grade=str(r.get("المجموعة/الصف",""))
-                academy=str(r.get("اسم الأكاديمية",""))
-                parts.append(f"<div class='student' style='background:{color};'><b>👤 {student}</b><span>{grade}</span><small>{academy}</small></div>")
-            cells.append("<td>"+("".join(parts) if parts else "—")+"</td>")
-        rows.append("<tr>"+"".join(cells)+"</tr>")
-    headers="<th>الساعة</th>"+"".join(f"<th>{d}</th>" for d in days)
-    css="""<style>body{font-family:Tahoma,Arial,sans-serif;font-weight:700;color:#111;direction:rtl}h1{text-align:center;color:#075985}.subtitle{text-align:center;margin-bottom:14px}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1.5px solid #111;padding:6px;text-align:center;vertical-align:top;font-size:10px;min-height:55px}th{background:#e2e8f0;font-size:12px}.time{width:55px;font-size:12px;vertical-align:middle}.student{color:#fff;border-radius:8px;padding:7px 4px;margin:2px 0;line-height:1.25}.student b,.student span,.student small{display:block}.student span{font-size:9px;margin-top:3px}.student small{font-size:8px;margin-top:2px}</style>"""
-    html=make_print_html(title, ''.join(rows), headers, f"إجمالي المواعيد: {len(work)}")
-    return html.replace("</head>", css+"</head>")
+        rows = "<tr><td colspan='8' class='empty'>لا توجد مواعيد مسجلة حالياً.</td></tr>"
+        headers = "<th class='time-head'>الساعة</th>" + "".join(f"<th>{d}</th>" for d in days)
+        total = 0
+    else:
+        work = df.copy()
+        work["_time"] = work["الموعد"].astype(str).str[:5]
+        work["_day"] = work["اليوم"].astype(str)
+        work = work[work["حالة الموعد"].astype(str) != "متوقف"].copy() if "حالة الموعد" in work.columns else work
+        times = sorted([t for t in work["_time"].dropna().unique() if t and t != "nan"])
+        body_rows = []
+        for tm in times:
+            cells = [f"<td class='time-cell'>{html.escape(format_schedule_time_ampm(tm))}</td>"]
+            for d in days:
+                matches = work[(work["_time"] == tm) & (work["_day"] == d)]
+                cards = []
+                for _, r in matches.iterrows():
+                    student = html.escape(str(r.get("اسم الطالب", "")))
+                    grade = html.escape(str(r.get("المجموعة/الصف", "")))
+                    academy = html.escape(str(r.get("اسم الأكاديمية", "")))
+                    phone = html.escape(str(r.get("رقم الطالب", "")))
+                    color = str(r.get("اللون", "#1677ff"))
+                    if not re.match(r"^#[0-9A-Fa-f]{6}$", color):
+                        color = "#1677ff"
+                    cards.append(
+                        f"<div class='student-card' style='--student-color:{color}'>"
+                        f"<div class='student-name'>👤 {student}</div>"
+                        f"<div class='student-meta'>{grade}</div>"
+                        f"<div class='student-meta'>{academy}</div>"
+                        f"{('<div class=\'student-phone\'>📞 ' + phone + '</div>') if phone and phone.lower() != 'nan' else ''}"
+                        f"</div>"
+                    )
+                cells.append("<td class='day-cell'>" + ("".join(cards) if cards else "<span class='dash'>—</span>") + "</td>")
+            body_rows.append("<tr>" + "".join(cells) + "</tr>")
+        rows = "".join(body_rows) if body_rows else "<tr><td colspan='8' class='empty'>لا توجد مواعيد نشطة.</td></tr>"
+        headers = "<th class='time-head'>الساعة</th>" + "".join(f"<th>{d}</th>" for d in days)
+        total = len(work)
+
+    photo_html = ""
+    if teacher_photo_b64:
+        photo_html = f"<img class='teacher-photo' src='data:image/png;base64,{teacher_photo_b64}' alt='صورة المعلم'>"
+
+    return f"""<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<title>{html.escape(title)}</title>
+<style>
+@page {{ size:A4 landscape; margin:9mm; }}
+* {{ box-sizing:border-box; }}
+body {{ margin:0; background:#fff; color:#102a52; font-family:'Cairo','Tahoma','Arial',sans-serif; font-weight:700; }}
+.page {{ width:100%; }}
+.header {{ background:linear-gradient(135deg,#062b63 0%,#0b56ad 65%,#1677ff 100%); color:#fff; border-radius:18px; padding:13px 17px; display:flex; align-items:center; gap:14px; box-shadow:0 8px 20px rgba(6,43,99,.18); }}
+.teacher-photo {{ width:66px; height:66px; border-radius:50%; object-fit:cover; border:3px solid rgba(255,255,255,.8); background:#fff; }}
+.brand {{ flex:1; text-align:right; }}
+.brand h2 {{ margin:0; font-size:20px; font-weight:900; color:#fff; }}
+.brand p {{ margin:2px 0 0; font-size:10px; color:#dbeafe; }}
+.header-badge {{ background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25); border-radius:999px; padding:5px 10px; font-size:9px; color:#fff; }}
+.title {{ text-align:center; margin:10px 0 2px; font-size:20px; color:#062b63; font-weight:900; }}
+.subtitle {{ text-align:center; color:#64748b; font-size:9px; margin-bottom:8px; }}
+table {{ width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed; overflow:hidden; border:1px solid #cbd5e1; border-radius:12px; }}
+th,td {{ border-left:1px solid #dbe4ef; border-bottom:1px solid #dbe4ef; text-align:center; vertical-align:top; }}
+th {{ background:#eaf4ff; color:#0b3b78; padding:7px 4px; font-size:10px; font-weight:900; }}
+th.time-head {{ width:70px; background:#062b63; color:#fff; }}
+td {{ padding:4px; min-height:60px; }}
+td.time-cell {{ background:#f8fbff; color:#062b63; font-size:10px; font-weight:900; vertical-align:middle; white-space:nowrap; }}
+.student-card {{ border-radius:9px; padding:6px 5px; margin:2px 0; background:linear-gradient(135deg,var(--student-color),#0b56ad); color:#fff; text-align:right; border-right:4px solid rgba(255,255,255,.85); box-shadow:0 2px 6px rgba(15,23,42,.12); }}
+.student-name {{ font-size:9px; font-weight:900; line-height:1.3; }}
+.student-meta {{ font-size:7px; margin-top:2px; opacity:.96; line-height:1.25; }}
+.student-phone {{ font-size:6.7px; margin-top:2px; opacity:.9; }}
+.dash {{ color:#cbd5e1; font-size:13px; }}
+.empty {{ padding:25px; color:#64748b; font-size:13px; }}
+.footer {{ margin-top:8px; display:flex; justify-content:space-between; gap:8px; border-top:1px solid #dbe4ef; padding-top:6px; color:#64748b; font-size:7.5px; }}
+@media print {{ body {{ background:#fff; }} }}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    {photo_html}
+    <div class="brand">
+      <h2>{html.escape(teacher_name)}</h2>
+      <p>البشمهندس x الرياضه — جدول حصص الطلاب الأسبوعي</p>
+      <p>📞 {html.escape(teacher_phone)}</p>
+    </div>
+    <div class="header-badge">إصدار رسمي للطباعة</div>
+  </div>
+  <div class="title">{html.escape(title)}</div>
+  <div class="subtitle">إجمالي المواعيد النشطة: {total} &nbsp; | &nbsp; تاريخ الإصدار: {today_text}</div>
+  <table><thead><tr>{headers}</tr></thead><tbody>{rows}</tbody></table>
+  <div class="footer">
+    <span>إعداد ومتابعة: {html.escape(teacher_name)}</span>
+    <span>جميع المواعيد وفق آخر جدول محفوظ على المنصة</span>
+    <span>البشمهندس x الرياضه</span>
+  </div>
+</div>
+</body>
+</html>"""
+
 
 def load_ads():
     """تحميل الإعلانات مع استرجاع الوسائط كاملة من AdsMedia لتجنب حد Excel البالغ 32767 حرفاً للخلية."""
@@ -997,8 +1111,7 @@ def render_student_ads():
     ads_df = st.session_state.get("ads_df", pd.DataFrame(columns=COL_ADS)).copy()
     if ads_df.empty:
         return
-    active = ads_df[ads_df["الحالة"].astype(str).str.strip().isin(["نشط", "فعال", "مفعل", "مفعّل", "نعم"])].copy() if "الحالة" in ads_df.columns else ads_df.copy()
-    if active.empty:
+    active = ads_df[ads_df["الحالة"].astype(str).str.strip().isin(["نشط", "فعال", "مفعل", "مفعّل", "نعم"])].copy() if "الحالة" in ads_df.columns else ads_df.copy()    if active.empty:
         return
     active = active.iloc[::-1].reset_index(drop=True)
 
@@ -1498,7 +1611,6 @@ except Exception:
 
 if "student_interface_df" not in st.session_state:
     st.session_state.student_interface_df = load_student_interface()
-
 if "page_view" not in st.session_state:
     st.session_state.page_view = "home"
 
@@ -1997,8 +2109,7 @@ label{font-weight:800!important;color:#1e3a5f!important}
 .about-panel{background:linear-gradient(180deg,#fff,#f5faff);border:1px solid #dce8f6;border-radius:22px;padding:22px;text-align:right;box-shadow:0 8px 25px rgba(20,58,100,.05)}
 .about-panel h3{color:#0b3b78!important;margin-top:0}.about-panel p{color:#526984!important;line-height:2;font-size:13px}
 /* logged dashboard */
-.dashboard-banner{background:linear-gradient(115deg,#062b63,#0c62c8);border-radius:22px;padding:22px 28px;color:#fff;display:flex;align-items:center;justify-content:space-between;overflow:hidden;box-shadow:0 14px 35px rgba(6,43,99,.16)}
-.dashboard-banner h2{color:#fff!important;margin:0 0 6px;font-size:25px}.dashboard-banner p{color:#dbeafe!important;margin:0;font-size:13px}.dashboard-banner img{width:120px;height:120px;object-fit:cover;border-radius:22px;border:3px solid rgba(255,255,255,.35)}
+.dashboard-banner{background:linear-gradient(115deg,#062b63,#0c62c8);border-radius:22px;padding:22px 28px;color:#fff;display:flex;align-items:center;justify-content:space-between;overflow:hidden;box-shadow:0 14px 35px rgba(6,43,99,.16)}.dashboard-banner h2{color:#fff!important;margin:0 0 6px;font-size:25px}.dashboard-banner p{color:#dbeafe!important;margin:0;font-size:13px}.dashboard-banner img{width:120px;height:120px;object-fit:cover;border-radius:22px;border:3px solid rgba(255,255,255,.35)}
 .quick-card{background:#fff;border:1px solid #e0eaf5;border-radius:18px;padding:18px;min-height:135px;box-shadow:0 8px 22px rgba(20,58,100,.06)}
 .quick-card h4{color:#0b3b78!important;margin:0 0 6px}.quick-card p{color:#64748b!important;font-size:12px}
 @media(max-width:950px){.landing-hero{flex-direction:column;gap:25px;padding:28px}.landing-login{width:100%;margin:0}.landing-photo{width:210px;height:240px}.landing-copy{text-align:center}.landing-copy h1{font-size:30px}.landing-features{justify-content:center}.main .block-container{padding-left:1rem!important;padding-right:1rem!important}}
@@ -2497,8 +2608,7 @@ if is_student_mode:
                 "grade": "الصف الثالث الإعدادي",
                 "price": "200",
                 "icon": "📕",
-                "accent": "#8b5cf6",
-                "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim-2/plans",
+                "accent": "#8b5cf6",                "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim-2/plans",
             },
             {
                 "badge": "باقة شهرية",
@@ -2997,8 +3107,7 @@ if t_page == "student_interface":
     if st.button("💾 حفظ واجهة الطالب", key="save_student_interface", use_container_width=True):
         st.session_state.student_interface_df = pd.DataFrame([{
             "عنوان_الواجهة": si_title.strip(), "الشارة": si_badge.strip(), "عنوان_البطل": si_hero_title.strip(), "وصف_البطل": si_hero_desc.strip(), "ميزة_1": si_feature1.strip(), "ميزة_2": si_feature2.strip(), "ميزة_3": si_feature3.strip(), "ميزة_4": si_feature4.strip(), "الوصف": si_desc.strip(), "صورة_الواجهة_base64": main_b64,
-            "عنوان_الاشتراكات": si_sub_title.strip(), "وصف_الاشتراكات": si_sub_desc.strip(), "عنوان_الحجز": si_booking_title.strip(),
-            "نص_الحجز": si_booking_text.strip(), "نص_الفوتر": si_footer.strip(), "صورة_الاشتراكات_base64": sub_b64, "صورة_البانر_base64": str(si.get("صورة_البانر_base64", "") or "")
+            "عنوان_الاشتراكات": si_sub_title.strip(), "وصف_الاشتراكات": si_sub_desc.strip(), "عنوان_الحجز": si_booking_title.strip(),            "نص_الحجز": si_booking_text.strip(), "نص_الفوتر": si_footer.strip(), "صورة_الاشتراكات_base64": sub_b64, "صورة_البانر_base64": str(si.get("صورة_البانر_base64", "") or "")
         }], columns=COL_STUDENT_INTERFACE)
         save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
         interface_cloud_ok = _cloud_save_student_interface(st.session_state.student_interface_df)
@@ -3191,6 +3300,32 @@ elif t_page == "payments":
 elif t_page == "weekly_schedule":
     st.markdown("<div class='vertical-section-header'>▦  مواعيد الطلاب الأسبوعية</div>", unsafe_allow_html=True)
     st.caption("لوحة مستقلة لإضافة الطلاب ومواعيدهم. كل طالب يظهر بلون مختلف، ويمكن إضافة أكثر من موعد للطالب نفسه.")
+
+    st.markdown("### 🔔 إشعارات الحصص على الهاتف")
+    if _telegram_configured():
+        st.success("✅ إشعارات Telegram مفعّلة — سيصل لك ملخص حصص اليوم على الهاتف يوميًا.")
+        if st.button("📲 إرسال إشعار تجريبي الآن", key="teacher_schedule_test_telegram"):
+            _day_names = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+            _today_name = _day_names[datetime.now().weekday()]
+            _today_rows = st.session_state.weekly_schedule_df[
+                (st.session_state.weekly_schedule_df["اليوم"].astype(str).str.strip() == _today_name) &
+                (st.session_state.weekly_schedule_df["حالة الموعد"].astype(str).str.strip() != "متوقف")
+            ].sort_values(by="الموعد", kind="stable") if not st.session_state.weekly_schedule_df.empty else pd.DataFrame()
+            if _today_rows.empty:
+                _msg = f"🔔 <b>جدول اليوم</b>\nلا توجد حصص مسجلة اليوم ({_today_name})."
+            else:
+                _lines = [f"🔔 <b>حصص اليوم — {_today_name}</b>", ""]
+                for _, _rr in _today_rows.iterrows():
+                    _lines.append(f"🕐 <b>{html.escape(format_schedule_time_ampm(_rr.get('الموعد','')))}</b> — {html.escape(str(_rr.get('اسم الطالب','')))} — {html.escape(str(_rr.get('المجموعة/الصف','')))}")
+                _msg = "\n".join(_lines)
+            _ok, _err = _telegram_send_message(_msg)
+            if _ok: st.success("تم إرسال الإشعار التجريبي إلى الهاتف عبر Telegram.")
+            else: st.error(f"تعذر إرسال الإشعار: {_err}")
+    else:
+        st.info("📱 لتفعيل إشعار الهاتف اليومي: اربط المنصة مع Telegram. بعد ضبط الأسرار سيعمل الإشعار تلقائيًا كل يوم صباحًا.")
+        st.caption("يتم الضبط بأسماء الأسرار فقط: TELEGRAM_BOT_TOKEN و TELEGRAM_CHAT_ID — لا تضع القيم داخل الكود أو GitHub.")
+
+
 
     ws_df = st.session_state.weekly_schedule_df
     known_students = sorted(list(set(
@@ -3498,7 +3633,6 @@ elif t_page == "online_schedule":
         zh=build_student_roster_html(all_registered_names,"كشف طلاب Zoom"); zpdata=html_to_pdf_bytes(zh)
         if zpdata: st.download_button("📄 طباعة الطلاب PDF",zpdata,file_name="كشف_طلاب_Zoom.pdf",mime="application/pdf",key="zoom_roster_pdf")
         else: st.download_button("🖨️ طباعة الطلاب",zh.encode("utf-8"),file_name="كشف_طلاب_Zoom.html",mime="text/html",key="zoom_roster_html")
-
     # المنهج والمرحلة خارج الفورم لأن Streamlit لا يعيد تشغيل widgets داخل form عند تغييرها
     os_curr = st.selectbox("المنهج الدراسي / الدولة:", list(CURRICULUM_DATA.keys()), key="zoom_schedule_curr")
     os_grade = st.selectbox("المرحلة / الصف الدراسي:", CURRICULUM_DATA[os_curr], key="zoom_schedule_grade")
@@ -3997,8 +4131,7 @@ elif t_page == "videos":
 
 elif t_page == "abqary":
     if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
-    st.subheader("💡 إدارة امتحانات ونتائج موقع عبقري:")
-    with st.form("upload_abqary_form", clear_on_submit=True):
+    st.subheader("💡 إدارة امتحانات ونتائج موقع عبقري:")    with st.form("upload_abqary_form", clear_on_submit=True):
         ab_title = st.text_input("عنوان امتحان عبقري:")
         ab_curr = st.selectbox("المنهج الدراسي / الدولة:", list(CURRICULUM_DATA.keys()), key="ab_c")
         ab_grade = st.selectbox("المرحلة / الصف الدراسي المستهدف:", CURRICULUM_DATA[ab_curr], key="ab_g")
@@ -4497,8 +4630,7 @@ elif t_page == "add_hw":
     with st.form("assessment_form", clear_on_submit=True):
         col_a1, col_a2 = st.columns(2)
         with col_a1:
-            if all_registered_names:
-                prefill_hw = str(st.session_state.get("prefill_student", ""))
+            if all_registered_names:                prefill_hw = str(st.session_state.get("prefill_student", ""))
                 hw_index = all_registered_names.index(prefill_hw) if prefill_hw in all_registered_names else 0
                 ass_student = st.selectbox("اختر الطالب:", all_registered_names, index=hw_index)
             else:
@@ -4997,8 +5129,7 @@ elif t_page == "ads":
                         "💾 حفظ التعديلات",
                         use_container_width=True,
                         type="primary"
-                    )
-                with cancel_edit:
+                    )                with cancel_edit:
                     cancel_edit_btn = st.form_submit_button(
                         "↩️ إلغاء",
                         use_container_width=True
