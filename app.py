@@ -890,131 +890,108 @@ def _hamza_secret(name):
         return ""
 
 def _hamza_ai_call(user_text, media_items=None, history=None):
-    """حمصا: مساعد رياضيات متعدد الوسائط باستخدام Gemini REST مع إعادة محاولة وانتقال تلقائي بين النماذج."""
+    """حمصا: حل رياضيات بالصور والكتابة عبر Google Gemini، مع إخراج منظم يدعم LaTeX."""
     key = _hamza_secret("GEMINI_API_KEY")
     if not key:
         raise RuntimeError("AI_KEY_MISSING")
 
-    # نستخدم نماذج Gemini الحالية فقط، مع انتقال تلقائي إذا كان أحدها غير متاح للحساب.
-    # لا نستخدم أي اسم قديم مثل gemini-2.5-flash-lite.
-    preferred = _hamza_secret("GEMINI_MODEL").strip()
-    # نكتشف النماذج المتاحة فعلياً لهذا المفتاح من Google بدل الاعتماد على اسم قديم أو غير متاح.
+    preferred = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
     models = []
-    try:
-        list_url = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
-        list_req = urllib.request.Request(
-            list_url,
-            headers={"x-goog-api-key": key},
-            method="GET"
-        )
-        with urllib.request.urlopen(list_req, timeout=30) as list_resp:
-            listed = json.loads(list_resp.read().decode("utf-8"))
-        for item in listed.get("models", []):
-            name = str(item.get("name", "")).strip().split("/")[-1]
-            methods = item.get("supportedGenerationMethods") or []
-            if name and "generateContent" in methods and name not in models:
-                models.append(name)
-    except Exception:
-        models = []
+    for candidate in [preferred, "gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]:
+        if candidate and candidate not in models:
+            models.append(candidate)
 
-    # ترتيب حمصا: نفضل النموذج المحدد في Secrets، ثم نماذج Gemini Flash الحالية.
-    preferred_order = [
-        preferred,
-        "gemini-3.8-flash",
-        "gemini-3.7-flash",
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite",
-        "gemini-2.5-flash"
-    ]
-    ordered = []
-    for name in preferred_order:
-        if name and name in models and name not in ordered:
-            ordered.append(name)
-    for name in models:
-        if name.startswith("gemini-") and "image" not in name and name not in ordered:
-            ordered.append(name)
-    models = ordered or [preferred or "gemini-3.5-flash"]
-
-    parts = []
-    context = ""
+    history_text = ""
     if history:
-        context = "\n\n".join(
+        history_text = "\n\n".join(
             f"الطالب: {str(h.get('student','')).strip()}\nحمصا: {str(h.get('assistant','')).strip()}"
-            for h in history[-6:]
+            for h in history[-4:]
         )
 
     prompt = f"""
-أنت "حمصا"، مدرس رياضيات وإحصاء ودود داخل منصة تعليمية للطلاب.
-أجب بالعربية المصرية المبسطة، وكن دقيقاً جداً.
-إذا كانت المسألة رياضيات أو إحصاء:
-1) اكتب فهمك للسؤال.
-2) اشرح القاعدة أو الفكرة المستخدمة.
-3) حل المسألة خطوة بخطوة وبترتيب واضح.
-4) اكتب الإجابة النهائية بوضوح.
-5) إذا كان في السؤال رسم أو جدول أو صورة، اقرأه بعناية ولا تخمّن القيم غير الواضحة؛ اطلب من الطالب صورة أوضح إذا لزم.
-6) استخدم LaTeX عند الحاجة. ضع كل معادلة رئيسية في سطر مستقل بين $...$، واستخدم $...$ فقط للمعادلات القصيرة داخل الجملة، مثل $\\frac{1}{2}$ و $\\sqrt{x}$ و $x^2$ و $2x+5=17$.
-7) اكتب الشرح العربي باتجاه RTL، وإذا كان السؤال أو الجزء الرياضي بالإنجليزية فاجعل الجملة والمعادلة LTR. لا تخلط اتجاه المعادلة مع اتجاه النص العربي.
-8) لا تعطِ إجابة مختصرة فقط؛ الهدف أن يتعلم الطالب طريقة الحل.
-إذا كان السؤال غير رياضي، أخبر الطالب بلطف أن حمصا متخصص أساساً في الرياضيات والإحصاء.
+أنت حمصا، مدرس رياضيات وإحصاء داخل منصة تعليمية.
+حل المسألة التي يرسلها الطالب بدقة شديدة، سواء كانت نصاً أو صورة.
+اقرأ الصورة بنفسك واستخرج الأرقام والرموز والجداول والرسومات قبل الحل.
+
+قواعد الإجابة:
+- اكتب بالعربية المصرية البسيطة.
+- اعرض الحل على خطوات مرقمة وواضحة.
+- اكتب كل معادلة رياضية بصيغة LaTeX صحيحة.
+- استخدم $...$ للمعادلة داخل السطر و $$...$$ للمعادلة في سطر مستقل.
+- الكسور يجب أن تكون مثل $\\frac{{3}}{{4}}$، والجذور مثل $\\sqrt{{25}}$، والأسس مثل $x^2$.
+- إذا كانت المعادلة أو التعبير باللغة الإنجليزية/الأرقام اللاتينية، اجعله في اتجاه LTR ولا تقلب ترتيب الرموز.
+- إذا كان السؤال بالعربية، اكتب الشرح RTL، مع إبقاء المعادلات نفسها LTR حتى تظهر رياضياً بشكل صحيح.
+- لا تستخدم علامة الدولار كعملة؛ استخدمها فقط كعلامة LaTeX.
+- في النهاية اكتب عنواناً واضحاً: "الإجابة النهائية".
+- لا تطلب صورة أوضح إلا إذا كانت الصورة فعلاً غير مقروءة.
+- لا ترجع JSON ولا كود؛ أرجع الحل المنسق مباشرة.
+
+السؤال المكتوب:
+{str(user_text or "").strip() or "حل المسألة الموجودة في الصورة."}
 
 المحادثة السابقة:
-{context or "لا توجد محادثة سابقة."}
-
-رسالة الطالب الحالية:
-{user_text.strip() or "حل المسألة الموجودة في الملف المرفق."}
-
-اكتب الإجابة مباشرة كنص منظم، ولا تستخدم JSON ولا تغلف الإجابة داخل كود.
-ابدأ بعنوان "فهم السؤال"، ثم "القانون أو الفكرة"، ثم "الحل خطوة بخطوة"، ثم "الإجابة النهائية".
-ضع كل معادلة مستقلة في سطر بين $...$، والمعادلات القصيرة داخل الشرح بين $...$.
+{history_text or "لا توجد."}
 """
-    parts.append({"text": prompt})
+    parts = [{"text": prompt}]
     for item in (media_items or []):
         if item and item.get("data"):
-            parts.append({"inline_data":{"mime_type":item.get("mime","application/octet-stream"),"data":item["data"]}})
+            parts.append({
+                "inline_data": {
+                    "mime_type": item.get("mime", "image/jpeg"),
+                    "data": item["data"]
+                }
+            })
 
-    body = {
-        "contents":[{"role":"user","parts":parts}],
-        "generationConfig":{
-            "maxOutputTokens":4096
-        }
-    }
-
+    body = {"contents": [{"role": "user", "parts": parts}], "generationConfig": {"maxOutputTokens": 4096}}
     last_error = ""
+
     for model in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         for attempt in range(3):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             req = urllib.request.Request(
                 url,
                 data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-                headers={"Content-Type":"application/json","x-goog-api-key":key},
+                headers={"Content-Type": "application/json", "x-goog-api-key": key},
                 method="POST"
             )
             try:
-                with urllib.request.urlopen(req, timeout=90) as resp:
+                with urllib.request.urlopen(req, timeout=120) as resp:
                     raw = json.loads(resp.read().decode("utf-8"))
 
                 candidates = raw.get("candidates") or []
                 if not candidates:
                     raise RuntimeError("EMPTY_RESPONSE")
-                content = candidates[0].get("content") or {}
-                text_parts = content.get("parts") or []
-                text = "".join(str(p.get("text","")) for p in text_parts if p.get("text") is not None).strip()
-                if not text:
+
+                parts_out = (candidates[0].get("content") or {}).get("parts") or []
+                answer = "".join(
+                    str(p.get("text", "")) for p in parts_out
+                    if p.get("text") is not None
+                ).strip()
+
+                if not answer:
                     raise RuntimeError("EMPTY_RESPONSE")
 
-                text = text.replace(chr(96)*3+"json","").replace(chr(96)*3,"").strip()
-                # نستخدم النص الخام مباشرة لتفادي فشل التحليل بسبب اختلاف تنسيق JSON،
-                # مع الحفاظ على LaTeX للمعادلات والكسور والجذور والأسس.
-                return {"answer":text,"final_answer":"","topic":"رياضيات"}
+                return {
+                    "answer": answer,
+                    "final_answer": "",
+                    "topic": "رياضيات"
+                }
 
             except urllib.error.HTTPError as ex:
                 msg = ex.read().decode("utf-8", errors="ignore")
-                last_error = msg or str(ex)
+                last_error = f"HTTP {getattr(ex, 'code', 0)}: {msg[:1200]}"
                 status = getattr(ex, "code", 0)
 
-                # 503/UNAVAILABLE: نعيد المحاولة ثم ننتقل تلقائياً لموديل احتياطي.
+                if status in (400, 401, 403, 404):
+                    break
+
+                if status == 429 or "RESOURCE_EXHAUSTED" in msg:
+                    if attempt < 2:
+                        import time
+                        time.sleep(2 * (attempt + 1))
+                        continue
+                    break
+
                 if status in (500, 502, 503, 504) or "UNAVAILABLE" in msg:
                     if attempt < 2:
                         import time
@@ -1022,106 +999,27 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
                         continue
                     break
 
-                # 429: إعادة محاولة قصيرة، ثم موديل احتياطي إذا استمر الحد.
-                if status == 429 or "RESOURCE_EXHAUSTED" in msg or "rateLimitExceeded" in msg:
-                    if attempt < 2:
-                        import time
-                        time.sleep(3 * (attempt + 1))
-                        continue
-                    break
-
-                # قد يرفض موديل معيّن JSON المهيكل أو يكون غير متاح للحساب؛
-                # ننتقل مباشرة للموديل التالي بدل إظهار فشل الصورة للطالب.
-                if status in (400, 401, 403, 404):
-                    # ننتقل تلقائياً للنموذج الاحتياطي بدون تغيير الصورة أو المفتاح.
-                    break
-
                 if attempt < 2:
                     import time
                     time.sleep(2 * (attempt + 1))
                     continue
 
-            except (urllib.error.URLError, TimeoutError, RuntimeError, ValueError, KeyError) as ex:
-                last_error = str(ex)
-                if attempt < 2:
-                    import time
-                    time.sleep(2 * (attempt + 1))
-                    continue
-                break
             except Exception as ex:
-                last_error = str(ex)
+                last_error = f"{type(ex).__name__}: {str(ex)[:900]}"
+                if attempt < 2:
+                    import time
+                    time.sleep(2 * (attempt + 1))
+                    continue
                 break
 
-    low = str(last_error).lower()
+    low = last_error.lower()
     if "429" in low or "resource_exhausted" in low or "ratelimit" in low:
-        raise RuntimeError("AI_RATE_LIMIT")
+        raise RuntimeError("AI_RATE_LIMIT:" + last_error)
     if "503" in low or "unavailable" in low or "high demand" in low:
-        raise RuntimeError("AI_BUSY")
-    if "api key" in low or "permission" in low or "unauthorized" in low:
-        raise RuntimeError("AI_KEY_MISSING")
-    safe_error = str(last_error or "unknown").replace(key, "[KEY]").replace("\n", " ")[:700]
-    raise RuntimeError("AI_ERROR:" + safe_error)
-
-def _hamza_render_solution(text):
-    """عرض حل حمصا بتنسيق واضح مع اتجاه صحيح للمعادلات."""
-    raw = str(text or "").strip()
-    if not raw:
-        return
-    parts = re.split(r"(\$\$.*?\$\$|\\\[.*?\\\])", raw, flags=re.S)
-    for part in parts:
-        part = part.strip()
-        if not part:
-            continue
-        if (part.startswith("$$") and part.endswith("$$")) or (part.startswith(r"\[") and part.endswith(r"\]")):
-            st.latex(part[2:-2].strip())
-            continue
-        for line in part.splitlines():
-            line = line.strip()
-            if not line:
-                st.write("")
-                continue
-            has_ar = bool(re.search(r"[\u0600-\u06FF]", line))
-            has_math = bool(re.search(r"\$[^$]+\$|\\frac|\\sqrt|\\sum|\\int|\\leq|\\geq|\\neq", line))
-            if has_math:
-                st.markdown(line)
-            else:
-                direction = "rtl" if has_ar else "ltr"
-                align = "right" if has_ar else "left"
-                st.markdown(
-                    f"<div dir='{direction}' style='text-align:{align};line-height:1.9'>{html.escape(line)}</div>",
-                    unsafe_allow_html=True
-                )
-
-def _hamza_math_html(text):
-    """تحويل LaTeX الأساسي إلى HTML مناسب للطباعة، خصوصاً الكسور والجذور والأسس."""
-    s = html.escape(str(text or "").strip()).replace("\n", "<br>")
-    s = s.replace("$$", "").replace("$", "")
-    s = s.replace(r"\dfrac", r"\frac").replace(r"\tfrac", r"\frac")
-    for _ in range(6):
-        new_s = re.sub(r"\\frac\{([^{}]+)\}\{([^{}]+)\}",
-                       r"<span class='frac'><span class='num'>\1</span><span class='den'>\2</span></span>", s)
-        if new_s == s:
-            break
-        s = new_s
-    for _ in range(4):
-        new_s = re.sub(r"\\sqrt(?:\[([^\]]+)\])?\{([^{}]+)\}",
-                       r"<span class='sqrt'>√<span class='radicand'>\2</span></span>", s)
-        if new_s == s:
-            break
-        s = new_s
-    s = re.sub(r"([A-Za-z0-9)\u0600-\u06FF]+)\^\{([^{}]+)\}", r"\1<sup>\2</sup>", s)
-    s = re.sub(r"([A-Za-z0-9)\u0600-\u06FF]+)\^([A-Za-z0-9]+)", r"\1<sup>\2</sup>", s)
-    s = re.sub(r"([A-Za-z0-9)\u0600-\u06FF]+)_\{([^{}]+)\}", r"\1<sub>\2</sub>", s)
-    symbols = {
-        r"\times":"×", r"\cdot":"·", r"\pm":"±", r"\mp":"∓",
-        r"\leq":"≤", r"\geq":"≥", r"\neq":"≠", r"\approx":"≈",
-        r"\pi":"π", r"\theta":"θ", r"\alpha":"α", r"\beta":"β",
-        r"\gamma":"γ", r"\delta":"δ", r"\lambda":"λ", r"\mu":"μ",
-        r"\sigma":"σ", r"\omega":"ω", r"\infty":"∞", r"\rightarrow":"→"
-    }
-    for src, dst in symbols.items():
-        s = s.replace(src, dst)
-    return s
+        raise RuntimeError("AI_BUSY:" + last_error)
+    if "401" in low or "403" in low or "api key" in low or "permission" in low or "unauthorized" in low:
+        raise RuntimeError("AI_KEY_MISSING:" + last_error)
+    raise RuntimeError("AI_ERROR:" + last_error)
 
 def _hamza_pdf_html(question, answer, final_answer, student_name):
     q=_hamza_math_html(question)
