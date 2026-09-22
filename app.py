@@ -890,283 +890,176 @@ def _hamza_secret(name):
         return ""
 
 def _hamza_ai_call(user_text, media_items=None, history=None):
-    """حمصا: حل مسائل الرياضيات بالصور/النص باستخدام Google Gemini، مع اكتشاف الموديلات المتاحة تلقائياً."""
+    """حمصا: Gemini متعدد الوسائط مع Google Search وCode Execution وحل منظم."""
     key = _hamza_secret("GEMINI_API_KEY")
     if not key:
         raise RuntimeError("AI_KEY_MISSING")
 
-    history_text = ""
+    preferred = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
+    models = []
+    for candidate in [
+        preferred,
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-2.5-flash",
+    ]:
+        if candidate and candidate not in models:
+            models.append(candidate)
+
+    context = ""
     if history:
-        history_text = "\n\n".join(
+        context = "\n\n".join(
             f"الطالب: {str(h.get('student','')).strip()}\nحمصا: {str(h.get('assistant','')).strip()}"
-            for h in history[-4:]
+            for h in history[-6:]
         )
 
     prompt = f"""
-أنت حمصا، مدرس رياضيات وإحصاء داخل منصة تعليمية.
-حل المسألة التي يرسلها الطالب بدقة شديدة، سواء كانت نصاً أو صورة أو PDF.
-اقرأ الصورة/الملف بنفسك واستخرج الأرقام والرموز والجداول والرسومات قبل الحل.
+أنت "حمصا"، مدرس رياضيات وإحصاء داخل منصة تعليمية.
+حل المسألة فعلياً ولا تكتفِ بوصف الصورة أو إعادة كتابة السؤال.
 
-قواعد الإجابة:
-- اكتب شرحاً منظماً بالعربية المصرية.
-- استخدم عناوين وخطوات مرقمة واضحة.
-- كل معادلة رياضية يجب أن تكون LaTeX صحيحة.
-- استخدم $...$ للمعادلة داخل السطر و $$...$$ للمعادلة المستقلة.
-- الكسور: $\\frac{{3}}{{4}}$، الجذور: $\\sqrt{{25}}$، الأسس: $x^2$.
-- لا تضع علامة $ خارج LaTeX.
-- إذا كان السؤال أو السطر باللغة الإنجليزية فاجعل اتجاهه تلقائياً من اليسار إلى اليمين LTR.
-- إذا كان الشرح بالعربية فاجعل اتجاه النص من اليمين إلى اليسار RTL.
-- إذا اختلط العربي مع معادلة أو تعبير إنجليزي في نفس السطر، اجعل النص العربي RTL والمعادلة نفسها LTR ولا تقلب ترتيبها.
-- اكتب كل خطوة في سطر مستقل، واجعل المعادلات واضحة ومنفصلة بصرياً عن الشرح عند الحاجة.
-- لا تطلب صورة أوضح إذا كانت المسألة مقروءة.
-- في النهاية اكتب "الإجابة النهائية".
-- أرجع الحل كنص منسق فقط، وليس JSON.
+مهم جداً:
+- اقرأ الصورة/المسألة بدقة.
+- استخدم التفكير الرياضي خطوة بخطوة.
+- استخدم أداة تنفيذ الكود عندما تحتاج حساباً رقمياً أو تحققاً جبرياً.
+- استخدم Google Search فقط إذا كان البحث الخارجي مفيداً للمعلومة أو القاعدة؛ لا تبحث عن إجابة جاهزة لمسألة الطالب إذا كان يمكن حلها رياضياً.
+- اشرح بالعربية المصرية المبسطة.
+- المعادلات الإنجليزية تُكتب LEFT-TO-RIGHT داخل كتلة مستقلة.
+- النص العربي يُكتب RIGHT-TO-LEFT.
+- استخدم LaTeX للرياضيات: $x^2$, $\\frac{{1}}{{2}}$, $\\sqrt{{x}}$, $2x+5=17$.
+- لا تكتب كلمة "fact" مكان الكسور أبداً.
+- لا تستخدم علامات $ إلا كمحدد LaTeX.
+- افصل كل خطوة في سطر واضح.
+- اكتب في النهاية إجابة نهائية واضحة.
 
-السؤال المكتوب:
-{str(user_text or "").strip() or "حل المسألة الموجودة في الملف المرفق."}
+أخرج نصاً منظماً فقط بهذا الشكل:
+[الحل]
+فهم السؤال:
+...
+
+الخطوات:
+1. ...
+2. ...
+3. ...
+
+[الإجابة النهائية]
+...
 
 المحادثة السابقة:
-{history_text or "لا توجد."}
+{context or "لا توجد محادثة سابقة."}
+
+رسالة الطالب:
+{user_text.strip() or "حل المسألة الموجودة في الملف المرفق."}
 """
     parts = [{"text": prompt}]
     for item in (media_items or []):
         if item and item.get("data"):
-            parts.append({"inline_data": {
-                "mime_type": item.get("mime", "image/jpeg"),
-                "data": item["data"]
-            }})
+            parts.append({
+                "inline_data": {
+                    "mime_type": item.get("mime", "image/jpeg"),
+                    "data": item["data"]
+                }
+            })
 
     body = {
         "contents": [{"role": "user", "parts": parts}],
-        "generationConfig": {"maxOutputTokens": 4096}
+        "tools": [
+            {"google_search": {}},
+            {"code_execution": {}}
+        ],
+        "generationConfig": {
+            "maxOutputTokens": 8192
+        }
     }
 
-    # اكتشاف الموديلات المتاحة فعلياً للمفتاح يمنع فشل 404 بسبب اسم موديل غير متاح.
-    models = []
-    try:
-        list_url = "https://generativelanguage.googleapis.com/v1beta/models"
-        list_req = urllib.request.Request(
-            list_url,
-            headers={"x-goog-api-key": key},
-            method="GET"
-        )
-        with urllib.request.urlopen(list_req, timeout=30) as resp:
-            listing = json.loads(resp.read().decode("utf-8"))
-        for m in listing.get("models", []):
-            name = str(m.get("name", "")).strip()
-            methods = m.get("supportedGenerationMethods") or []
-            if name.startswith("models/") and "generateContent" in methods:
-                short = name.split("/", 1)[1]
-                if "flash" in short.lower() and short not in models:
-                    models.append(short)
-        # نضع الموديل المحفوظ إن كان موجوداً ضمن القائمة.
-        preferred = _hamza_secret("GEMINI_MODEL").strip()
-        if preferred and preferred in models:
-            models.remove(preferred)
-            models.insert(0, preferred)
-    except Exception as ex:
-        # لو تعذر ListModels نستخدم موديلات معروفة كاحتياطي.
-        models = []
-        preferred = _hamza_secret("GEMINI_MODEL").strip()
-        for candidate in ["gemini-3.8-flash", preferred, "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"]:
-            if candidate and candidate not in models:
-                models.append(candidate)
-
-    if not models:
-        raise RuntimeError("AI_NO_MODEL")
-
     last_error = ""
-    for model in models[:8]:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    for model in models:
         for attempt in range(3):
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             req = urllib.request.Request(
                 url,
                 data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-                headers={"Content-Type": "application/json", "x-goog-api-key": key},
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": key
+                },
                 method="POST"
             )
             try:
-                with urllib.request.urlopen(req, timeout=120) as resp:
+                with urllib.request.urlopen(req, timeout=150) as resp:
                     raw = json.loads(resp.read().decode("utf-8"))
+
                 candidates = raw.get("candidates") or []
                 if not candidates:
                     raise RuntimeError("EMPTY_RESPONSE")
-                out_parts = (candidates[0].get("content") or {}).get("parts") or []
-                answer = "".join(str(p.get("text", "")) for p in out_parts if p.get("text") is not None).strip()
-                if answer:
-                    return {"answer": answer, "final_answer": "", "topic": "رياضيات"}
-                raise RuntimeError("EMPTY_RESPONSE")
+
+                content = candidates[0].get("content") or {}
+                text_parts = content.get("parts") or []
+                texts = []
+                for part in text_parts:
+                    if part.get("text") is not None:
+                        texts.append(str(part.get("text", "")))
+                text = "\n".join(texts).strip()
+                if not text:
+                    raise RuntimeError("EMPTY_RESPONSE")
+
+                text = text.replace(chr(96)*3 + "markdown", "").replace(chr(96)*3 + "text", "").replace(chr(96)*3, "").strip()
+
+                if "[الحل]" in text:
+                    ans = text.split("[الحل]", 1)[1]
+                else:
+                    ans = text
+
+                if "[الإجابة النهائية]" in ans:
+                    solution, final = ans.split("[الإجابة النهائية]", 1)
+                else:
+                    solution, final = ans, ""
+
+                return {
+                    "answer": solution.strip(),
+                    "final_answer": final.strip(),
+                    "topic": "رياضيات / إحصاء"
+                }
+
             except urllib.error.HTTPError as ex:
                 msg = ex.read().decode("utf-8", errors="ignore")
-                last_error = f"HTTP {getattr(ex, 'code', 0)}: {msg[:1200]}"
+                last_error = msg or str(ex)
                 status = getattr(ex, "code", 0)
-                if status in (400, 401, 403, 404):
-                    break
-                if status == 429 or "RESOURCE_EXHAUSTED" in msg:
-                    if attempt < 2:
-                        import time
-                        time.sleep(2 * (attempt + 1))
-                        continue
-                    break
-                if status in (500, 502, 503, 504) or "UNAVAILABLE" in msg:
+
+                if status in (429, 500, 502, 503, 504) or "UNAVAILABLE" in msg or "RESOURCE_EXHAUSTED" in msg:
                     if attempt < 2:
                         import time
                         time.sleep(2 ** (attempt + 1))
                         continue
                     break
+
+                if status in (400, 401, 403, 404):
+                    break
+
                 if attempt < 2:
                     import time
-                    time.sleep(2 * (attempt + 1))
-                    continue
-            except Exception as ex:
-                last_error = f"{type(ex).__name__}: {str(ex)[:900]}"
-                if attempt < 2:
-                    import time
-                    time.sleep(2 * (attempt + 1))
+                    time.sleep(2 ** (attempt + 1))
                     continue
                 break
 
-    low = last_error.lower()
+            except (urllib.error.URLError, TimeoutError, RuntimeError, ValueError, KeyError) as ex:
+                last_error = str(ex)
+                if attempt < 2:
+                    import time
+                    time.sleep(2 ** (attempt + 1))
+                    continue
+                break
+            except Exception as ex:
+                last_error = str(ex)
+                break
+
+    low = str(last_error).lower()
     if "429" in low or "resource_exhausted" in low or "ratelimit" in low:
-        raise RuntimeError("AI_RATE_LIMIT:" + last_error)
+        raise RuntimeError("AI_RATE_LIMIT")
     if "503" in low or "unavailable" in low or "high demand" in low:
-        raise RuntimeError("AI_BUSY:" + last_error)
-    if "401" in low or "403" in low or "api key" in low or "permission" in low or "unauthorized" in low:
-        raise RuntimeError("AI_KEY_MISSING:" + last_error)
-    if "404" in low:
-        raise RuntimeError("AI_NO_MODEL:" + last_error)
-    raise RuntimeError("AI_ERROR:" + last_error)
-
-def _hamza_render_solution(text):
-    """عرض حل حمصا بشكل ثابت: العربي RTL والمعادلات LTR والكسور والجذور والأسس منسقة."""
-    raw = str(text or "").strip()
-    if not raw:
-        return
-
-    raw = raw.replace("\\r\\n", "\n").replace("\\r", "\n")
-    # Gemini قد يعيد أسطرًا على شكل \\n داخل النص.
-    raw = raw.replace("\\n", "\n")
-
-    html_body = _hamza_math_html(raw)
-    if html_body:
-        st.markdown(
-            f"<div class='hamza-solution' style='direction:rtl;text-align:right;line-height:2.05;font-size:17px;'>"
-            f"{html_body}</div>",
-            unsafe_allow_html=True,
-        )
-
-def _hamza_math_html(value):
-    """تنسيق رياضيات حمصا للعرض والطباعة مع اتجاه صحيح للمعادلات."""
-    text = html.escape(str(value or ""), quote=False)
-    text = text.replace("\\r\\n", "\n").replace("\\n", "\n")
-    text = text.replace("$$", "").replace("$", "")
-
-    # الكسور: LaTeX ثم الكسور العادية.
-    text = re.sub(
-        r"\\(?:dfrac|tfrac|frac)\{([^{}]*)\}\s*\{([^{}]*)\}",
-        r"<span class='frac' dir='ltr'><span class='num'>\1</span><span class='den'>\2</span></span>",
-        text,
-    )
-    text = re.sub(
-        r"\(([^()]+)\)\s*/\s*\(([^()]+)\)",
-        r"<span class='frac' dir='ltr'><span class='num'>\1</span><span class='den'>\2</span></span>",
-        text,
-    )
-    text = re.sub(
-        r"(?<![A-Za-z0-9])([0-9]+)\s*/\s*([0-9]+)(?![A-Za-z0-9])",
-        r"<span class='frac' dir='ltr'><span class='num'>\1</span><span class='den'>\2</span></span>",
-        text,
-    )
-
-    # الجذور.
-    text = re.sub(
-        r"\\sqrt\{([^{}]*)\}",
-        r"<span class='sqrt' dir='ltr'>√<span class='radicand'>\1</span></span>",
-        text,
-    )
-    text = re.sub(
-        r"\\sqrt\s*([A-Za-z0-9]+)",
-        r"<span class='sqrt' dir='ltr'>√<span class='radicand'>\1</span></span>",
-        text,
-    )
-
-    # الرموز الرياضية.
-    symbols = {
-        r"\\pi":"π", r"\\theta":"θ", r"\\alpha":"α", r"\\beta":"β",
-        r"\\gamma":"γ", r"\\delta":"δ", r"\\lambda":"λ", r"\\mu":"μ",
-        r"\\sigma":"σ", r"\\omega":"ω", r"\\infty":"∞", r"\\times":"×",
-        r"\\cdot":"·", r"\\pm":"±", r"\\mp":"∓", r"\\leq":"≤",
-        r"\\le":"≤", r"\\geq":"≥", r"\\ge":"≥", r"\\neq":"≠",
-        r"\\approx":"≈", r"\\rightarrow":"→", r"\\to":"→", r"\\div":"÷",
-        r"\\degree":"°",
-    }
-    for pat, repl in symbols.items():
-        text = re.sub(pat, repl, text)
-
-    text = re.sub(r"\\left|\\right", "", text)
-    text = re.sub(r"\\text\{([^{}]*)\}", r"\1", text)
-
-    # الأسس والرموز السفلية.
-    text = re.sub(
-        r"([A-Za-zΑ-Ωα-ω0-9\)\]])\^\{([^{}]+)\}",
-        r"<span class='math-inline' dir='ltr'>\1<sup>\2</sup></span>",
-        text,
-    )
-    text = re.sub(
-        r"([A-Za-zΑ-Ωα-ω0-9\)\]])\^([A-Za-z0-9+\-]+)",
-        r"<span class='math-inline' dir='ltr'>\1<sup>\2</sup></span>",
-        text,
-    )
-    text = re.sub(
-        r"([A-Za-zΑ-Ωα-ω0-9\)\]])_\{([^{}]+)\}",
-        r"<span class='math-inline' dir='ltr'>\1<sub>\2</sub></span>",
-        text,
-    )
-    text = re.sub(
-        r"([A-Za-zΑ-Ωα-ω0-9\)\]])_([A-Za-z0-9]+)",
-        r"<span class='math-inline' dir='ltr'>\1<sub>\2</sub></span>",
-        text,
-    )
-
-    out = []
-    for raw_line in text.split("\n"):
-        line = raw_line.strip()
-        if not line:
-            continue
-
-        # عنوان الخطوة بدون تعقيد Regex.
-        step = re.match(r"^(الخطوة\s*)?(\d+)\s*[.)\-:]\s*(.+)$", line)
-        if step and not re.search(r"[=<>≤≥≠±×÷^]", step.group(3)):
-            out.append(
-                f"<div dir='rtl' class='step-title'><span>{step.group(2)}.</span> {step.group(3)}</div>"
-            )
-            continue
-
-        plain = re.sub(r"<[^>]+>", "", line).strip()
-        has_arabic = bool(re.search(r"[ء-ي]", plain))
-        has_math = bool(re.search(r"[A-Za-z0-9=<>≤≥≠≈±×÷√πθαλβγδλμσω∞+\-*/^_()\[\]]", plain))
-
-        if has_arabic and has_math:
-            # سطر عربي يحتوي على معادلة: العربي RTL والمعادلة/الإنجليزي LTR داخل نفس السطر.
-            parts = re.split(r"(<[^>]+>)", line)
-            mixed = []
-            math_token = re.compile(r"(?<![A-Za-z0-9])([A-Za-z0-9πθαλβγδλμσω∞√]+(?:[\s]*[=<>≤≥≠≈±×÷+\-*/^_()[\]{}][\s]*[A-Za-z0-9πθαλβγδλμσω∞√]+)+|[A-Za-z][A-Za-z0-9]*(?:\([^)]*\))?)")
-            for part in parts:
-                if part.startswith("<") and part.endswith(">"):
-                    mixed.append(part)
-                else:
-                    mixed.append(math_token.sub(r"<bdi dir='ltr' class='mixed-math'>\1</bdi>", part))
-            out.append(f"<div dir='rtl' class='mixed-line'>{''.join(mixed)}</div>")
-        elif has_arabic:
-            out.append(f"<div dir='rtl' class='text-line'>{line}</div>")
-        elif has_math:
-            # السؤال/الحل الإنجليزي أو الرياضي بالكامل: LTR.
-            out.append(f"<div dir='ltr' class='math-line'>{line}</div>")
-        else:
-            out.append(f"<div dir='ltr' class='text-line'>{line}</div>")
-
-    return "".join(out)
-
+        raise RuntimeError("AI_BUSY")
+    if "api key" in low or "permission" in low or "unauthorized" in low:
+        raise RuntimeError("AI_KEY_MISSING")
+    raise RuntimeError("AI_ERROR")
 
 def _hamza_pdf_html(question, answer, final_answer, student_name):
     q=_hamza_math_html(question)
