@@ -1160,6 +1160,35 @@ def _telegram_send_message(message):
         return False, str(exc)
 
 
+def _notify_schedule_change(action, record):
+    """إشعار فوري للمعلم عند إضافة/تعديل/إلغاء موعد."""
+    try:
+        if not _telegram_configured():
+            return
+        r = record or {}
+        student = str(r.get("اسم الطالب", "")).strip()
+        day = str(r.get("اليوم", "")).strip()
+        tm = format_schedule_time_ampm(r.get("الموعد", ""))
+        grade = str(r.get("المجموعة/الصف", "")).strip()
+        academy = str(r.get("اسم الأكاديمية", "")).strip()
+        zoom = str(r.get("رابط Zoom", r.get("رابط زوم", ""))).strip()
+        status = str(r.get("حالة الموعد", "نشط")).strip()
+        emoji = {"إضافة":"➕", "تعديل":"📝", "إلغاء":"🚫", "حذف":"🗑️"}.get(action, "🔔")
+        lines = [
+            f"{emoji} <b>إشعار الحصص</b>",
+            f"<b>العملية:</b> {html.escape(str(action))}",
+            f"<b>الطالب:</b> {html.escape(student)}",
+            f"<b>الصف:</b> {html.escape(grade)}",
+            f"<b>الأكاديمية:</b> {html.escape(academy)}",
+            f"<b>الموعد:</b> {html.escape(day)} — {html.escape(tm)}",
+            f"<b>الحالة:</b> {html.escape(status)}",
+        ]
+        if zoom and zoom.lower() != "nan":
+            lines.append(f"<b>Zoom:</b> {html.escape(zoom)}")
+        _telegram_send_message("\n".join(lines))
+    except Exception:
+        pass
+
 def build_weekly_schedule_print_html(df, title="الجدول الأسبوعي لمواعيد الطلاب"):
     """نسخة طباعة احترافية A4 Landscape للجدول الأسبوعي، مع بطاقات واضحة لكل طالب."""
     days = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"]
@@ -3905,6 +3934,7 @@ elif t_page == "weekly_schedule":
                         st.session_state.users_df.at[ui,"المجموعة/الصف"] = ws_grade
                     st.session_state.weekly_schedule_df = pd.concat([st.session_state.weekly_schedule_df, pd.DataFrame([new_ws])], ignore_index=True)
                     save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                    _notify_schedule_change("إضافة", new_ws)
                     st.success(f"✓ تم إضافة موعد {student_clean} يوم {ws_day} الساعة {ws_time.strftime('%I:%M %p').lstrip('0')}.")
                     st.rerun()
 
@@ -3960,8 +3990,10 @@ elif t_page == "weekly_schedule":
                         st.rerun()
                 with b4:
                     if st.button("🗑️ حذف الموعد", key=f"ws_del_{ws_idx}"):
+                        old_ws_record = r.to_dict()
                         st.session_state.weekly_schedule_df = ws_df.drop(ws_idx).reset_index(drop=True)
                         save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        _notify_schedule_change("إلغاء", old_ws_record)
                         st.success("تم حذف الموعد فقط، ولن يتم حذف الطالب أو سجلاته.")
                         st.rerun()
 
