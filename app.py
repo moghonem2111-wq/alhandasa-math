@@ -890,21 +890,16 @@ def _hamza_secret(name):
         return ""
 
 def _hamza_ai_call(user_text, media_items=None, history=None):
-    """حمصا: Gemini متعدد الوسائط مع Google Search وCode Execution وحل منظم."""
+    """حمصا: حل مسائل الرياضيات بالصور أو الكتابة باستخدام Gemini مع بحث Google عند الحاجة."""
     key = _hamza_secret("GEMINI_API_KEY")
     if not key:
         raise RuntimeError("AI_KEY_MISSING")
 
-    preferred = _hamza_secret("GEMINI_MODEL") or "gemini-3.8-flash"
-    models = []
-    for candidate in [
-        preferred,
-        "gemini-3.8-flash",
-        "gemini-3.7-flash",
-        "gemini-2.5-flash",
-    ]:
-        if candidate and candidate not in models:
-            models.append(candidate)
+    # نبدأ بموديل ثابت ومناسب للصور والرياضيات، ثم نستخدم موديل احتياطي.
+    models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
+    preferred = _hamza_secret("GEMINI_MODEL")
+    if preferred and preferred not in models:
+        models.insert(0, preferred)
 
     context = ""
     if history:
@@ -915,41 +910,33 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
 
     prompt = f"""
 أنت "حمصا"، مدرس رياضيات وإحصاء داخل منصة تعليمية.
-حل المسألة فعلياً ولا تكتفِ بوصف الصورة أو إعادة كتابة السؤال.
+مهمتك الأساسية: قراءة المسألة من الصورة أو النص ثم حلها فعلياً، وليس وصف الصورة فقط.
 
-مهم جداً:
-- اقرأ الصورة/المسألة بدقة.
-- استخدم التفكير الرياضي خطوة بخطوة.
-- استخدم أداة تنفيذ الكود عندما تحتاج حساباً رقمياً أو تحققاً جبرياً.
-- استخدم Google Search فقط إذا كان البحث الخارجي مفيداً للمعلومة أو القاعدة؛ لا تبحث عن إجابة جاهزة لمسألة الطالب إذا كان يمكن حلها رياضياً.
-- اشرح بالعربية المصرية المبسطة.
-- المعادلات الإنجليزية تُكتب LEFT-TO-RIGHT داخل كتلة مستقلة.
-- النص العربي يُكتب RIGHT-TO-LEFT.
-- استخدم LaTeX للرياضيات: $x^2$, $\\frac{{1}}{{2}}$, $\\sqrt{{x}}$, $2x+5=17$.
-- لا تكتب كلمة "fact" مكان الكسور أبداً.
-- لا تستخدم علامات $ إلا كمحدد LaTeX.
-- افصل كل خطوة في سطر واضح.
-- اكتب في النهاية إجابة نهائية واضحة.
-
-أخرج نصاً منظماً فقط بهذا الشكل:
-[الحل]
-فهم السؤال:
-...
-
-الخطوات:
-1. ...
-2. ...
-3. ...
-
-[الإجابة النهائية]
-...
+قواعد الحل:
+- اقرأ كل الأرقام والرموز والاختيارات والجداول والرسوم الموجودة في الصورة.
+- نفّذ الحسابات وتحقق من النتيجة قبل الإجابة.
+- اشرح الحل خطوة بخطوة وبترتيب واضح.
+- إذا احتجت معلومة حديثة أو تعريفاً أو مرجعاً خارجياً، استخدم بحث Google.
+- لا تقل للطالب "صورة أوضح" إلا إذا كانت هناك فعلاً معلومة أساسية غير مقروءة.
+- اكتب المعادلات الرياضية باستخدام LaTeX.
+- المعادلات الإنجليزية والرموز الرياضية تكون LTR من اليسار إلى اليمين.
+- النص العربي يكون RTL من اليمين إلى اليسار.
+- استخدم الكسور مثل $\\frac{{1}}{{2}}$ والجذور مثل $\\sqrt{{x}}$ والأسس مثل $x^2$.
+- لا تضع أي علامات غريبة بين الأرقام والرموز.
+- نظّم الإجابة بهذا الشكل:
+### فهم المسألة
+### القاعدة / الفكرة
+### الحل خطوة بخطوة
+### الإجابة النهائية
+- لا تستخدم JSON ولا Markdown code fences؛ أرسل الحل كنص منظم مباشرة.
 
 المحادثة السابقة:
 {context or "لا توجد محادثة سابقة."}
 
-رسالة الطالب:
-{user_text.strip() or "حل المسألة الموجودة في الملف المرفق."}
+سؤال الطالب:
+{user_text.strip() or "حل المسألة الموجودة في الصورة المرفقة."}
 """
+
     parts = [{"text": prompt}]
     for item in (media_items or []):
         if item and item.get("data"):
@@ -962,12 +949,10 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
 
     body = {
         "contents": [{"role": "user", "parts": parts}],
-        "tools": [
-            {"google_search": {}},
-            {"code_execution": {}}
-        ],
+        "tools": [{"google_search": {}}],
         "generationConfig": {
-            "maxOutputTokens": 8192
+            "temperature": 0.15,
+            "maxOutputTokens": 6144
         }
     }
 
@@ -980,44 +965,53 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
                 data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
                 headers={
                     "Content-Type": "application/json",
-                    "x-goog-api-key": key
+                    "x-goog-api-key": key,
                 },
-                method="POST"
+                method="POST",
             )
             try:
-                with urllib.request.urlopen(req, timeout=150) as resp:
+                with urllib.request.urlopen(req, timeout=120) as resp:
                     raw = json.loads(resp.read().decode("utf-8"))
 
                 candidates = raw.get("candidates") or []
                 if not candidates:
-                    raise RuntimeError("EMPTY_RESPONSE")
+                    feedback = raw.get("promptFeedback") or {}
+                    reason = feedback.get("blockReason") or "EMPTY_RESPONSE"
+                    raise RuntimeError(str(reason))
 
-                content = candidates[0].get("content") or {}
-                text_parts = content.get("parts") or []
-                texts = []
-                for part in text_parts:
+                text_parts = []
+                for part in ((candidates[0].get("content") or {}).get("parts") or []):
                     if part.get("text") is not None:
-                        texts.append(str(part.get("text", "")))
-                text = "\n".join(texts).strip()
+                        text_parts.append(str(part.get("text")))
+                text = "".join(text_parts).strip()
+
                 if not text:
-                    raise RuntimeError("EMPTY_RESPONSE")
+                    finish = candidates[0].get("finishReason") or ""
+                    raise RuntimeError("EMPTY_TEXT:" + str(finish))
 
-                text = text.replace(chr(96)*3 + "markdown", "").replace(chr(96)*3 + "text", "").replace(chr(96)*3, "").strip()
+                # لو رجع النموذج JSON رغم طلب النص، نستخرج الإجابة منه.
+                cleaned = text.replace(chr(96)*3 + "json", "").replace(chr(96)*3, "").strip()
+                try:
+                    obj = json.loads(cleaned)
+                    if isinstance(obj, dict) and obj.get("answer"):
+                        answer = str(obj.get("answer"))
+                        final_answer = str(obj.get("final_answer") or "")
+                        return {
+                            "answer": answer,
+                            "final_answer": final_answer,
+                            "topic": str(obj.get("topic") or "رياضيات"),
+                        }
+                except Exception:
+                    pass
 
-                if "[الحل]" in text:
-                    ans = text.split("[الحل]", 1)[1]
-                else:
-                    ans = text
-
-                if "[الإجابة النهائية]" in ans:
-                    solution, final = ans.split("[الإجابة النهائية]", 1)
-                else:
-                    solution, final = ans, ""
-
+                final_answer = ""
+                m = re.search(r"(?:###\s*الإجابة النهائية|الإجابة النهائية)\s*[:：]?\s*(.*)", text, re.S)
+                if m:
+                    final_answer = m.group(1).strip()
                 return {
-                    "answer": solution.strip(),
-                    "final_answer": final.strip(),
-                    "topic": "رياضيات / إحصاء"
+                    "answer": text,
+                    "final_answer": final_answer,
+                    "topic": "رياضيات / إحصاء",
                 }
 
             except urllib.error.HTTPError as ex:
@@ -1025,29 +1019,34 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
                 last_error = msg or str(ex)
                 status = getattr(ex, "code", 0)
 
-                if status in (429, 500, 502, 503, 504) or "UNAVAILABLE" in msg or "RESOURCE_EXHAUSTED" in msg:
+                if status in (401, 403):
+                    raise RuntimeError("AI_KEY_MISSING")
+
+                if status == 429 or "RESOURCE_EXHAUSTED" in msg:
+                    if attempt < 2:
+                        import time
+                        time.sleep(3 * (attempt + 1))
+                        continue
+                    break
+
+                if status in (500, 502, 503, 504) or "UNAVAILABLE" in msg:
                     if attempt < 2:
                         import time
                         time.sleep(2 ** (attempt + 1))
                         continue
                     break
 
-                if status in (400, 401, 403, 404):
-                    break
-
-                if attempt < 2:
-                    import time
-                    time.sleep(2 ** (attempt + 1))
-                    continue
+                # 400/404 غالباً الموديل أو أداة غير متاحة؛ ننتقل للاحتياطي.
                 break
 
             except (urllib.error.URLError, TimeoutError, RuntimeError, ValueError, KeyError) as ex:
                 last_error = str(ex)
                 if attempt < 2:
                     import time
-                    time.sleep(2 ** (attempt + 1))
+                    time.sleep(2 * (attempt + 1))
                     continue
                 break
+
             except Exception as ex:
                 last_error = str(ex)
                 break
@@ -1059,7 +1058,9 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
         raise RuntimeError("AI_BUSY")
     if "api key" in low or "permission" in low or "unauthorized" in low:
         raise RuntimeError("AI_KEY_MISSING")
-    raise RuntimeError("AI_ERROR")
+    # نحتفظ بتفصيل آمن يساعدنا في معرفة السبب الحقيقي دون كشف المفتاح.
+    safe = str(last_error or "unknown").replace(key, "[KEY]").replace("\n", " ")[:500]
+    raise RuntimeError("AI_ERROR:" + safe)
 
 def _hamza_pdf_html(question, answer, final_answer, student_name):
     q=_hamza_math_html(question)
