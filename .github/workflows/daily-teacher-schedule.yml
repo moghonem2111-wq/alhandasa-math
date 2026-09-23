@@ -53,9 +53,23 @@ jobs:
               "https://api.telegram.org/bot" + bot + "/getMe",
               timeout=20
           )
-          telegram_test.raise_for_status()
-          if not telegram_test.json().get("ok"):
-              raise RuntimeError("Telegram bot authentication failed")
+          print("Telegram getMe HTTP:", telegram_test.status_code)
+          if telegram_test.status_code != 200:
+              print("Telegram getMe response:", telegram_test.text[:1000])
+              raise RuntimeError(
+                  "Telegram getMe failed: HTTP " + str(telegram_test.status_code)
+                  + " | " + telegram_test.text[:1000]
+              )
+          try:
+              telegram_test_json = telegram_test.json()
+          except Exception:
+              print("Telegram getMe non-JSON response:", telegram_test.text[:1000])
+              raise RuntimeError("Telegram getMe returned a non-JSON response")
+          if not telegram_test_json.get("ok"):
+              raise RuntimeError(
+                  "Telegram bot authentication failed: "
+                  + str(telegram_test_json)[:1000]
+              )
 
           def clean(v):
               s = str(v or "").strip()
@@ -80,12 +94,29 @@ jobs:
               return ""
 
           def send(msg):
-              r = requests.post(
-                  "https://api.telegram.org/bot" + bot + "/sendMessage",
-                  data={"chat_id": chat, "text": msg, "parse_mode": "HTML",
-                        "disable_web_page_preview": False},
-                  timeout=30)
-              r.raise_for_status()
+              try:
+                  r = requests.post(
+                      "https://api.telegram.org/bot" + bot + "/sendMessage",
+                      data={"chat_id": chat, "text": msg, "parse_mode": "HTML",
+                            "disable_web_page_preview": False},
+                      timeout=30)
+              except requests.RequestException as ex:
+                  raise RuntimeError("Telegram network error: " + str(ex))
+              print("Telegram sendMessage HTTP:", r.status_code)
+              print("Telegram sendMessage response:", r.text[:1000])
+              if r.status_code != 200:
+                  raise RuntimeError(
+                      "Telegram sendMessage failed: HTTP " + str(r.status_code)
+                      + " | " + r.text[:1000]
+                  )
+              try:
+                  result = r.json()
+              except Exception:
+                  raise RuntimeError("Telegram sendMessage returned non-JSON response")
+              if not result.get("ok"):
+                  raise RuntimeError(
+                      "Telegram sendMessage failed: " + str(result)[:1000]
+                  )
 
           schedule_response = requests.get(
               supabase + "/rest/v1/weekly_schedule",
