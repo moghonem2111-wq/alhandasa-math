@@ -2,7 +2,7 @@ name: Daily Teacher Schedule Notification
 
 on:
   schedule:
-    - cron: "1-59/5 * * * *"
+    - cron: "*/5 * * * *"
       timezone: "Africa/Cairo"
   workflow_dispatch:
 
@@ -19,7 +19,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .notify_state
-          key: teacher-schedule-summary-${{ steps.cairo_date.outputs.day }}
+          key: teacher-schedule-state-${{ steps.cairo_date.outputs.day }}
 
       - name: Send today's schedule to Telegram
         env:
@@ -37,12 +37,20 @@ jobs:
           TZ = ZoneInfo("Africa/Cairo")
           DEFAULT_ZOOM = "https://us05web.zoom.us/j/83526892910?pwd=2jWRgATgBRPbXttdnm0QpLwBApsZL4.1"
           supabase = os.environ["SUPABASE_URL"].strip().rstrip("/")
-          key = os.environ["SUPABASE_KEY"].strip()
+          key = (os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_ANON_KEY") or "").strip()
           bot = os.environ["TELEGRAM_BOT_TOKEN"].strip()
           chat = os.environ["TELEGRAM_CHAT_ID"].strip()
           if not supabase or not key or not bot or not chat:
               raise RuntimeError("Missing one or more required GitHub Secrets: SUPABASE_URL, SUPABASE_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID")
           headers = {"apikey": key, "Authorization": "Bearer " + key}
+
+          telegram_test = requests.get(
+              "https://api.telegram.org/bot" + bot + "/getMe",
+              timeout=20
+          )
+          telegram_test.raise_for_status()
+          if not telegram_test.json().get("ok"):
+              raise RuntimeError("Telegram bot authentication failed")
 
           def clean(v):
               s = str(v or "").strip()
