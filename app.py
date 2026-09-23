@@ -947,12 +947,14 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
                 }
             })
 
+    # نطلب التفكير والتحقق، مع بحث Google عند الحاجة.
     body = {
         "contents": [{"role": "user", "parts": parts}],
         "tools": [{"google_search": {}}],
         "generationConfig": {
             "temperature": 0.15,
-            "maxOutputTokens": 6144
+            "maxOutputTokens": 6144,
+            "thinkingConfig": {"thinkingBudget": 2048}
         }
     }
 
@@ -1036,7 +1038,48 @@ def _hamza_ai_call(user_text, media_items=None, history=None):
                         continue
                     break
 
-                # 400/404 غالباً الموديل أو أداة غير متاحة؛ ننتقل للاحتياطي.
+                # إذا رفض Gemini أداة البحث في هذا الطلب، نجرب نفس الصورة والنص
+                # بدون أداة البحث. لا نطلب من الطالب إعادة رفع الصورة.
+                if status == 400 and "google_search" in json.dumps(body):
+                    fallback_body = json.loads(json.dumps(body, ensure_ascii=False))
+                    fallback_body.pop("tools", None)
+                    fallback_body["generationConfig"].pop("thinkingConfig", None)
+                    try:
+                        fallback_req = urllib.request.Request(
+                            url,
+                            data=json.dumps(fallback_body, ensure_ascii=False).encode("utf-8"),
+                            headers={
+                                "Content-Type": "application/json",
+                                "x-goog-api-key": key,
+                            },
+                            method="POST",
+                        )
+                        with urllib.request.urlopen(fallback_req, timeout=120) as fallback_resp:
+                            fallback_raw = json.loads(fallback_resp.read().decode("utf-8"))
+                        fallback_candidates = fallback_raw.get("candidates") or []
+                        if fallback_candidates:
+                            fallback_parts = (fallback_candidates[0].get("content") or {}).get("parts") or []
+                            fallback_text = "".join(
+                                str(p.get("text", "")) for p in fallback_parts
+                                if p.get("text") is not None
+                            ).strip()
+                            if fallback_text:
+                                final_answer = ""
+                                m = re.search(
+                                    r"(?:###\s*الإجابة النهائية|الإجابة النهائية)\s*[:：]?\s*(.*)",
+                                    fallback_text,
+                                    re.S,
+                                )
+                                if m:
+                                    final_answer = m.group(1).strip()
+                                return {
+                                    "answer": fallback_text,
+                                    "final_answer": final_answer,
+                                    "topic": "رياضيات / إحصاء",
+                                }
+                    except Exception as fallback_ex:
+                        last_error = str(fallback_ex)
+                # 400/404: انتقل للموديل الاحتياطي.
                 break
 
             except (urllib.error.URLError, TimeoutError, RuntimeError, ValueError, KeyError) as ex:
