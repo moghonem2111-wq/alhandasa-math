@@ -12,6 +12,7 @@ import urllib.parse
 import uuid
 import zipfile
 from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
 import pandas as pd
 from PIL import Image
 import streamlit as st
@@ -3505,6 +3506,145 @@ if t_page != "dashboard":
             st.session_state.teacher_page = "dashboard"
             st.rerun()
 
+def _teacher_zoom_link_for_student(student_name, today_date=None):
+    """الحصول على رابط Zoom المرتبط بالطالب من جدول الأونلاين، مع رابط احتياطي ثابت."""
+    default_zoom = "https://us05web.zoom.us/j/83526892910?pwd=2jWRgATgBRPbXttdnm0QpLwBApsZL4.1"
+    name = str(student_name or "").strip()
+    if not name:
+        return default_zoom
+    try:
+        os_df = st.session_state.get("online_schedule_df", pd.DataFrame())
+        if os_df is not None and not os_df.empty and "اسم الطالب" in os_df.columns:
+            rows = os_df[os_df["اسم الطالب"].astype(str).str.strip() == name].copy()
+            if today_date is not None and "تاريخ الحصة" in rows.columns:
+                today_rows = rows[rows["تاريخ الحصة"].astype(str).str[:10] == str(today_date)]
+                if not today_rows.empty:
+                    rows = today_rows
+            if not rows.empty and "رابط زوم" in rows.columns:
+                for link in reversed(rows["رابط زوم"].tolist()):
+                    link = str(link or "").strip()
+                    if link and link.lower() != "nan" and link.startswith(("http://", "https://")):
+                        return link
+    except Exception:
+        pass
+    return default_zoom
+
+
+@st.fragment(run_every="1s")
+def _render_teacher_today_lessons():
+    """بطاقات حصص اليوم مع عداد تنازلي حي ورابط Zoom."""
+    cairo = ZoneInfo("Africa/Cairo")
+    now = datetime.now(cairo)
+    day_names = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+    today_name = day_names[now.weekday()]
+    today_date = now.date()
+
+    ws = st.session_state.get("weekly_schedule_df", pd.DataFrame())
+    if ws is None or ws.empty:
+        st.info("📅 لا توجد حصص في جدول المواعيد.")
+        return
+
+    work = ws.copy()
+    if "اليوم" not in work.columns or "الموعد" not in work.columns:
+        st.info("📅 جدول المواعيد لا يحتوي على بيانات اليوم والساعة.")
+        return
+
+    work["_day_clean"] = work["اليوم"].astype(str).str.strip()
+    work["_time_clean"] = work["الموعد"].astype(str).str[:5]
+    work = work[work["_day_clean"] == today_name].copy()
+    if "حالة الموعد" in work.columns:
+        work = work[work["حالة الموعد"].astype(str).str.strip() != "متوقف"].copy()
+
+    if work.empty:
+        st.success(f"🌤️ لا توجد حصص مجدولة اليوم — {today_name} {today_date}.")
+        return
+
+    cards = []
+    for idx, row in work.iterrows():
+        student = str(row.get("اسم الطالب", "")).strip()
+        tm = str(row.get("_time_clean", "")).strip()
+        try:
+            lesson_time = datetime.strptime(tm, "%H:%M").time()
+            target = datetime.combine(today_date, lesson_time).replace(tzinfo=cairo)
+            diff = int((target - now).total_seconds())
+        except Exception:
+            continue
+
+        cards.append((target, diff, idx, row))
+
+    cards.sort(key=lambda x: x[0])
+
+    st.caption(f"🕒 الوقت الحالي: {now.strftime('%I:%M:%S %p').lstrip('0')} — {today_name} {today_date}")
+
+    for target, diff, idx, row in cards:
+        student = str(row.get("اسم الطالب", "")).strip()
+        grade = str(row.get("المجموعة/الصف", "")).strip()
+        academy = str(row.get("اسم الأكاديمية", "أكاديمية البشمهندس")).strip()
+        price = row.get("سعر الحصة", 0)
+
+        zoom_link = _teacher_zoom_link_for_student(student, today_date)
+
+        if diff > 0:
+            days_left = diff // 86400
+            hours_left = (diff % 86400) // 3600
+            mins_left = (diff % 3600) // 60
+            secs_left = diff % 60
+            if days_left:
+                countdown = f"⏳ فاضل {days_left} يوم و {hours_left} ساعة و {mins_left} دقيقة"
+            elif hours_left:
+                countdown = f"⏳ فاضل {hours_left} ساعة و {mins_left} دقيقة و {secs_left} ثانية"
+            elif mins_left:
+                countdown = f"⏳ فاضل {mins_left} دقيقة و {secs_left} ثانية"
+            else:
+                countdown = f"⏳ فاضل {secs_left} ثانية"
+            border = "#0284c7"
+            bg = "#eff6ff"
+            title_color = "#0369a1"
+            status = "الحصة القادمة"
+        else:
+            countdown = "🔴 ابدأ الحصة الآن"
+            border = "#dc2626"
+            bg = "#fef2f2"
+            title_color = "#b91c1c"
+            status = "حان موعد الحصة"
+
+        st.markdown(
+            f"""
+            <div style="background:{bg};border:3px solid {border};border-radius:18px;
+                        padding:16px 18px;margin:10px 0 6px;box-shadow:0 5px 18px rgba(0,0,0,.08);">
+                <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
+                    <div>
+                        <div style="font-size:19px;font-weight:900;color:{title_color};">👨‍🎓 {html.escape(student)}</div>
+                        <div style="font-size:14px;margin-top:5px;">📚 {html.escape(grade)} &nbsp; | &nbsp; 🏛️ {html.escape(academy)}</div>
+                    </div>
+                    <div style="font-size:22px;font-weight:900;color:{title_color};">{html.escape(countdown)}</div>
+                </div>
+                <div style="margin-top:10px;font-size:15px;">
+                    📅 اليوم: <b>{html.escape(today_name)}</b>
+                    &nbsp;&nbsp; ⏰ موعد الحصة: <b>{html.escape(target.strftime('%I:%M %p').lstrip('0'))}</b>
+                    &nbsp;&nbsp; 💰 السعر: <b>{html.escape(str(price))} جنيه</b>
+                </div>
+                <div style="margin-top:8px;font-weight:800;color:{title_color};">{html.escape(status)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if diff <= 0:
+            st.link_button(
+                "🔴 ابدأ الحصة الآن — دخول Zoom",
+                zoom_link,
+                use_container_width=True,
+                key=f"teacher_today_zoom_start_{idx}",
+            )
+        else:
+            st.link_button(
+                "🔗 رابط Zoom للحصة",
+                zoom_link,
+                use_container_width=True,
+                key=f"teacher_today_zoom_wait_{idx}",
+            )
+
 def _student_profiles_for_curriculum(curriculum):
     """إرجاع الطلاب المرتبطين بالمنهج المختار مع المرحلة من بيانات الطالب الأساسية.
     
@@ -3653,6 +3793,11 @@ elif t_page == "dashboard":
             st.rerun()
     if st.session_state.teacher_notifications_open:
         _render_notification_box("teacher")
+
+    st.markdown("### 🔔 حصص اليوم")
+    st.caption("يتم جلب الحصص تلقائياً من جدول مواعيد الطلاب. العداد يتحدث كل ثانية، وعند حلول الموعد تتحول البطاقة إلى الأحمر ويظهر زر بدء الحصة.")
+    _render_teacher_today_lessons()
+
     st.markdown("<div style='height:14px'></div>",unsafe_allow_html=True)
     s1,s2,s3,s4=st.columns(4)
     for c,icon,num,label,cls in [(s1,'♙',len(dashboard_students),'إجمالي الطلاب','stat-purple'),(s2,'▣',len(st.session_state.weekly_schedule_df),'المواعيد الأسبوعية','stat-green'),(s3,'◉',len(st.session_state.online_schedule_df),'مواعيد Zoom','stat-blue'),(s4,'✎',len(st.session_state.sessions_df),'الحصص المرصودة','stat-yellow')]:
