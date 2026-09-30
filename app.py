@@ -4061,6 +4061,123 @@ elif t_page == "weekly_schedule":
                 c1.write(f"**المنهج:** {r.get('المنهج/الدولة','')}\n\n**المرحلة:** {r.get('المجموعة/الصف','')}")
                 c2.write(f"**سعر الحصة:** {r.get('سعر الحصة',0)} جنيه\n\n**مشرف الأكاديمية:** {r.get('رقم مشرف الأكاديمية','')}")
                 c3.write(f"**رقم الطالب:** {r.get('رقم الطالب','')}\n\n**الحالة:** {r.get('حالة الموعد','نشط')}")
+                # تعديل الموعد والسعر مباشرة من شاشة مواعيد الطلاب.
+                with st.expander("✏️ تعديل بيانات هذا الموعد", expanded=False):
+                    with st.form(f"edit_weekly_schedule_form_{ws_idx}", clear_on_submit=False):
+                        ec1, ec2 = st.columns(2)
+                        with ec1:
+                            edit_academy = st.text_input(
+                                "اسم الأكاديمية",
+                                value=str(r.get("اسم الأكاديمية", "")),
+                                key=f"edit_academy_{ws_idx}",
+                            )
+                            edit_phone = st.text_input(
+                                "رقم الطالب",
+                                value=str(r.get("رقم الطالب", "")),
+                                key=f"edit_phone_{ws_idx}",
+                            )
+                            edit_supervisor = st.text_input(
+                                "رقم مشرف الأكاديمية",
+                                value=str(r.get("رقم مشرف الأكاديمية", "")),
+                                key=f"edit_supervisor_{ws_idx}",
+                            )
+                            try:
+                                edit_price_default = float(r.get("سعر الحصة", 0) or 0)
+                            except Exception:
+                                edit_price_default = 0.0
+                            edit_price = st.number_input(
+                                "سعر الحصة (جنيه)",
+                                min_value=0.0,
+                                step=10.0,
+                                value=edit_price_default,
+                                key=f"edit_price_{ws_idx}",
+                            )
+                        with ec2:
+                            edit_days = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"]
+                            edit_day_old = str(r.get("اليوم", "السبت"))
+                            edit_day_idx = edit_days.index(edit_day_old) if edit_day_old in edit_days else 0
+                            edit_day = st.selectbox(
+                                "يوم الحصة",
+                                edit_days,
+                                index=edit_day_idx,
+                                key=f"edit_day_{ws_idx}",
+                            )
+                            try:
+                                edit_time_old = datetime.strptime(str(r.get("الموعد", "18:00"))[:5], "%H:%M").time()
+                            except Exception:
+                                edit_time_old = time(18, 0)
+                            edit_hour_old = edit_time_old.hour % 12 or 12
+                            edit_ampm_old = "AM" if edit_time_old.hour < 12 else "PM"
+                            edit_min_old = (edit_time_old.minute // 15) * 15
+                            if edit_min_old not in [0, 15, 30, 45]:
+                                edit_min_old = 0
+                            eh1, eh2, eh3 = st.columns(3)
+                            with eh1:
+                                edit_hour = st.selectbox(
+                                    "الساعة",
+                                    list(range(1, 13)),
+                                    index=list(range(1, 13)).index(edit_hour_old),
+                                    key=f"edit_hour_{ws_idx}",
+                                )
+                            with eh2:
+                                edit_minute = st.selectbox(
+                                    "الدقائق",
+                                    [0, 15, 30, 45],
+                                    index=[0, 15, 30, 45].index(edit_min_old),
+                                    format_func=lambda x: f"{x:02d}",
+                                    key=f"edit_minute_{ws_idx}",
+                                )
+                            with eh3:
+                                edit_ampm = st.selectbox(
+                                    "الفترة",
+                                    ["AM", "PM"],
+                                    index=0 if edit_ampm_old == "AM" else 1,
+                                    key=f"edit_ampm_{ws_idx}",
+                                )
+                            edit_status_options = ["نشط", "متوقف"]
+                            edit_status_old = str(r.get("حالة الموعد", "نشط")).strip()
+                            if edit_status_old not in edit_status_options:
+                                edit_status_old = "نشط"
+                            edit_status = st.selectbox(
+                                "حالة الموعد",
+                                edit_status_options,
+                                index=edit_status_options.index(edit_status_old),
+                                key=f"edit_status_{ws_idx}",
+                            )
+
+                        if st.form_submit_button("💾 حفظ تعديل الموعد والسعر"):
+                            edit_hour24 = edit_hour % 12 + (12 if edit_ampm == "PM" else 0)
+                            edit_time = time(edit_hour24, edit_minute)
+                            updated = r.to_dict()
+                            updated["اسم الأكاديمية"] = edit_academy.strip()
+                            updated["رقم الطالب"] = edit_phone.strip()
+                            updated["رقم مشرف الأكاديمية"] = edit_supervisor.strip()
+                            updated["سعر الحصة"] = float(edit_price)
+                            updated["اليوم"] = edit_day
+                            updated["الموعد"] = edit_time.strftime("%H:%M")
+                            updated["حالة الموعد"] = edit_status
+                            updated["اسم الطالب"] = student_nm.strip()
+                            # المنهج والمرحلة يظلان مرتبطين ببيانات الطالب الأساسية.
+                            st.session_state.weekly_schedule_df.loc[ws_idx, list(updated.keys())] = list(updated.values())
+                            save_all_data(
+                                st.session_state.users_df,
+                                st.session_state.sessions_df,
+                                st.session_state.assessments_df,
+                                st.session_state.messages_df,
+                                st.session_state.exams_df,
+                                st.session_state.essays_df,
+                                st.session_state.bookings_df,
+                                st.session_state.bank_requests_df,
+                                st.session_state.question_bank_df,
+                                st.session_state.videos_df,
+                                st.session_state.video_comments_df,
+                                st.session_state.abqary_df,
+                                st.session_state.online_schedule_df,
+                            )
+                            _notify_schedule_change("تعديل", updated)
+                            st.success("✓ تم تعديل موعد الطالب والسعر بنجاح. سيُستخدم السعر الجديد تلقائياً عند تسجيل الحضور.")
+                            st.rerun()
+
                 b1, b2, b3, b4 = st.columns(4)
                 with b1:
                     if st.button("➕ إضافة موعد آخر", key=f"ws_add_another_{ws_idx}"):
@@ -5145,7 +5262,15 @@ elif t_page == "add_session":
             work = work[work["اسم الطالب"] == student_clean]
             if work.empty or "سعر الحصة" not in work.columns:
                 continue
-            for raw_price in work["سعر الحصة"].tolist():
+            # إذا كان للطالب أكثر من موعد، نعتمد آخر سعر محفوظ في الجدول.
+            # المواعيد المتوقفة لا تُستخدم كمصدر للسعر.
+            if "حالة الموعد" in work.columns:
+                active_work = work[
+                    work["حالة الموعد"].astype(str).str.strip() != "متوقف"
+                ]
+                if not active_work.empty:
+                    work = active_work
+            for raw_price in reversed(work["سعر الحصة"].tolist()):
                 try:
                     if pd.notna(raw_price) and str(raw_price).strip() != "":
                         return float(raw_price)
