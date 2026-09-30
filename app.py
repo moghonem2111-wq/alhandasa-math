@@ -5244,6 +5244,32 @@ elif t_page == "add_session":
     def _get_registered_session_price(student, curriculum):
         student_clean = str(student or "").strip()
         curriculum_clean = str(curriculum or "").strip()
+        # إذا دخلنا إلى التحضير من زر "رصد حصة الطالب" داخل موعد محدد،
+        # نستخدم سعر هذا الموعد نفسه حتى لو كان للطالب أكثر من موعد.
+        _prefill_idx = st.session_state.get("prefill_schedule_idx", None)
+        _weekly_now = st.session_state.get("weekly_schedule_df", pd.DataFrame())
+        if _prefill_idx is not None and _weekly_now is not None and not _weekly_now.empty:
+            try:
+                _idx = int(_prefill_idx)
+                if _idx in _weekly_now.index:
+                    _selected_schedule = _weekly_now.loc[_idx]
+                    _selected_name = str(_selected_schedule.get("اسم الطالب", "")).strip()
+                    _selected_curr = str(_selected_schedule.get("المنهج/الدولة", "")).strip()
+                    _selected_status = str(_selected_schedule.get("حالة الموعد", "نشط")).strip()
+                    if (
+                        _selected_name == student_clean
+                        and _selected_curr == curriculum_clean
+                        and _selected_status != "متوقف"
+                    ):
+                        try:
+                            _selected_price = _selected_schedule.get("سعر الحصة", None)
+                            if pd.notna(_selected_price) and str(_selected_price).strip() != "":
+                                return float(_selected_price)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
         sources = [
             st.session_state.get("weekly_schedule_df", pd.DataFrame()),
             st.session_state.get("online_schedule_df", pd.DataFrame()),
