@@ -3505,6 +3505,53 @@ if t_page != "dashboard":
             st.session_state.teacher_page = "dashboard"
             st.rerun()
 
+def _student_profiles_for_curriculum(curriculum):
+    """إرجاع الطلاب المرتبطين بالمنهج المختار مع المرحلة من بيانات الطالب الأساسية.
+    
+    الأولوية لجدول Users (بيانات التسجيل الأساسية)، ثم المواعيد والجداول،
+    ثم سجلات الحصص القديمة كخطة احتياطية. هذا يمنع ظهور طالب في منهج آخر
+    بسبب سجل حضور قديم.
+    """
+    target = str(curriculum or "").strip()
+    sources = [
+        st.session_state.get("users_df", pd.DataFrame()),
+        st.session_state.get("weekly_schedule_df", pd.DataFrame()),
+        st.session_state.get("online_schedule_df", pd.DataFrame()),
+        st.session_state.get("sessions_df", pd.DataFrame()),
+    ]
+    profiles = {}
+    for src in sources:
+        if src is None or src.empty:
+            continue
+        work = src.copy()
+        name_col = "اسم الطالب"
+        curr_col = "المنهج/الدولة"
+        grade_col = "المجموعة/الصف"
+        if name_col not in work.columns or curr_col not in work.columns:
+            continue
+        work[name_col] = work[name_col].astype(str).str.strip()
+        work[curr_col] = work[curr_col].astype(str).str.strip()
+        if grade_col not in work.columns:
+            work[grade_col] = ""
+        work[grade_col] = work[grade_col].astype(str).str.strip()
+        work = work[
+            (work[name_col] != "") &
+            (work[curr_col] == target)
+        ]
+        for _, row in work.iterrows():
+            name = str(row.get(name_col, "")).strip()
+            if not name or name in profiles:
+                continue
+            grade = str(row.get(grade_col, "")).strip()
+            if grade.lower() == "nan":
+                grade = ""
+            profiles[name] = {
+                "اسم الطالب": name,
+                "المنهج/الدولة": target,
+                "المجموعة/الصف": grade,
+            }
+    return profiles
+
 if t_page == "student_interface":
     st.subheader("🎨 تصميم واجهة الطالب")
     st.caption("قسم مستقل للتحكم المباشر في واجهة الطالب. أي صورة ترفعها هنا تُحفظ في بيانات واجهة الطالب وتُستخدم مباشرة في صفحة الطالب، والصورة المدمجة مجرد نسخة احتياطية.")
@@ -5042,53 +5089,6 @@ elif t_page == "students":
                     st.rerun()
                 st.write("---")
 
-
-def _student_profiles_for_curriculum(curriculum):
-    """إرجاع الطلاب المرتبطين بالمنهج المختار مع المرحلة من بيانات الطالب الأساسية.
-    
-    الأولوية لجدول Users (بيانات التسجيل الأساسية)، ثم المواعيد والجداول،
-    ثم سجلات الحصص القديمة كخطة احتياطية. هذا يمنع ظهور طالب في منهج آخر
-    بسبب سجل حضور قديم.
-    """
-    target = str(curriculum or "").strip()
-    sources = [
-        st.session_state.get("users_df", pd.DataFrame()),
-        st.session_state.get("weekly_schedule_df", pd.DataFrame()),
-        st.session_state.get("online_schedule_df", pd.DataFrame()),
-        st.session_state.get("sessions_df", pd.DataFrame()),
-    ]
-    profiles = {}
-    for src in sources:
-        if src is None or src.empty:
-            continue
-        work = src.copy()
-        name_col = "اسم الطالب"
-        curr_col = "المنهج/الدولة"
-        grade_col = "المجموعة/الصف"
-        if name_col not in work.columns or curr_col not in work.columns:
-            continue
-        work[name_col] = work[name_col].astype(str).str.strip()
-        work[curr_col] = work[curr_col].astype(str).str.strip()
-        if grade_col not in work.columns:
-            work[grade_col] = ""
-        work[grade_col] = work[grade_col].astype(str).str.strip()
-        work = work[
-            (work[name_col] != "") &
-            (work[curr_col] == target)
-        ]
-        for _, row in work.iterrows():
-            name = str(row.get(name_col, "")).strip()
-            if not name or name in profiles:
-                continue
-            grade = str(row.get(grade_col, "")).strip()
-            if grade.lower() == "nan":
-                grade = ""
-            profiles[name] = {
-                "اسم الطالب": name,
-                "المنهج/الدولة": target,
-                "المجموعة/الصف": grade,
-            }
-    return profiles
 
 elif t_page == "add_session":
     if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
