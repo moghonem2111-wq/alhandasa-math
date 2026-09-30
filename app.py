@@ -3714,20 +3714,37 @@ def _render_teacher_today_lessons():
         )
 
         _render_zoom_copy_button(zoom_link, f"{lesson_date}_{idx}")
-        if diff <= 0:
-            st.link_button(
-                "🔴 ابدأ الحصة الآن — دخول Zoom",
-                zoom_link,
+
+        _action_a, _action_b = st.columns(2)
+        with _action_a:
+            if st.button(
+                "✅ تحضير الحصة",
+                key=f"teacher_today_prepare_{lesson_date}_{idx}",
                 use_container_width=True,
-                key=f"teacher_today_zoom_start_{lesson_date}_{idx}",
-            )
-        else:
-            st.link_button(
-                "🔗 رابط Zoom للحصة",
-                zoom_link,
-                use_container_width=True,
-                key=f"teacher_today_zoom_wait_{lesson_date}_{idx}",
-            )
+                type="primary",
+            ):
+                st.session_state.prefill_student = student
+                st.session_state.prefill_schedule_idx = idx
+                st.session_state.prefill_curriculum = str(row.get("المنهج/الدولة", "")).strip()
+                st.session_state.prefill_session_date = str(lesson_date)
+                st.session_state.teacher_page = "add_session"
+                st.rerun()
+
+        with _action_b:
+            if diff <= 0:
+                st.link_button(
+                    "🔴 ابدأ الحصة الآن — دخول Zoom",
+                    zoom_link,
+                    use_container_width=True,
+                    key=f"teacher_today_zoom_start_{lesson_date}_{idx}",
+                )
+            else:
+                st.link_button(
+                    "🔗 رابط Zoom للحصة",
+                    zoom_link,
+                    use_container_width=True,
+                    key=f"teacher_today_zoom_wait_{lesson_date}_{idx}",
+                )
 
 def _student_profiles_for_curriculum(curriculum):
     """إرجاع الطلاب المرتبطين بالمنهج المختار مع المرحلة من بيانات الطالب الأساسية.
@@ -5439,7 +5456,15 @@ elif t_page == "students":
 elif t_page == "add_session":
     if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
     st.subheader("إدخال بيانات الحصة")
-    t_curriculum = st.selectbox("اختر المنهج الدراسي:", list(CURRICULUM_DATA.keys()), key="teacher_curr_select")
+    _prefill_curriculum = str(st.session_state.get("prefill_curriculum", "")).strip()
+    _curriculum_options = list(CURRICULUM_DATA.keys())
+    _curriculum_default = _curriculum_options.index(_prefill_curriculum) if _prefill_curriculum in _curriculum_options else 0
+    t_curriculum = st.selectbox(
+        "اختر المنهج الدراسي:",
+        _curriculum_options,
+        index=_curriculum_default,
+        key="teacher_curr_select",
+    )
     t_grades = CURRICULUM_DATA[t_curriculum]
 
     # المنهج ← الطلاب التابعون له فقط ← المرحلة تُملأ تلقائياً من ملف الطالب.
@@ -5549,7 +5574,13 @@ elif t_page == "add_session":
     with st.form("teacher_entry_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
-            session_date = st.date_input("تاريخ الحصة", value=date.today())
+            _prefill_session_date = st.session_state.get("prefill_session_date", date.today())
+            if isinstance(_prefill_session_date, str):
+                try:
+                    _prefill_session_date = date.fromisoformat(_prefill_session_date)
+                except Exception:
+                    _prefill_session_date = date.today()
+            session_date = st.date_input("تاريخ الحصة", value=_prefill_session_date, key="session_date_input")
         with col2:
             price = st.number_input(
                 "سعر الحصة (جنيه)",
@@ -5577,6 +5608,8 @@ elif t_page == "add_session":
                 st.success(f"✓ تم حفظ سجل الحصة للطالب ({student_name}) بنجاح!")
                 st.session_state.pop("prefill_student", None)
                 st.session_state.pop("prefill_schedule_idx", None)
+                st.session_state.pop("prefill_curriculum", None)
+                st.session_state.pop("prefill_session_date", None)
 
 elif t_page == "add_hw":
     if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
