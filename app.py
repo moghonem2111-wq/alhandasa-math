@@ -5122,13 +5122,61 @@ elif t_page == "add_session":
         )
         group_name = st.selectbox("المرحلة / الصف الدراسي:", t_grades, key="session_grade_manual")
 
+    # السعر يُجلب تلقائياً من سعر الموعد المسجل للطالب.
+    # الغياب أو العذر = 0 جنيه، والحضور/التأخر = سعر الموعد.
+    def _get_registered_session_price(student, curriculum):
+        student_clean = str(student or "").strip()
+        curriculum_clean = str(curriculum or "").strip()
+        sources = [
+            st.session_state.get("weekly_schedule_df", pd.DataFrame()),
+            st.session_state.get("online_schedule_df", pd.DataFrame()),
+            st.session_state.get("users_df", pd.DataFrame()),
+        ]
+        for src in sources:
+            if src is None or src.empty:
+                continue
+            if "اسم الطالب" not in src.columns:
+                continue
+            work = src.copy()
+            work["اسم الطالب"] = work["اسم الطالب"].astype(str).str.strip()
+            if "المنهج/الدولة" in work.columns:
+                work["المنهج/الدولة"] = work["المنهج/الدولة"].astype(str).str.strip()
+                work = work[work["المنهج/الدولة"] == curriculum_clean]
+            work = work[work["اسم الطالب"] == student_clean]
+            if work.empty or "سعر الحصة" not in work.columns:
+                continue
+            for raw_price in work["سعر الحصة"].tolist():
+                try:
+                    if pd.notna(raw_price) and str(raw_price).strip() != "":
+                        return float(raw_price)
+                except Exception:
+                    pass
+        return 100.0
+
+    _registered_price = _get_registered_session_price(student_name, t_curriculum)
+    status = st.selectbox(
+        "حالة الحضور",
+        ["حاضر", "غائب", "متأخر", "بعذر"],
+        key="session_attendance_status",
+    )
+
+    _price_state_key = "session_auto_price"
+    _price_context = f"{str(student_name).strip()}|{str(t_curriculum).strip()}|{status}"
+    if st.session_state.get("session_price_context") != _price_context:
+        st.session_state.session_price_context = _price_context
+        st.session_state[_price_state_key] = 0.0 if status in ["غائب", "بعذر"] else _registered_price
+
     with st.form("teacher_entry_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
             session_date = st.date_input("تاريخ الحصة", value=date.today())
-            status = st.selectbox("حالة الحضور", ["حاضر", "غائب", "متأخر", "بعذر"])
         with col2:
-            price = st.number_input("سعر الحصة", min_value=0.0, step=10.0, value=100.0)
+            price = st.number_input(
+                "سعر الحصة (جنيه)",
+                min_value=0.0,
+                step=10.0,
+                key=_price_state_key,
+            )
             total_sessions = st.number_input("الحصص المنفذة حتى الآن", min_value=1, step=1, value=1)
             payment_type = st.selectbox("نظام الدفع", ["اشتراك شهري", "مقدم", "مؤخر (بعد الحصة)", "مؤجل"])
             student_level = st.selectbox("المستوى الدراسي", ["ممتاز ⭐⭐⭐", "جيد جداً ⭐⭐", "جيد ⭐", "متوسط", "يحتاج متابعة"])
