@@ -1260,11 +1260,17 @@ def build_weekly_schedule_print_html(df, title="الجدول الأسبوعي ل
                     grade = html.escape(str(r.get("المجموعة/الصف", "")))
                     academy = html.escape(str(r.get("اسم الأكاديمية", "")))
                     phone = html.escape(str(r.get("رقم الطالب", "")))
-                    color = str(r.get("اللون", "#1677ff"))
-                    if not re.match(r"^#[0-9A-Fa-f]{6}$", color):
-                        color = "#1677ff"
+                    color = str(r.get("اللون", "#2563eb")).strip()
+                    # ألوان الطلاب قد تكون Hex أو HSL (للطلاب بعد أول مجموعة الألوان).
+                    # نمرر اللون نفسه مباشرة إلى بطاقة الطباعة حتى يطابق الجدول على الموقع.
+                    if not (
+                        re.match(r"^#[0-9A-Fa-f]{6}$", color)
+                        or re.match(r"^hsl\\(\\s*\\d+\\s*,\\s*\\d+%\\s*,\\s*\\d+%\\s*\\)$", color)
+                    ):
+                        color = "#2563eb"
                     card_html = (
-                        f"<div class='student-card' style='--student-color:{color}'>"
+                        f"<div class='student-card' style='background:{color} !important;"
+                        f"background-color:{color} !important;border-right:4px solid {color} !important;'>"
                         f"<div class='student-name'>👤 {student}</div>"
                         f"<div class='student-meta'>{grade}</div>"
                         f"<div class='student-meta'>{academy}</div>"
@@ -1305,14 +1311,14 @@ th {{ background:#eaf4ff; color:#0b3b78; padding:7px 4px; font-size:10px; font-w
 th.time-head {{ width:70px; background:#062b63; color:#fff; }}
 td {{ padding:4px; min-height:60px; }}
 td.time-cell {{ background:#f8fbff; color:#062b63; font-size:10px; font-weight:900; vertical-align:middle; white-space:nowrap; }}
-.student-card {{ border-radius:9px; padding:6px 5px; margin:2px 0; background:linear-gradient(135deg,var(--student-color),#0b56ad); color:#fff; text-align:right; border-right:4px solid rgba(255,255,255,.85); box-shadow:0 2px 6px rgba(15,23,42,.12); }}
+.student-card {{ border-radius:9px; padding:6px 5px; margin:2px 0; color:#fff; text-align:right; box-shadow:0 2px 6px rgba(15,23,42,.12); -webkit-print-color-adjust:exact; print-color-adjust:exact; }}
 .student-name {{ font-size:9px; font-weight:900; line-height:1.3; }}
 .student-meta {{ font-size:7px; margin-top:2px; opacity:.96; line-height:1.25; }}
 .student-phone {{ font-size:6.7px; margin-top:2px; opacity:.9; }}
 .dash {{ color:#cbd5e1; font-size:13px; }}
 .empty {{ padding:25px; color:#64748b; font-size:13px; }}
 .footer {{ margin-top:8px; display:flex; justify-content:space-between; gap:8px; border-top:1px solid #dbe4ef; padding-top:6px; color:#64748b; font-size:7.5px; }}
-@media print {{ body {{ background:#fff; }} }}
+@media print {{ body {{ background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact; }} .student-card {{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }} }}
 </style>
 </head>
 <body>
