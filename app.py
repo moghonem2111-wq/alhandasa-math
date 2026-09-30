@@ -5042,36 +5042,84 @@ elif t_page == "students":
                     st.rerun()
                 st.write("---")
 
+
+def _student_profiles_for_curriculum(curriculum):
+    """إرجاع الطلاب المرتبطين بالمنهج المختار مع المرحلة من بيانات الطالب الأساسية.
+    
+    الأولوية لجدول Users (بيانات التسجيل الأساسية)، ثم المواعيد والجداول،
+    ثم سجلات الحصص القديمة كخطة احتياطية. هذا يمنع ظهور طالب في منهج آخر
+    بسبب سجل حضور قديم.
+    """
+    target = str(curriculum or "").strip()
+    sources = [
+        st.session_state.get("users_df", pd.DataFrame()),
+        st.session_state.get("weekly_schedule_df", pd.DataFrame()),
+        st.session_state.get("online_schedule_df", pd.DataFrame()),
+        st.session_state.get("sessions_df", pd.DataFrame()),
+    ]
+    profiles = {}
+    for src in sources:
+        if src is None or src.empty:
+            continue
+        work = src.copy()
+        name_col = "اسم الطالب"
+        curr_col = "المنهج/الدولة"
+        grade_col = "المجموعة/الصف"
+        if name_col not in work.columns or curr_col not in work.columns:
+            continue
+        work[name_col] = work[name_col].astype(str).str.strip()
+        work[curr_col] = work[curr_col].astype(str).str.strip()
+        if grade_col not in work.columns:
+            work[grade_col] = ""
+        work[grade_col] = work[grade_col].astype(str).str.strip()
+        work = work[
+            (work[name_col] != "") &
+            (work[curr_col] == target)
+        ]
+        for _, row in work.iterrows():
+            name = str(row.get(name_col, "")).strip()
+            if not name or name in profiles:
+                continue
+            grade = str(row.get(grade_col, "")).strip()
+            if grade.lower() == "nan":
+                grade = ""
+            profiles[name] = {
+                "اسم الطالب": name,
+                "المنهج/الدولة": target,
+                "المجموعة/الصف": grade,
+            }
+    return profiles
+
 elif t_page == "add_session":
     if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
     st.subheader("إدخال بيانات الحصة")
     t_curriculum = st.selectbox("اختر المنهج الدراسي:", list(CURRICULUM_DATA.keys()), key="teacher_curr_select")
     t_grades = CURRICULUM_DATA[t_curriculum]
 
-    # الطالب يتفلتر تلقائياً حسب المنهج المختار، والصف يُستنتج تلقائياً من بيانات الطالب.
-    _users = st.session_state.users_df.copy()
-    _weekly = st.session_state.weekly_schedule_df.copy()
-    _online = st.session_state.online_schedule_df.copy()
-    _student_rows = pd.concat([_users, _weekly, _online], ignore_index=True, sort=False)
-    _student_rows["اسم الطالب"] = _student_rows.get("اسم الطالب", pd.Series(dtype=str)).astype(str).str.strip()
-    _student_rows["المنهج/الدولة"] = _student_rows.get("المنهج/الدولة", pd.Series(dtype=str)).astype(str).str.strip()
-    _student_rows["المجموعة/الصف"] = _student_rows.get("المجموعة/الصف", pd.Series(dtype=str)).astype(str).str.strip()
-    _student_rows = _student_rows[
-        (_student_rows["اسم الطالب"] != "") &
-        (_student_rows["المنهج/الدولة"] == str(t_curriculum).strip())
-    ].copy()
-    _student_names = sorted(_student_rows["اسم الطالب"].drop_duplicates().tolist())
+    # المنهج ← الطلاب التابعون له فقط ← المرحلة تُملأ تلقائياً من ملف الطالب.
+    _student_profiles = _student_profiles_for_curriculum(t_curriculum)
+    _student_names = sorted(_student_profiles.keys())
     _prefill_session = str(st.session_state.get("prefill_student", "")).strip()
     if _student_names:
         _session_default = _student_names.index(_prefill_session) if _prefill_session in _student_names else 0
-        student_name = st.selectbox("اسم الطالب — طلاب المنهج المختار فقط", _student_names, index=_session_default, key="session_student_select")
-        _student_matches = _student_rows[_student_rows["اسم الطالب"] == str(student_name).strip()]
-        _detected_grades = [x for x in _student_matches["المجموعة/الصف"].tolist() if x and x.lower() != "nan"]
-        group_name = _detected_grades[0] if _detected_grades else (t_grades[0] if t_grades else "")
+        student_name = st.selectbox(
+            "اسم الطالب — طلاب المنهج المختار فقط",
+            _student_names,
+            index=_session_default,
+            key="session_student_select",
+        )
+        group_name = str(_student_profiles[student_name].get("المجموعة/الصف", "")).strip()
+        if not group_name:
+            group_name = t_grades[0] if t_grades else ""
         st.info(f"📚 المرحلة/الصف: **{group_name}** — تم اختيارها تلقائياً من بيانات الطالب.")
     else:
         st.warning("لا يوجد طلاب مسجلون لهذا المنهج حالياً.")
-        student_name = st.text_input("اسم الطالب", value=_prefill_session, placeholder="مثال: أحمد محمد", key="session_student_manual")
+        student_name = st.text_input(
+            "اسم الطالب",
+            value=_prefill_session,
+            placeholder="مثال: أحمد محمد",
+            key="session_student_manual",
+        )
         group_name = st.selectbox("المرحلة / الصف الدراسي:", t_grades, key="session_grade_manual")
 
     with st.form("teacher_entry_form", clear_on_submit=True):
@@ -5105,29 +5153,22 @@ elif t_page == "add_session":
 elif t_page == "add_hw":
     if st.button("⬅️ العودة للرئيسية"): st.session_state.teacher_page = "dashboard"; st.rerun()
     st.subheader("إضافة درجات الواجبات المنزلية والاختبارات يدوياً")
-    # نفس الفكرة في تسجيل الواجب: المنهج ← الطلاب التابعون له فقط ← المرحلة تلقائياً.
+    # المنهج ← الطلاب التابعون له فقط ← المرحلة تُملأ تلقائياً من ملف الطالب.
     hw_curriculum = st.selectbox("اختر المنهج الدراسي:", list(CURRICULUM_DATA.keys()), key="hw_curr_select")
-    _hw_sources = pd.concat([
-        st.session_state.users_df.copy(),
-        st.session_state.sessions_df.copy(),
-        st.session_state.weekly_schedule_df.copy(),
-        st.session_state.online_schedule_df.copy(),
-    ], ignore_index=True, sort=False)
-    _hw_sources["اسم الطالب"] = _hw_sources.get("اسم الطالب", pd.Series(dtype=str)).astype(str).str.strip()
-    _hw_sources["المنهج/الدولة"] = _hw_sources.get("المنهج/الدولة", pd.Series(dtype=str)).astype(str).str.strip()
-    _hw_sources["المجموعة/الصف"] = _hw_sources.get("المجموعة/الصف", pd.Series(dtype=str)).astype(str).str.strip()
-    _hw_sources = _hw_sources[
-        (_hw_sources["اسم الطالب"] != "") &
-        (_hw_sources["المنهج/الدولة"] == str(hw_curriculum).strip())
-    ].copy()
-    _hw_names = sorted(_hw_sources["اسم الطالب"].drop_duplicates().tolist())
+    _hw_profiles = _student_profiles_for_curriculum(hw_curriculum)
+    _hw_names = sorted(_hw_profiles.keys())
     _prefill_hw = str(st.session_state.get("prefill_student", "")).strip()
     if _hw_names:
         _hw_default = _hw_names.index(_prefill_hw) if _prefill_hw in _hw_names else 0
-        ass_student = st.selectbox("اختر الطالب — طلاب المنهج المختار فقط", _hw_names, index=_hw_default, key="assessment_student_select")
-        _hw_match = _hw_sources[_hw_sources["اسم الطالب"] == str(ass_student).strip()]
-        _hw_grades = [x for x in _hw_match["المجموعة/الصف"].tolist() if x and x.lower() != "nan"]
-        ass_grade = _hw_grades[0] if _hw_grades else (CURRICULUM_DATA[hw_curriculum][0] if CURRICULUM_DATA[hw_curriculum] else "")
+        ass_student = st.selectbox(
+            "اختر الطالب — طلاب المنهج المختار فقط",
+            _hw_names,
+            index=_hw_default,
+            key="assessment_student_select",
+        )
+        ass_grade = str(_hw_profiles[ass_student].get("المجموعة/الصف", "")).strip()
+        if not ass_grade:
+            ass_grade = CURRICULUM_DATA[hw_curriculum][0] if CURRICULUM_DATA[hw_curriculum] else ""
         st.info(f"📚 المرحلة/الصف: **{ass_grade}** — تم اختيارها تلقائياً من بيانات الطالب.")
     else:
         st.warning("لا يوجد طلاب مسجلون لهذا المنهج حالياً.")
