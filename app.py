@@ -3530,6 +3530,62 @@ def _teacher_zoom_link_for_student(student_name, today_date=None):
     return default_zoom
 
 
+def _render_zoom_copy_button(zoom_link, key):
+    """زر نسخ حقيقي لرابط الحصة داخل المتصفح، مع بقاء زر دخول Zoom منفصلاً."""
+    safe_link = html.escape(str(zoom_link or "").strip(), quote=True)
+    js_link = json.dumps(str(zoom_link or "").strip(), ensure_ascii=False)
+    component_html = f"""
+    <div dir="rtl" style="font-family:Arial,sans-serif;margin:2px 0 8px;">
+      <button id="copyBtn"
+        style="width:100%;border:1px solid #cbd5e1;border-radius:10px;
+               padding:10px 14px;background:#ffffff;color:#0f172a;
+               font-size:15px;font-weight:800;cursor:pointer;">
+        📋 نسخ لينك الحصة
+      </button>
+      <div id="copyMsg" style="text-align:center;margin-top:5px;font-size:12px;color:#64748b;">
+        اضغط الزر لنسخ رابط Zoom
+      </div>
+      <input value="{safe_link}" readonly
+        style="width:100%;margin-top:6px;border:1px solid #e2e8f0;border-radius:8px;
+               padding:7px 9px;background:#f8fafc;color:#475569;font-size:12px;direction:ltr;text-align:left;">
+    </div>
+    <script>
+      const link = {js_link};
+      const btn = document.getElementById("copyBtn");
+      const msg = document.getElementById("copyMsg");
+      btn.addEventListener("click", async () => {{
+        try {{
+          if (navigator.clipboard && window.isSecureContext) {{
+            await navigator.clipboard.writeText(link);
+          }} else {{
+            const ta = document.createElement("textarea");
+            ta.value = link;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+          }}
+          btn.innerText = "✅ تم نسخ لينك الحصة";
+          msg.innerText = "تم نسخ الرابط إلى الحافظة";
+          msg.style.color = "#059669";
+          setTimeout(() => {{
+            btn.innerText = "📋 نسخ لينك الحصة";
+            msg.innerText = "اضغط الزر لنسخ رابط Zoom";
+            msg.style.color = "#64748b";
+          }}, 1800);
+        }} catch (e) {{
+          msg.innerText = "⚠️ لم يتم النسخ تلقائياً — انسخ الرابط من الخانة أسفل الزر";
+          msg.style.color = "#dc2626";
+        }}
+      }});
+    </script>
+    """
+    st.components.v1.html(component_html, height=112, scrolling=False)
+
+
 @st.fragment(run_every="1s")
 def _render_teacher_today_lessons():
     """عرض حصص اليوم وغداً مع عداد تنازلي حي ورابط Zoom."""
@@ -3657,6 +3713,7 @@ def _render_teacher_today_lessons():
             unsafe_allow_html=True,
         )
 
+        _render_zoom_copy_button(zoom_link, f"{lesson_date}_{idx}")
         if diff <= 0:
             st.link_button(
                 "🔴 ابدأ الحصة الآن — دخول Zoom",
