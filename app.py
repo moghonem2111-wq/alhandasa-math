@@ -1233,6 +1233,22 @@ def _notify_schedule_change(action, record):
     except Exception:
         pass
 
+def _schedule_color_to_hex(color):
+    """تحويل لون جدول الموقع إلى HEX ثابت للـ PDF مع الحفاظ على نفس اللون بصرياً."""
+    import colorsys
+    value = str(color or "").strip()
+    if re.match(r"^#[0-9A-Fa-f]{6}$", value):
+        return value
+    m = re.match(r"^hsl\\(\\s*(\\d+(?:\\.\\d+)?)\\s*,\\s*(\\d+(?:\\.\\d+)?)%\\s*,\\s*(\\d+(?:\\.\\d+)?)%\\s*\\)$", value, re.I)
+    if m:
+        h = (float(m.group(1)) % 360) / 360.0
+        s = max(0.0, min(100.0, float(m.group(2)))) / 100.0
+        l = max(0.0, min(100.0, float(m.group(3)))) / 100.0
+        rr, gg, bb = colorsys.hls_to_rgb(h, l, s)
+        return "#{:02x}{:02x}{:02x}".format(round(rr*255), round(gg*255), round(bb*255))
+    return "#2563eb"
+
+
 def build_weekly_schedule_print_html(df, title="الجدول الأسبوعي لمواعيد الطلاب"):
     """نسخة طباعة احترافية A4 Landscape للجدول الأسبوعي، مع بطاقات واضحة لكل طالب."""
     days = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"]
@@ -1260,14 +1276,9 @@ def build_weekly_schedule_print_html(df, title="الجدول الأسبوعي ل
                     grade = html.escape(str(r.get("المجموعة/الصف", "")))
                     academy = html.escape(str(r.get("اسم الأكاديمية", "")))
                     phone = html.escape(str(r.get("رقم الطالب", "")))
-                    color = str(r.get("اللون", "#2563eb")).strip()
-                    # ألوان الطلاب قد تكون Hex أو HSL (للطلاب بعد أول مجموعة الألوان).
-                    # نمرر اللون نفسه مباشرة إلى بطاقة الطباعة حتى يطابق الجدول على الموقع.
-                    if not (
-                        re.match(r"^#[0-9A-Fa-f]{6}$", color)
-                        or re.match(r"^hsl\\(\\s*\\d+\\s*,\\s*\\d+%\\s*,\\s*\\d+%\\s*\\)$", color)
-                    ):
-                        color = "#2563eb"
+                    site_color = str(r.get("اللون", "#2563eb")).strip()
+                    color = _schedule_color_to_hex(site_color)
+                    # نفس لون الموقع تماماً؛ نحول HSL إلى HEX فقط لأن محرك الـ PDF أضمن مع HEX.
                     card_html = (
                         f"<div class='student-card' style='background:{color} !important;"
                         f"background-color:{color} !important;border-right:4px solid {color} !important;'>"
