@@ -4108,33 +4108,84 @@ elif t_page == "weekly_schedule":
         [str(x).strip() for x in ws_df["اسم الطالب"].dropna().unique() if str(x).strip()]
     )))
 
-    # ألوان جاهزة ومتعددة للطلاب
-    palette = ["#2563eb", "#16a34a", "#dc2626", "#9333ea", "#ea580c", "#0891b2", "#db2777", "#65a30d", "#7c3aed", "#0f766e"]
-    # لون ثابت لكل طالب، ومختلف تلقائياً عن لون أي طالب آخر.
-    # إذا كانت البيانات القديمة أعطت أكثر من طالب نفس اللون، نعيد توزيع الألوان مرة واحدة.
+    # ألوان ثابتة ومتمايزة للطلاب — نفس القيمة تُستخدم في الموقع وفي PDF.
+    # نعالج الألوان القديمة المكررة بحيث لا يظهر طالبان بلون واحد بسبب البيانات القديمة.
+    palette = [
+        "#2563eb", "#16a34a", "#dc2626", "#9333ea", "#ea580c",
+        "#0891b2", "#db2777", "#65a30d", "#7c3aed", "#0f766e",
+        "#b91c1c", "#0369a1", "#15803d", "#c2410c", "#be185d",
+        "#4338ca", "#047857", "#a16207", "#9f1239", "#1d4ed8",
+        "#166534", "#c026d3", "#0e7490", "#ca8a04", "#7e22ce",
+        "#be123c", "#0369a1", "#4d7c0f", "#c2410c", "#6d28d9"
+    ]
+
     color_map = {}
     used_colors = set()
+    colors_changed = False
+
+    def _valid_student_color(value):
+        v = str(value or "").strip()
+        return bool(
+            re.match(r"^#[0-9A-Fa-f]{6}$", v)
+            or re.match(r"^hsl\\(\\s*\\d+(?:\\.\\d+)?\\s*,\\s*\\d+(?:\\.\\d+)?%\\s*,\\s*\\d+(?:\\.\\d+)?%\\s*\\)$", v, re.I)
+        )
+
     if not ws_df.empty:
         for i, name in enumerate(known_students):
-            old_colors = [str(x).strip() for x in ws_df.loc[ws_df["اسم الطالب"].astype(str).str.strip() == name, "اللون"].dropna().tolist()]
-            old_color = next((c for c in old_colors if c.startswith("#")), "")
-            if old_color and old_color not in used_colors:
+            old_colors = [
+                str(x).strip()
+                for x in ws_df.loc[
+                    ws_df["اسم الطالب"].astype(str).str.strip() == name, "اللون"
+                ].dropna().tolist()
+                if _valid_student_color(x)
+            ]
+            old_color = old_colors[0] if old_colors else ""
+
+            # نحافظ على لون الطالب القديم إذا كان فريداً، وإلا نعطيه لوناً جديداً غير مستخدم.
+            if old_color and old_color.lower() not in {str(x).lower() for x in used_colors}:
                 chosen = old_color
             else:
-                chosen = palette[i % len(palette)]
-                # ضمان عدم تكرار اللون حتى لو عدد الطلاب أكبر من الألوان الجاهزة
-                if chosen in used_colors:
-                    chosen = palette[next(j for j in range(len(palette)) if palette[j] not in used_colors)] if len(used_colors) < len(palette) else f"hsl({(i*47)%360}, 75%, 48%)"
+                chosen = next(
+                    (p for p in palette if p.lower() not in {str(x).lower() for x in used_colors}),
+                    f"hsl({(i * 137) % 360}, 78%, 45%)"
+                )
+                colors_changed = True
+
             color_map[name] = chosen
             used_colors.add(chosen)
-    else:
-        color_map = {name: palette[i % len(palette)] for i, name in enumerate(known_students)}
 
-    # تحديث ألوان الصفوف الموجودة لضمان أن كل اسم طالب له لون مختلف في الجدول والحفظ.
+            if old_color.lower() != chosen.lower():
+                colors_changed = True
+
+    else:
+        for i, name in enumerate(known_students):
+            chosen = palette[i] if i < len(palette) else f"hsl({(i * 137) % 360}, 78%, 45%)"
+            color_map[name] = chosen
+
+    # نفس اللون المخزن هنا هو الذي يستخدمه جدول الموقع والطباعة PDF.
     if not ws_df.empty and color_map:
         ws_df = ws_df.copy()
-        ws_df["اللون"] = ws_df["اسم الطالب"].astype(str).str.strip().map(color_map).fillna(ws_df["اللون"])
+        old_series = ws_df["اللون"].astype(str).str.strip() if "اللون" in ws_df.columns else pd.Series("", index=ws_df.index)
+        new_series = ws_df["اسم الطالب"].astype(str).str.strip().map(color_map).fillna("#2563eb")
+        if not old_series.equals(new_series.astype(str)):
+            colors_changed = True
+        ws_df["اللون"] = new_series
         st.session_state.weekly_schedule_df = ws_df
+
+        # نحفظ إعادة توزيع الألوان مرة واحدة؛ بعد ذلك يظل لون كل طالب ثابتاً في الموقع وPDF.
+        if colors_changed:
+            try:
+                save_all_data(
+                    st.session_state.users_df, st.session_state.sessions_df,
+                    st.session_state.assessments_df, st.session_state.messages_df,
+                    st.session_state.exams_df, st.session_state.essays_df,
+                    st.session_state.bookings_df, st.session_state.bank_requests_df,
+                    st.session_state.question_bank_df, st.session_state.videos_df,
+                    st.session_state.video_comments_df, st.session_state.abqary_df,
+                    st.session_state.online_schedule_df, st.session_state.weekly_schedule_df
+                )
+            except Exception:
+                pass
 
     st.markdown("### 👥 إدارة طلاب لوحة المواعيد")
     wm1,wm2,wm3=st.columns(3)
