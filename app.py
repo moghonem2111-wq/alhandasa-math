@@ -3915,6 +3915,9 @@ if is_academy_mode:
                     att_notes = st.text_input("ملاحظات:")
                 save_att = st.form_submit_button("✅ حفظ التحضير", use_container_width=True, type="primary")
                 if save_att:
+                    if float(att_teacher_share) > float(att_price):
+                        st.error("نصيب المدرس لا يمكن أن يكون أكبر من سعر الحصة.")
+                        st.stop()
                     rec = {"معرف السجل":str(uuid.uuid4()),"اسم الأكاديمية":academy_name,"اسم الطالب":att_student,"اسم المدرس":str(att_teacher).strip(),"التاريخ":str(att_date),"الوقت":att_time.strftime("%H:%M"),"الحالة":att_status,"سعر الحصة":float(att_price),"نصيب المدرس":float(att_teacher_share),"نصيب الأكاديمية":float(att_academy_share),"ملاحظات":att_notes.strip()}
                     aat = pd.concat([aat,pd.DataFrame([rec])], ignore_index=True)
                     st.session_state.academy_attendance_df = aat[COL_ACADEMY_ATTENDANCE]
