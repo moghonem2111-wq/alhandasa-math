@@ -6691,7 +6691,7 @@ elif t_page == "academies":
                 st.error("اكتب اسم الأكاديمية وبيانات الدخول.")
             else:
                 mask = aa["اسم الأكاديمية"].astype(str).str.strip() == ac_name.strip()
-                rec = {"اسم الأكاديمية":ac_name.strip(),"رقم الهاتف":ac_phone.strip(),"كلمة المرور":ac_password.strip(),"نسبة الأكاديمية":float(ac_pct),"الحالة":ac_status}
+                rec = {"اسم الأكاديمية":ac_name.strip(),"رقم الهاتف":ac_phone.strip(),"كلمة المرور":ac_password.strip(),"نسبة الأكاديمية":0.0,"الحالة":ac_status}
                 if mask.any():
                     aa.loc[mask, list(rec.keys())] = list(rec.values())
                 else:
