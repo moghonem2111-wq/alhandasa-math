@@ -2987,24 +2987,29 @@ if is_student_mode:
                             if _col not in _df.columns: _df[_col] = ""
                     _phone, _pass = str(ac_phone).strip(), str(ac_pass).strip()
                     _active = lambda s: str(s).strip() not in ("موقوف", "غير نشط", "معطل")
-                    if ac_role == "رئيس الأكاديمية":
-                        match = aa[(aa["رقم الهاتف"].astype(str).str.strip() == _phone) & (aa["كلمة المرور"].astype(str).str.strip() == _pass) & aa["الحالة"].map(_active)]
-                    else:
-                        match = access[(access["رقم الهاتف"].astype(str).str.strip() == _phone) & (access["كلمة المرور"].astype(str).str.strip() == _pass) & (access["نوع الحساب"].astype(str).str.strip() == "مشرف أكاديمي") & access["الحالة"].map(_active)]
+                    # تسجيل الدخول يعتمد على الحساب الذي أنشأه صاحب المنصة فقط (AcademyAccess).
+                    _role_clean = "رئيس الأكاديمية" if ac_role == "رئيس الأكاديمية" else "مشرف أكاديمي"
+                    _access_work = access.copy()
+                    for _col in COL_ACADEMY_ACCESS:
+                        if _col not in _access_work.columns:
+                            _access_work[_col] = ""
+                    _phone_norm = _phone.replace(" ", "").replace("-", "")
+                    _phone_series = _access_work["رقم الهاتف"].astype(str).str.strip().str.replace(" ","",regex=False).str.replace("-","",regex=False)
+                    _pass_series = _access_work["كلمة المرور"].astype(str).str.strip()
+                    _role_series = _access_work["نوع الحساب"].astype(str).str.strip()
+                    _status_series = _access_work["الحالة"].astype(str).str.strip()
+                    match = _access_work[(_phone_series == _phone_norm) & (_pass_series == _pass) & (_role_series == _role_clean) & _status_series.map(_active)]
                     if match.empty:
-                        st.error("❌ بيانات الدخول غير صحيحة أو الحساب موقوف. تأكد من اختيار نوع الدخول الصحيح واستخدام نفس بيانات الحساب التي أنشأها صاحب المنصة.")
+                        st.error("❌ اسم المستخدم/رقم الهاتف أو كلمة المرور غير صحيحة، أو الحساب غير نشط. استخدم نفس البيانات التي أنشأها صاحب المنصة.")
                     else:
-                        if ac_role == "رئيس الأكاديمية":
-                            st.session_state.logged_academy = match.iloc[0].to_dict()
-                        else:
-                            row = match.iloc[0].to_dict()
-                            row["اسم الأكاديمية"] = str(row.get("اسم الأكاديمية","")).strip()
-                            academy_rows = aa[aa["اسم الأكاديمية"].astype(str).str.strip() == row["اسم الأكاديمية"]]
-                            if academy_rows.empty:
-                                st.error("❌ الأكاديمية المرتبطة بحساب المشرف غير موجودة.")
-                                st.stop()
-                            st.session_state.logged_academy = academy_rows.iloc[0].to_dict()
-                        st.session_state.academy_login_role = ac_role
+                        row = match.iloc[0].to_dict()
+                        row["اسم الأكاديمية"] = str(row.get("اسم الأكاديمية","")).strip()
+                        academy_rows = aa[aa["اسم الأكاديمية"].astype(str).str.strip() == row["اسم الأكاديمية"]]
+                        if academy_rows.empty:
+                            st.error("❌ الأكاديمية المرتبطة بهذا الحساب غير موجودة. يجب أن ينشئ صاحب المنصة الأكاديمية أولًا.")
+                            st.stop()
+                        st.session_state.logged_academy = academy_rows.iloc[0].to_dict()
+                        st.session_state.academy_login_role = _role_clean
                         st.session_state.academy_page = "dashboard"
                         st.query_params["role"] = "academy"
                         st.rerun()
@@ -3681,12 +3686,15 @@ def _academy_subscription_rows(academy_name, student_name=""):
         attendance["_student"] = attendance["اسم الطالب"].astype(str).str.strip()
         attendance["_status"] = attendance["الحالة"].astype(str).str.strip()
         attendance["_price"] = pd.to_numeric(attendance["سعر الحصة"], errors="coerce").fillna(0)
-        attendance["_date"] = attendance["التاريخ"].astype(str).str[:10]
+        _parsed_dates = pd.to_datetime(attendance["التاريخ"], errors="coerce", dayfirst=True)
+        attendance["_date"] = _parsed_dates.dt.strftime("%Y-%m-%d").fillna(attendance["التاريخ"].astype(str).str[:10])
     for _, sub in subs.iterrows():
         name = str(sub.get("اسم الطالب","")).strip()
         initial = float(pd.to_numeric(sub.get("قيمة الاشتراك",0), errors="coerce") or 0)
-        start = str(sub.get("تاريخ البداية","")).strip()
-        end = str(sub.get("تاريخ النهاية","")).strip()
+        _start_dt = pd.to_datetime(sub.get("تاريخ البداية",""), errors="coerce", dayfirst=True)
+        _end_dt = pd.to_datetime(sub.get("تاريخ النهاية",""), errors="coerce", dayfirst=True)
+        start = _start_dt.strftime("%Y-%m-%d") if pd.notna(_start_dt) else ""
+        end = _end_dt.strftime("%Y-%m-%d") if pd.notna(_end_dt) else ""
         ss = attendance[(attendance["_academy"] == academy_clean) & (attendance["_student"] == name)].copy() if not attendance.empty else pd.DataFrame()
         if start and start.lower() != "nan": ss = ss[ss["_date"] >= start]
         if end and end.lower() != "nan": ss = ss[ss["_date"] <= end]
