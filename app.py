@@ -6797,6 +6797,40 @@ elif t_page == "academies":
         st.dataframe(aa,use_container_width=True)
         selected = st.selectbox("اختر أكاديمية للإدارة:",sorted(aa["اسم الأكاديمية"].astype(str).str.strip().unique()),key="academy_admin_selected")
 
+        # حذف الأكاديمية بالكامل — متاح لصاحب المنصة من لوحة المعلم فقط.
+        with st.expander("🗑️ حذف أكاديمية بالكامل", expanded=False):
+            st.warning("هذا الإجراء يحذف حساب الأكاديمية وجميع بياناتها: الطلاب، المدرسين، المشرفين، الحضور، الاشتراكات، التوزيعات والجداول. لا يمكن التراجع عنه.")
+            with st.form("delete_academy_owner_form"):
+                _delete_confirm = st.text_input("اكتب اسم الأكاديمية مرة أخرى للتأكيد:", placeholder=selected)
+                _delete_ok = st.checkbox("أفهم أن جميع بيانات هذه الأكاديمية سيتم حذفها نهائيًا.")
+                _delete_submit = st.form_submit_button("🗑️ حذف الأكاديمية وجميع بياناتها", use_container_width=True)
+                if _delete_submit:
+                    if not _delete_ok or _delete_confirm.strip() != selected.strip():
+                        st.error("للحذف، اكتب اسم الأكاديمية مطابقًا واختر مربع التأكيد.")
+                    else:
+                        _academy_tables = [
+                            ("academy_accounts_df", COL_ACADEMY_ACCOUNTS),
+                            ("academy_teachers_df", COL_ACADEMY_TEACHERS),
+                            ("academy_assignments_df", COL_ACADEMY_ASSIGNMENTS),
+                            ("academy_access_df", COL_ACADEMY_ACCESS),
+                            ("academy_subscriptions_df", COL_ACADEMY_SUBSCRIPTIONS),
+                            ("academy_students_df", COL_ACADEMY_STUDENTS),
+                            ("academy_attendance_df", COL_ACADEMY_ATTENDANCE),
+                            ("academy_schedule_df", COL_ACADEMY_SCHEDULE),
+                        ]
+                        for _key, _cols in _academy_tables:
+                            _df_del = st.session_state.get(_key, pd.DataFrame(columns=_cols)).copy()
+                            if "اسم الأكاديمية" in _df_del.columns:
+                                _df_del = _df_del[_df_del["اسم الأكاديمية"].astype(str).str.strip() != selected.strip()].copy()
+                            st.session_state[_key] = _df_del[_cols]
+                        # لو كان هناك حساب أكاديمية مفتوح في نفس الجلسة، أغلقه أيضًا.
+                        if str(st.session_state.get("logged_academy","")).strip() == selected.strip():
+                            st.session_state.logged_academy = None
+                            st.session_state.academy_page = "dashboard"
+                        save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                        st.success(f"تم حذف الأكاديمية «{selected}» وجميع بياناتها بنجاح.")
+                        st.rerun()
+
         # لوحة المعلم الشاملة: نفس البيانات التي يراها رئيس الأكاديمية، مع أدوات الإدارة والطباعة.
         _admin_students = st.session_state.get("academy_students_df", pd.DataFrame(columns=COL_ACADEMY_STUDENTS)).copy()
         _admin_att = st.session_state.get("academy_attendance_df", pd.DataFrame(columns=COL_ACADEMY_ATTENDANCE)).copy()
