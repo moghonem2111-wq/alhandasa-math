@@ -4359,6 +4359,44 @@ if is_academy_mode:
             if _payment_rows: st.dataframe(pd.DataFrame(_payment_rows),use_container_width=True,hide_index=True)
 
         # كشف تفصيلي للمدرس: يظهر للرئيس والمشرف، دون أي تجميع لنصيب الأكاديمية للمشرف.
+
+        st.markdown("### ✏️ تعديل أو حذف قبض مدرس")
+        _all_payments=[]
+        for _tn2 in _teachers_for_period:
+            _idxs=at.index[(at["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(at["اسم المدرس"].astype(str).str.strip()==_tn2)]
+            if len(_idxs):
+                _tidx2=_idxs[-1]
+                for _pi2,_pp2 in enumerate(_academy_payment_records(at.loc[_tidx2])):
+                    _all_payments.append((_tidx2,_pi2,_tn2,_pp2))
+        if _all_payments:
+            _plabels={f"{x[0]}:{x[1]}":f"{x[2]} — {x[3].get('التاريخ','')} — {float(pd.to_numeric(x[3].get('المبلغ',0),errors='coerce') or 0):,.2f} جنيه" for x in _all_payments}
+            _pk=st.selectbox("اختر عملية القبض:",list(_plabels.keys()),format_func=lambda x:_plabels[x],key="academy_manage_payment")
+            _ptuple=next(x for x in _all_payments if f"{x[0]}:{x[1]}"==_pk)
+            _pay_row_idx,_pay_idx,_pay_tname,_pay_rec=_ptuple
+            try: _pdate=datetime.strptime(str(_pay_rec.get("التاريخ","")),"%Y-%m-%d").date()
+            except Exception: _pdate=date.today()
+            try: _pfrom=datetime.strptime(str(_pay_rec.get("من","")),"%Y-%m-%d").date()
+            except Exception: _pfrom=_pdate
+            try: _pto=datetime.strptime(str(_pay_rec.get("إلى","")),"%Y-%m-%d").date()
+            except Exception: _pto=_pdate
+            with st.form("academy_edit_payment_form"):
+                _pamt=st.number_input("مبلغ القبض",min_value=0.0,step=10.0,value=float(pd.to_numeric(_pay_rec.get("المبلغ",0),errors="coerce") or 0))
+                _pdte=st.date_input("تاريخ القبض",value=_pdate)
+                _pfr=st.date_input("من تاريخ",value=_pfrom); _pto2=st.date_input("إلى تاريخ",value=_pto)
+                _pu=st.form_submit_button("💾 حفظ تعديل القبض",use_container_width=True)
+                _pd=st.form_submit_button("🗑️ حذف عملية القبض",use_container_width=True)
+            if _pu:
+                _recs=_academy_payment_records(at.loc[_pay_row_idx])
+                if 0<=_pay_idx<len(_recs):
+                    _recs[_pay_idx]={"التاريخ":str(_pdte),"من":str(_pfr),"إلى":str(_pto2),"المبلغ":float(_pamt)}
+                    at.loc[_pay_row_idx,"سجل القبض"]=json.dumps(_recs,ensure_ascii=False)
+                    st.session_state.academy_teachers_df=at[COL_ACADEMY_TEACHERS]; _save_academy_system(); st.success("تم تعديل عملية القبض."); st.rerun()
+            if _pd:
+                _recs=_academy_payment_records(at.loc[_pay_row_idx])
+                if 0<=_pay_idx<len(_recs): _recs.pop(_pay_idx)
+                at.loc[_pay_row_idx,"سجل القبض"]=json.dumps(_recs,ensure_ascii=False)
+                st.session_state.academy_teachers_df=at[COL_ACADEMY_TEACHERS]; _save_academy_system(); st.success("تم حذف عملية القبض."); st.rerun()
+
         st.markdown("### 🧾 كشف حساب مدرس بالتفصيل")
         if _teachers_for_period:
             _statement_teacher=st.selectbox("اختر المدرس للكشف:",_teachers_for_period,key="academy_teacher_statement_v2")
