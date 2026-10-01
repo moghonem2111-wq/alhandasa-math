@@ -3768,6 +3768,42 @@ if is_academy_mode:
         else:
             d4.metric("🏫 نصيب الأكاديمية", f"{academy_total:,.2f} جنيه")
         st.info("كل بيانات هذا النظام خاصة بالأكاديمية نفسها، ولا يتم سحب الطلاب أو الحضور من المنصة التعليمية الأساسية.")
+        # كشف موحد يظهر للرئيس والمشرف: الطالب + المشرف + المنهج + المرحلة + المدرس + الحضور + الاشتراك والرصيد.
+        _academy_full_rows=[]
+        _teacher_map=at_a.set_index("اسم المدرس")["المادة"].to_dict() if not at_a.empty and "المادة" in at_a.columns else {}
+        _sub_all=st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)).copy()
+        for _sn in sorted(ast_a["اسم الطالب"].astype(str).str.strip().unique()):
+            _sv=ast_a[ast_a["اسم الطالب"].astype(str).str.strip()==_sn]
+            _srow=_sv.iloc[0] if not _sv.empty else {}
+            _av=attended[attended["اسم الطالب"].astype(str).str.strip()==_sn]
+            _assignment=ax_a[ax_a["اسم الطالب"].astype(str).str.strip()==_sn]
+            _arow=_assignment.iloc[-1] if not _assignment.empty else {}
+            _sr=_sub_all[(_sub_all["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(_sub_all["اسم الطالب"].astype(str).str.strip()==_sn)]
+            _srr=_academy_subscription_rows(academy_name,_sn)
+            _sub_initial=float(_srr.iloc[0]["قيمة الاشتراك"]) if not _srr.empty else 0.0
+            _sub_used=float(_srr.iloc[0]["المخصوم"]) if not _srr.empty else 0.0
+            _sub_remaining=float(_srr.iloc[0]["المتبقي"]) if not _srr.empty else 0.0
+            _sub_type=str(_sr.iloc[-1].get("نوع الدفع","")) if not _sr.empty else ""
+            _teacher=str(_arow.get("اسم المدرس","")) if _arow else (str(_av.iloc[-1].get("اسم المدرس","")) if not _av.empty else "")
+            _academy_full_rows.append({
+                "اسم الطالب":_sn,
+                "اسم المشرف":str(_srow.get("اسم المشرف","")),
+                "المنهج":str(_srow.get("المنهج","")),
+                "المرحلة":str(_srow.get("المرحلة","")),
+                "المادة":str(_srow.get("المادة","")),
+                "اسم المدرس":_teacher,
+                "مادة المدرس":str(_teacher_map.get(_teacher,"")),
+                "عدد الحصص":len(_av),
+                "قيمة الاشتراك":round(_sub_initial,2),
+                "المخصوم":round(_sub_used,2),
+                "الرصيد المتبقي":round(_sub_remaining,2),
+                "الدفع":_sub_type
+            })
+        _academy_full_df=pd.DataFrame(_academy_full_rows)
+        if not _academy_full_df.empty:
+            st.markdown("### 📋 الكشف الشامل للطلاب")
+            st.dataframe(_academy_full_df,use_container_width=True,hide_index=True)
+
 
     elif st.session_state.academy_page == "students":
         st.markdown("### 👥 إدارة طلاب الأكاديمية")
