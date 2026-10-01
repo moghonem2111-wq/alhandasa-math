@@ -6790,6 +6790,43 @@ elif t_page == "academies":
                 st.success("تم حفظ حساب الأكاديمية.")
                 st.rerun()
 
+    # إنشاء حسابات الدخول للمستخدمين من صاحب المنصة فقط.
+    st.markdown("### 🔐 إنشاء حسابات الدخول للأكاديمية")
+    st.caption("أنت صاحب المنصة الذي ينشئ الحساب ويعطي بيانات الدخول لرئيس الأكاديمية أو المشرف. لا يوجد تسجيل ذاتي لهم.")
+    _all_ac_names = sorted([str(x).strip() for x in aa["اسم الأكاديمية"].dropna().unique() if str(x).strip()])
+    if _all_ac_names:
+        with st.form("owner_create_academy_access"):
+            _login_academy = st.selectbox("الأكاديمية:", _all_ac_names)
+            _login_role = st.selectbox("نوع الحساب:", ["رئيس الأكاديمية", "مشرف أكاديمي"])
+            _login_name = st.text_input("اسم صاحب الحساب:", placeholder="مثال: أ/ أحمد")
+            _login_phone = st.text_input("رقم الهاتف / اسم المستخدم:")
+            _login_password = st.text_input("كلمة المرور التي سترسلها له:", type="password")
+            _login_status = st.selectbox("حالة الحساب:", ["نشط", "موقوف"])
+            _login_save = st.form_submit_button("💾 إنشاء / تحديث بيانات الدخول", use_container_width=True, type="primary")
+            if _login_save:
+                if not _login_phone.strip() or not _login_password.strip():
+                    st.error("اكتب اسم المستخدم/رقم الهاتف وكلمة المرور.")
+                else:
+                    _access = st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS)).copy()
+                    _mask = ((_access["اسم الأكاديمية"].astype(str).str.strip()==_login_academy.strip()) &
+                             (_access["رقم الهاتف"].astype(str).str.strip()==_login_phone.strip()) &
+                             (_access["نوع الحساب"].astype(str).str.strip()==_login_role.strip()))
+                    _rec = {"اسم الأكاديمية":_login_academy.strip(),"رقم الهاتف":_login_phone.strip(),"كلمة المرور":_login_password.strip(),"نوع الحساب":_login_role,"الحالة":_login_status}
+                    if _mask.any():
+                        _access.loc[_mask,list(_rec.keys())]=list(_rec.values())
+                    else:
+                        _access=pd.concat([_access,pd.DataFrame([_rec])],ignore_index=True)
+                    st.session_state.academy_access_df=_access[COL_ACADEMY_ACCESS]
+                    save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                    st.success(f"تم إنشاء حساب {_login_role} بنجاح. أرسل له اسم المستخدم/رقم الهاتف وكلمة المرور التي أدخلتها.")
+                    st.rerun()
+
+        _access_view=st.session_state.get("academy_access_df",pd.DataFrame(columns=COL_ACADEMY_ACCESS)).copy()
+        _access_view=_access_view[_access_view["نوع الحساب"].astype(str).str.strip().isin(["رئيس الأكاديمية","مشرف أكاديمي"])]
+        if not _access_view.empty:
+            st.markdown("#### 👥 الحسابات التي أنشأتها أنت")
+            st.dataframe(_access_view,use_container_width=True,hide_index=True)
+
     if aa.empty:
         st.info("لا توجد أكاديميات. أنشئ أول حساب من النموذج.")
     else:
