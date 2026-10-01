@@ -3059,7 +3059,7 @@ if is_student_mode:
                         st.session_state.academy_page = "dashboard"
                         st.query_params["role"] = "academy"
                         st.rerun()
-    elif st.session_state.page_view == "register":
+        elif st.session_state.page_view == "register":
             st.markdown("<div class='about-panel' style='max-width:820px;margin:auto;text-align:center'><h3>✨ إنشاء حساب جديد</h3><p>أنشئ حسابك مجاناً وابدأ رحلتك التعليمية مع البشمهندس x الرياضه.</p></div>", unsafe_allow_html=True)
             with st.form("student_register_form"):
                 reg_name=st.text_input("اسمك بالكامل:"); reg_phone=st.text_input("رقم الهاتف المحمول (لتسجيل الدخول به لاحقاً):*")
