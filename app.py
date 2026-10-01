@@ -1924,13 +1924,18 @@ def save_all_data(users_df, sessions_df, assessments_df, messages_df, exams_df, 
     _cloud_ok = _cloud_save_excel_bytes(excel_bytes, reason="manual_or_autosave")
     _structured_ok = True
     if _cloud_ok:
-        # بالإضافة إلى ملف Excel الرئيسي، حافظ على نسخة منظمة داخل كل جدول Supabase.
-        _structured_ok = _cloud_sync_all_structured_tables(
-            users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df,
-            bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df,
-            abqary_df, online_schedule_df, weekly_schedule_df, payment_records_df, ads_df
-        )
-    return bool(_cloud_ok and _structured_ok)
+        # ملف Excel هو المصدر الأساسي؛ لا نمنع حفظ الحساب إذا فشلت مزامنة جدول منظم.
+        try:
+            _structured_ok = _cloud_sync_all_structured_tables(
+                users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df,
+                bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df,
+                abqary_df, online_schedule_df, weekly_schedule_df, payment_records_df, ads_df
+            )
+        except Exception as _sync_exc:
+            _structured_ok = False
+            try: st.session_state["academy_cloud_sync_error"] = str(_sync_exc)
+            except Exception: pass
+    return bool(_cloud_ok)
 
 if "users_df" not in st.session_state:
     u_df, s_df, a_df, m_df, e_df, es_df, b_df, br_df, qb_df, v_df, vc_df, ab_df, os_df, ws_df, pr_df, aa_df, at_df, ax_df, acs_df, asub_df, ast_df, aat_df, asch_df = load_all_data()
@@ -2975,14 +2980,19 @@ if is_student_mode:
                         st.session_state.page_view = "home"
                         st.rerun()
                 if ac_submit:
-                    aa = st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS))
-                    access = st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS))
+                    aa = st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)).copy()
+                    access = st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS)).copy()
+                    for _df, _cols in [(aa, COL_ACADEMY_ACCOUNTS), (access, COL_ACADEMY_ACCESS)]:
+                        for _col in _cols:
+                            if _col not in _df.columns: _df[_col] = ""
+                    _phone, _pass = str(ac_phone).strip(), str(ac_pass).strip()
+                    _active = lambda s: str(s).strip() not in ("موقوف", "غير نشط", "معطل")
                     if ac_role == "رئيس الأكاديمية":
-                        match = aa[(aa["رقم الهاتف"].astype(str).str.strip() == ac_phone.strip()) & (aa["كلمة المرور"].astype(str).str.strip() == ac_pass.strip()) & (aa["الحالة"].astype(str).str.strip() != "موقوف")]
+                        match = aa[(aa["رقم الهاتف"].astype(str).str.strip() == _phone) & (aa["كلمة المرور"].astype(str).str.strip() == _pass) & aa["الحالة"].map(_active)]
                     else:
-                        match = access[(access["رقم الهاتف"].astype(str).str.strip() == ac_phone.strip()) & (access["كلمة المرور"].astype(str).str.strip() == ac_pass.strip()) & (access["نوع الحساب"].astype(str).str.strip() == "مشرف أكاديمي") & (access["الحالة"].astype(str).str.strip() != "موقوف")]
+                        match = access[(access["رقم الهاتف"].astype(str).str.strip() == _phone) & (access["كلمة المرور"].astype(str).str.strip() == _pass) & (access["نوع الحساب"].astype(str).str.strip() == "مشرف أكاديمي") & access["الحالة"].map(_active)]
                     if match.empty:
-                        st.error("❌ بيانات الدخول غير صحيحة أو الحساب موقوف.")
+                        st.error("❌ بيانات الدخول غير صحيحة أو الحساب موقوف. تأكد من اختيار نوع الدخول الصحيح واستخدام نفس بيانات الحساب التي أنشأها صاحب المنصة.")
                     else:
                         if ac_role == "رئيس الأكاديمية":
                             st.session_state.logged_academy = match.iloc[0].to_dict()
@@ -6793,8 +6803,12 @@ elif t_page == "academies":
                 else:
                     access_df = pd.concat([access_df,pd.DataFrame([access_rec])],ignore_index=True)
                 st.session_state.academy_access_df = access_df[COL_ACADEMY_ACCESS]
-                _save_academy_system()
-                st.success("تم حفظ حساب الأكاديمية.")
+                try:
+                    _save_academy_system()
+                    st.success("تم حفظ حساب الأكاديمية بنجاح. يمكنك الآن الدخول بنفس رقم الهاتف وكلمة المرور.")
+                except Exception as _save_exc:
+                    st.error("حدث خطأ أثناء الحفظ السحابي. تم الاحتفاظ بالحساب في التطبيق، وأعد المحاولة بعد التأكد من إعداد Supabase.")
+                    st.session_state["academy_save_error"] = str(_save_exc)
                 st.rerun()
 
     # إنشاء حسابات الدخول للمستخدمين من صاحب المنصة فقط.
