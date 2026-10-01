@@ -3688,20 +3688,15 @@ def _academy_subscription_rows(academy_name, student_name=""):
 
 def _save_academy_system():
     """حفظ جميع بيانات المنصة والأكاديميات في التخزين السحابي."""
+    # save_all_data يستقبل جداول المنصة الأساسية فقط؛ جداول الأكاديميات موجودة بالفعل
+    # في session_state ويتم تضمينها تلقائياً داخل ملف Excel والمزامنة المنظمة.
     return save_all_data(
         st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df,
         st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df,
         st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df,
         st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df,
-        st.session_state.online_schedule_df, st.session_state.weekly_schedule_df, st.session_state.payment_records_df,
-        st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)),
-        st.session_state.get("academy_teachers_df", pd.DataFrame(columns=COL_ACADEMY_TEACHERS)),
-        st.session_state.get("academy_assignments_df", pd.DataFrame(columns=COL_ACADEMY_ASSIGNMENTS)),
-        st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS)),
-        st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)),
-        st.session_state.get("academy_students_df", pd.DataFrame(columns=COL_ACADEMY_STUDENTS)),
-        st.session_state.get("academy_attendance_df", pd.DataFrame(columns=COL_ACADEMY_ATTENDANCE)),
-        st.session_state.get("academy_schedule_df", pd.DataFrame(columns=COL_ACADEMY_SCHEDULE)),
+        st.session_state.online_schedule_df, st.session_state.weekly_schedule_df,
+        st.session_state.payment_records_df
     )
 
 if is_academy_mode:
