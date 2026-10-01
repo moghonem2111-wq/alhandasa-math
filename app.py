@@ -1995,6 +1995,12 @@ if "academy_page" not in st.session_state:
     st.session_state.academy_page = "dashboard"
 if "logged_academy" not in st.session_state:
     st.session_state.logged_academy = None
+if "academy_login_role" not in st.session_state:
+    st.session_state.academy_login_role = "رئيس الأكاديمية"
+if "academy_access_df" not in st.session_state:
+    st.session_state.academy_access_df = pd.DataFrame(columns=COL_ACADEMY_ACCESS)
+if "academy_subscriptions_df" not in st.session_state:
+    st.session_state.academy_subscriptions_df = pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)
 
 if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = False
@@ -2907,6 +2913,7 @@ if is_student_mode:
         elif st.session_state.page_view == "academy_login":
             st.markdown("<div class='about-panel' style='max-width:760px;margin:auto;text-align:center'><h3>🏫 دخول الأكاديمية</h3><p>حساب مستقل لإدارة الطلاب والحضور والحصص والحسابات.</p></div>", unsafe_allow_html=True)
             with st.form("academy_login_form"):
+                ac_role = st.radio("نوع الدخول:", ["رئيس الأكاديمية", "مشرف أكاديمي"], horizontal=True)
                 ac_phone = st.text_input("رقم الهاتف / اسم المستخدم:")
                 ac_pass = st.text_input("كلمة المرور:", type="password")
                 c_a1, c_a2 = st.columns(2)
@@ -2919,10 +2926,13 @@ if is_student_mode:
                 if ac_submit:
                     aa = st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS))
                     match = aa[(aa["رقم الهاتف"].astype(str).str.strip() == ac_phone.strip()) & (aa["كلمة المرور"].astype(str).str.strip() == ac_pass.strip()) & (aa["الحالة"].astype(str).str.strip() != "موقوف")]
-                    if match.empty:
+                    access = st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS))
+                    access_match = access[(access["رقم الهاتف"].astype(str).str.strip() == ac_phone.strip()) & (access["نوع الحساب"].astype(str).str.strip() == ac_role) & (access["الحالة"].astype(str).str.strip() != "موقوف")] if not access.empty else pd.DataFrame()
+                    if match.empty or access_match.empty:
                         st.error("❌ بيانات الدخول غير صحيحة أو حساب الأكاديمية موقوف.")
                     else:
                         st.session_state.logged_academy = match.iloc[0].to_dict()
+                        st.session_state.academy_login_role = ac_role
                         st.session_state.academy_page = "dashboard"
                         st.query_params["role"] = "academy"
                         st.rerun()
@@ -3581,7 +3591,55 @@ if is_student_mode:
     st.stop()
 
 
-elif is_academy_mode:
+eldef _academy_subscription_rows(academy_name, student_name=""):
+    """حساب استهلاك الاشتراك من سجلات الحضور: حاضر/متأخر فقط يخصمان."""
+    subs = st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)).copy()
+    sessions = st.session_state.get("sessions_df", pd.DataFrame()).copy()
+    academy_clean = str(academy_name or "").strip()
+    student_clean = str(student_name or "").strip()
+    if subs.empty:
+        return pd.DataFrame(columns=["اسم الأكاديمية","اسم الطالب","قيمة الاشتراك","المخصوم","المتبقي","الحصص المستخدمة","الحالة","تاريخ البداية","تاريخ النهاية","ملاحظات"])
+    subs["_academy"] = subs["اسم الأكاديمية"].astype(str).str.strip()
+    subs["_student"] = subs["اسم الطالب"].astype(str).str.strip()
+    if academy_clean:
+        subs = subs[subs["_academy"] == academy_clean].copy()
+    if student_clean:
+        subs = subs[subs["_student"] == student_clean].copy()
+    out = []
+    if not sessions.empty:
+        sessions["_student"] = sessions["اسم الطالب"].astype(str).str.strip()
+        sessions["_status"] = sessions["الحالة"].astype(str).str.strip()
+        sessions["_price"] = pd.to_numeric(sessions["سعر الحصة"], errors="coerce").fillna(0)
+        sessions["_date"] = sessions["التاريخ"].astype(str).str[:10]
+    for _, sub in subs.iterrows():
+        name = str(sub.get("اسم الطالب","")).strip()
+        initial = float(pd.to_numeric(sub.get("قيمة الاشتراك",0), errors="coerce") or 0)
+        start = str(sub.get("تاريخ البداية","")).strip()
+        end = str(sub.get("تاريخ النهاية","")).strip()
+        ss = sessions[sessions["_student"] == name].copy() if not sessions.empty else pd.DataFrame()
+        if start and start.lower() != "nan":
+            ss = ss[ss["_date"] >= start]
+        if end and end.lower() != "nan":
+            ss = ss[ss["_date"] <= end]
+        if not ss.empty:
+            ss = ss[ss["_status"].isin(["حاضر","متأخر"])]
+        consumed = float(ss["_price"].sum()) if not ss.empty else 0.0
+        remaining = max(initial - consumed, 0.0)
+        out.append({
+            "اسم الأكاديمية": academy_clean or str(sub.get("اسم الأكاديمية","")).strip(),
+            "اسم الطالب": name,
+            "قيمة الاشتراك": initial,
+            "المخصوم": consumed,
+            "المتبقي": remaining,
+            "الحصص المستخدمة": int(len(ss)),
+            "الحالة": str(sub.get("الحالة","نشط")).strip() or "نشط",
+            "تاريخ البداية": start,
+            "تاريخ النهاية": end,
+            "ملاحظات": str(sub.get("ملاحظات","")).strip(),
+        })
+    return pd.DataFrame(out)
+
+if is_academy_mode:
     if not st.session_state.logged_academy:
         st.query_params["role"] = "student"
         st.session_state.page_view = "home"
@@ -3589,6 +3647,8 @@ elif is_academy_mode:
 
     academy = st.session_state.logged_academy
     academy_name = str(academy.get("اسم الأكاديمية", "")).strip()
+    academy_role = str(st.session_state.get("academy_login_role", "رئيس الأكاديمية")).strip() or "رئيس الأكاديمية"
+    is_academy_president = academy_role == "رئيس الأكاديمية"
     aa = st.session_state.academy_accounts_df
     at = st.session_state.academy_teachers_df
     ax = st.session_state.academy_assignments_df
@@ -3596,13 +3656,14 @@ elif is_academy_mode:
     st.markdown(f"<div class='vertical-section-header'>🏫 لوحة إدارة {html.escape(academy_name)}</div>", unsafe_allow_html=True)
     st.caption("الحساب المالي يعتمد فقط على الحصص التي تم تسجيلها كـ «حاضر» أو «متأخر».")
 
-    nav = st.columns(6)
-    academy_pages = [("الرئيسية","dashboard"),("👥 الطلاب","students"),("📝 الحضور","attendance"),("💰 الحسابات","finance"),("👨‍🏫 المدرسون","teachers"),("↪ خروج","logout")]
+    nav = st.columns(7)
+    academy_pages = [("الرئيسية","dashboard"),("👥 الطلاب","students"),("📝 الحضور","attendance"),("💳 الاشتراكات","subscriptions"),("💰 الحسابات","finance"),("👨‍🏫 المدرسون","teachers"),("↪ خروج","logout")]
     for i, (label, target) in enumerate(academy_pages):
         with nav[i]:
             if st.button(label, key=f"academy_nav_{i}", use_container_width=True, type="primary" if st.session_state.academy_page == target else "secondary"):
                 if target == "logout":
                     st.session_state.logged_academy = None
+                    st.session_state.academy_login_role = "رئيس الأكاديمية"
                     st.query_params.clear()
                     st.query_params["role"] = "student"
                     st.session_state.page_view = "home"
