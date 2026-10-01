@@ -588,6 +588,9 @@ COL_TEACHER_PROFILE = ["اسم المعلم", "الصورة_base64"]
 COL_STUDENT_INTERFACE = ["عنوان_الواجهة", "الشارة", "عنوان_البطل", "وصف_البطل", "ميزة_1", "ميزة_2", "ميزة_3", "ميزة_4", "الوصف", "صورة_الواجهة_base64", "عنوان_الاشتراكات", "وصف_الاشتراكات", "عنوان_الحجز", "نص_الحجز", "نص_الفوتر", "صورة_الاشتراكات_base64", "صورة_البانر_base64"]
 COL_PAYMENT_RECORDS = ["التاريخ", "الشهر", "اسم الطالب", "المبلغ", "طريقة الدفع", "حالة الدفع", "ملاحظات"]
 COL_ADS = ["معرف_الإعلان", "تاريخ_النشر", "العنوان", "نوع_الإعلان", "النص", "الوسائط_base64", "نوع_الوسائط", "الرابط", "نص_الزر", "الحالة"]
+COL_ACADEMY_ACCOUNTS = ["اسم الأكاديمية", "رقم الهاتف", "كلمة المرور", "نسبة الأكاديمية", "الحالة"]
+COL_ACADEMY_TEACHERS = ["اسم الأكاديمية", "اسم المدرس", "نسبة المدرس", "الحالة"]
+COL_ACADEMY_ASSIGNMENTS = ["اسم الأكاديمية", "اسم الطالب", "اسم المدرس", "الحالة"]
 
 def load_teacher_profile():
     profile = pd.DataFrame(columns=COL_TEACHER_PROFILE)
@@ -1539,6 +1542,9 @@ def load_all_data():
     online_schedule_df = pd.DataFrame(columns=COL_ONLINE_SCHEDULE)
     weekly_schedule_df = pd.DataFrame(columns=COL_WEEKLY_SCHEDULE)
     payment_records_df = pd.DataFrame(columns=COL_PAYMENT_RECORDS)
+    academy_accounts_df = pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)
+    academy_teachers_df = pd.DataFrame(columns=COL_ACADEMY_TEACHERS)
+    academy_assignments_df = pd.DataFrame(columns=COL_ACADEMY_ASSIGNMENTS)
 
     excel_source = _get_excel_source()
     if excel_source is not None:
@@ -1568,6 +1574,9 @@ def load_all_data():
                 if "OnlineSchedule" in xls.sheet_names: online_schedule_df = pd.read_excel(xls, "OnlineSchedule")
                 if "WeeklySchedule" in xls.sheet_names: weekly_schedule_df = pd.read_excel(xls, "WeeklySchedule")
                 if "PaymentRecords" in xls.sheet_names: payment_records_df = pd.read_excel(xls, "PaymentRecords")
+                if "AcademyAccounts" in xls.sheet_names: academy_accounts_df = pd.read_excel(xls, "AcademyAccounts")
+                if "AcademyTeachers" in xls.sheet_names: academy_teachers_df = pd.read_excel(xls, "AcademyTeachers")
+                if "AcademyAssignments" in xls.sheet_names: academy_assignments_df = pd.read_excel(xls, "AcademyAssignments")
         except Exception:
             pass
 
@@ -1597,7 +1606,19 @@ def load_all_data():
             elif col == "اسم الأكاديمية": online_schedule_df[col] = "أكاديمية البشمهندس"
             else: online_schedule_df[col] = ""
 
-    return users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df, bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df, abqary_df, online_schedule_df, weekly_schedule_df, payment_records_df
+    for col in COL_ACADEMY_ACCOUNTS:
+        if col not in academy_accounts_df.columns:
+            academy_accounts_df[col] = 0.0 if col == "نسبة الأكاديمية" else ("نشط" if col == "الحالة" else "")
+    for col in COL_ACADEMY_TEACHERS:
+        if col not in academy_teachers_df.columns:
+            academy_teachers_df[col] = 0.0 if col == "نسبة المدرس" else ("نشط" if col == "الحالة" else "")
+    for col in COL_ACADEMY_ASSIGNMENTS:
+        if col not in academy_assignments_df.columns:
+            academy_assignments_df[col] = "نشط" if col == "الحالة" else ""
+    academy_accounts_df = academy_accounts_df[COL_ACADEMY_ACCOUNTS]
+    academy_teachers_df = academy_teachers_df[COL_ACADEMY_TEACHERS]
+    academy_assignments_df = academy_assignments_df[COL_ACADEMY_ASSIGNMENTS]
+    return users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df, bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df, abqary_df, online_schedule_df, weekly_schedule_df, payment_records_df, academy_accounts_df, academy_teachers_df, academy_assignments_df
 
 def load_all_data_from_excel_bytes(excel_bytes):
     cols=[COL_USERS,COL_SESSIONS,COL_ASSESSMENTS,COL_MESSAGES,COL_EXAMS,COL_ESSAYS,COL_BOOKINGS,COL_BANK_REQUESTS,COL_QUESTION_BANK,COL_VIDEOS,COL_VIDEO_COMMENTS,COL_ABQARY,COL_ONLINE_SCHEDULE,COL_WEEKLY_SCHEDULE,COL_PAYMENT_RECORDS]
@@ -1800,6 +1821,9 @@ def save_all_data(users_df, sessions_df, assessments_df, messages_df, exams_df, 
         online_schedule_df.to_excel(writer, sheet_name="OnlineSchedule", index=False)
         weekly_schedule_df.to_excel(writer, sheet_name="WeeklySchedule", index=False)
         payment_records_df.to_excel(writer, sheet_name="PaymentRecords", index=False)
+        st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)).to_excel(writer, sheet_name="AcademyAccounts", index=False)
+        st.session_state.get("academy_teachers_df", pd.DataFrame(columns=COL_ACADEMY_TEACHERS)).to_excel(writer, sheet_name="AcademyTeachers", index=False)
+        st.session_state.get("academy_assignments_df", pd.DataFrame(columns=COL_ACADEMY_ASSIGNMENTS)).to_excel(writer, sheet_name="AcademyAssignments", index=False)
         # بيانات الإعلان النصية/الوصفية في Ads، بينما الوسائط الكبيرة تُخزن على أجزاء داخل AdsMedia
         # حتى لا تتجاوز الصورة الأصلية حد Excel للخلية ولا يتم قصها أو فقدان جودتها.
         ads_meta = ads_df.copy()
@@ -1836,7 +1860,7 @@ def save_all_data(users_df, sessions_df, assessments_df, messages_df, exams_df, 
     return bool(_cloud_ok and _structured_ok)
 
 if "users_df" not in st.session_state:
-    u_df, s_df, a_df, m_df, e_df, es_df, b_df, br_df, qb_df, v_df, vc_df, ab_df, os_df, ws_df, pr_df = load_all_data()
+    u_df, s_df, a_df, m_df, e_df, es_df, b_df, br_df, qb_df, v_df, vc_df, ab_df, os_df, ws_df, pr_df, aa_df, at_df, ax_df = load_all_data()
     st.session_state.users_df = u_df
     st.session_state.sessions_df = s_df
     st.session_state.assessments_df = a_df
@@ -1852,6 +1876,9 @@ if "users_df" not in st.session_state:
     st.session_state.online_schedule_df = os_df
     st.session_state.weekly_schedule_df = ws_df
     st.session_state.payment_records_df = pr_df
+    st.session_state.academy_accounts_df = aa_df
+    st.session_state.academy_teachers_df = at_df
+    st.session_state.academy_assignments_df = ax_df
     st.session_state.ads_df = load_ads()
     st.session_state.teacher_profile_df = load_teacher_profile()
     # استخدم صورة المعلم المحفوظة داخل TeacherProfile/التخزين السحابي في كل صفحات الطالب
@@ -1879,10 +1906,17 @@ if "users_df" not in st.session_state:
 # تأكد من وجود جدول المواعيد حتى لو كانت جلسة Streamlit قديمة قبل إضافة الميزة
 if "weekly_schedule_df" not in st.session_state:
     try:
-        _, _, _, _, _, _, _, _, _, _, _, _, _, ws_df = load_all_data()
+        _, _, _, _, _, _, _, _, _, _, _, _, _, ws_df, _, _, _ = load_all_data()
         st.session_state.weekly_schedule_df = ws_df
     except Exception:
         st.session_state.weekly_schedule_df = pd.DataFrame(columns=COL_WEEKLY_SCHEDULE)
+if "academy_accounts_df" not in st.session_state:
+    st.session_state.academy_accounts_df = pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)
+if "academy_teachers_df" not in st.session_state:
+    st.session_state.academy_teachers_df = pd.DataFrame(columns=COL_ACADEMY_TEACHERS)
+if "academy_assignments_df" not in st.session_state:
+    st.session_state.academy_assignments_df = pd.DataFrame(columns=COL_ACADEMY_ASSIGNMENTS)
+
 if "payment_records_df" not in st.session_state:
     st.session_state.payment_records_df = pd.DataFrame(columns=COL_PAYMENT_RECORDS)
     if _os.path.exists(FILE_NAME):
@@ -1924,6 +1958,10 @@ if "student_sub_page" not in st.session_state:
 
 if "teacher_page" not in st.session_state:
     st.session_state.teacher_page = "dashboard"
+if "academy_page" not in st.session_state:
+    st.session_state.academy_page = "dashboard"
+if "logged_academy" not in st.session_state:
+    st.session_state.logged_academy = None
 
 if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = False
@@ -2012,6 +2050,7 @@ def _render_notification_box(role="student", student_name=""):
 
 query_params = st.query_params
 is_student_mode = query_params.get("role") == "student"
+is_academy_mode = query_params.get("role") == "academy"
 
 if "logged_student" not in st.session_state:
     st.session_state.logged_student = None
@@ -2507,7 +2546,7 @@ if is_student_mode:
                 _student_nav = [("⌂ الرئيسية","dashboard"), ("🤖 اسأل حمصا","hamza"), ("▣ المقررات","videos"), ("▤ الواجبات","hw_grades"), ("◫ الجدول","attendance"), ("▥ النتائج","exam_grades"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__"), ("↪ خروج","__logout__")]
                 _student_current = st.session_state.student_sub_page
             else:
-                _student_nav = [("⌂ الرئيسية","__home__"), ("🤖 اسأل حمصا","__hamza_public__"), ("👤 دخول","__login__"), ("✨ حساب جديد","__register__"), ("👥 ضيف","__guest__"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__")]
+                _student_nav = [("⌂ الرئيسية","__home__"), ("🤖 اسأل حمصا","__hamza_public__"), ("👤 دخول","__login__"), ("🏫 الأكاديمية","__academy_login__"), ("✨ حساب جديد","__register__"), ("👥 ضيف","__guest__"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__")]
                 _student_current = st.session_state.page_view
 
             # أزرار حقيقية بدل st.pills لضمان استجابة النقر على جميع إصدارات Streamlit Cloud.
@@ -2523,6 +2562,7 @@ if is_student_mode:
                         elif _target == "__home__": st.session_state.page_view="home"
                         elif _target == "__hamza_public__": st.session_state.page_view="hamza_public"
                         elif _target == "__login__": st.session_state.page_view="login"
+                        elif _target == "__academy_login__": st.session_state.page_view="academy_login"
                         elif _target == "__register__": st.session_state.page_view="register"
                         elif _target == "__guest__": st.session_state.page_view="guest_reg"
                         elif st.session_state.logged_student:
@@ -2763,7 +2803,7 @@ if is_student_mode:
             # أزرار الدخول والتسجيل هنا هي عناصر Streamlit حقيقية وقابلة للضغط.
             # تم حذف النصوص HTML القديمة حتى لا تظهر كأنها أزرار غير فعالة.
             st.markdown("<div class='landing-auth-title'>اختر ما يناسبك لبدء رحلتك التعليمية</div>", unsafe_allow_html=True)
-            c_home_b1,c_home_b2,c_home_b3=st.columns(3)
+            c_home_b1,c_home_b2,c_home_b3,c_home_b4=st.columns(4)
             with c_home_b1:
                 if st.button("تسجيل الدخول", key="landing_login_btn", use_container_width=True, type="primary"):
                     st.session_state.page_view="login"
@@ -2773,6 +2813,10 @@ if is_student_mode:
                     st.session_state.page_view="register"
                     st.rerun()
             with c_home_b3:
+                if st.button("🏫 دخول الأكاديمية", key="landing_academy_btn", use_container_width=True):
+                    st.session_state.page_view="academy_login"
+                    st.rerun()
+            with c_home_b4:
                 if st.button("👥 الدخول كضيف", key="landing_guest_btn", use_container_width=True):
                     st.session_state.page_view="guest_reg"
                     st.rerun()
@@ -3497,7 +3541,7 @@ with _brand_col:
     st.markdown("<div class='top-navigation-title'>البشمهندس x الرياضه</div><div class='top-navigation-subtitle'>لوحة تحكم المعلم • م/ محمد غنيم</div>", unsafe_allow_html=True)
 with _pills_col:
     if _nav_open:
-        _teacher_nav = [("◉ الرئيسية","dashboard"), ("◫ Zoom","online_schedule"), ("▦ المواعيد","weekly_schedule"), ("▣ الامتحانات","exam_maker"), ("🤖 استوديو AI","ai_studio"), ("▤ بنك الأسئلة","question_bank"), ("▶ الفيديوهات","videos"), ("✦ عبقري","abqary"), ("▥ الدرجات","grades"), ("✎ المقالي","essays"), ("◌ الرسائل","chat"), ("♙ الطلاب","students"), ("＋ حصة","add_session"), ("＋ واجب","add_hw"), ("✎ تعديل السجلات","edit_records"), ("▥ السجلات","all_records"), ("📢 الإعلانات","ads"), ("▤ ولي الأمر","parent_report"), ("▰ المدفوعات","payments"), ("💾 النسخ الاحتياطية","online_backup"), ("◈ واجهة الطالب","student_interface")]
+        _teacher_nav = [("◉ الرئيسية","dashboard"), ("◫ Zoom","online_schedule"), ("▦ المواعيد","weekly_schedule"), ("▣ الامتحانات","exam_maker"), ("🤖 استوديو AI","ai_studio"), ("▤ بنك الأسئلة","question_bank"), ("▶ الفيديوهات","videos"), ("✦ عبقري","abqary"), ("▥ الدرجات","grades"), ("✎ المقالي","essays"), ("◌ الرسائل","chat"), ("♙ الطلاب","students"), ("＋ حصة","add_session"), ("＋ واجب","add_hw"), ("✎ تعديل السجلات","edit_records"), ("▥ السجلات","all_records"), ("📢 الإعلانات","ads"), ("▤ ولي الأمر","parent_report"), ("▰ المدفوعات","payments"), ("🏫 الأكاديميات","academies"), ("💾 النسخ الاحتياطية","online_backup"), ("◈ واجهة الطالب","student_interface")]
         _teacher_cols = st.columns(5, gap="small")
         for _ti, (_label, _target) in enumerate(_teacher_nav):
             with _teacher_cols[_ti % 5]:
