@@ -328,6 +328,15 @@ def _cloud_sync_all_structured_tables(users_df, sessions_df, assessments_df, mes
     tables.extend([
         ("teacher_profile", teacher_profile_df, "بيانات المعلم"),
         ("student_interface", student_interface_df, "واجهة الطالب"),
+        # بيانات الأكاديميات الخارجية مستقلة تمامًا عن طلاب المنصة.
+        ("academy_accounts", st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)), "حسابات الأكاديميات"),
+        ("academy_teachers", st.session_state.get("academy_teachers_df", pd.DataFrame(columns=COL_ACADEMY_TEACHERS)), "مدرسو الأكاديميات"),
+        ("academy_assignments", st.session_state.get("academy_assignments_df", pd.DataFrame(columns=COL_ACADEMY_ASSIGNMENTS)), "توزيع طلاب الأكاديميات"),
+        ("academy_access", st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS)), "دخول الأكاديميات والمشرفين"),
+        ("academy_subscriptions", st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)), "اشتراكات الأكاديميات"),
+        ("academy_students", st.session_state.get("academy_students_df", pd.DataFrame(columns=COL_ACADEMY_STUDENTS)), "طلاب الأكاديميات"),
+        ("academy_attendance", st.session_state.get("academy_attendance_df", pd.DataFrame(columns=COL_ACADEMY_ATTENDANCE)), "حضور الأكاديميات"),
+        ("academy_schedule", st.session_state.get("academy_schedule_df", pd.DataFrame(columns=COL_ACADEMY_SCHEDULE)), "جداول الأكاديميات"),
     ])
     results = []
     for table_name, df, label in tables:
