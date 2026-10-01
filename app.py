@@ -601,7 +601,7 @@ COL_STUDENT_INTERFACE = ["عنوان_الواجهة", "الشارة", "عنوا�
 COL_PAYMENT_RECORDS = ["التاريخ", "الشهر", "اسم الطالب", "المبلغ", "طريقة الدفع", "حالة الدفع", "ملاحظات"]
 COL_ADS = ["معرف_الإعلان", "تاريخ_النشر", "العنوان", "نوع_الإعلان", "النص", "الوسائط_base64", "نوع_الوسائط", "الرابط", "نص_الزر", "الحالة"]
 COL_ACADEMY_ACCOUNTS = ["اسم الأكاديمية", "رقم الهاتف", "كلمة المرور", "نسبة الأكاديمية", "الحالة"]
-COL_ACADEMY_TEACHERS = ["اسم الأكاديمية", "اسم المدرس", "المادة", "نسبة المدرس", "الحالة"]
+COL_ACADEMY_TEACHERS = ["اسم الأكاديمية", "اسم المدرس", "المادة", "نسبة المدرس", "سجل القبض", "الحالة"]
 COL_ACADEMY_ASSIGNMENTS = ["اسم الأكاديمية", "اسم الطالب", "اسم المدرس", "سعر الحصة", "نصيب المدرس", "نصيب الأكاديمية", "الحالة"]
 COL_ACADEMY_ACCESS = ["اسم الأكاديمية", "رقم الهاتف", "كلمة المرور", "نوع الحساب", "الحالة"]
 COL_ACADEMY_SUBSCRIPTIONS = ["اسم الأكاديمية", "اسم الطالب", "قيمة الاشتراك", "تاريخ البداية", "تاريخ النهاية", "نوع الدفع", "الحالة", "ملاحظات"]
@@ -3788,10 +3788,9 @@ if is_academy_mode:
         d2.metric("📝 سجلات الحضور", len(aat_a))
         d3.metric("💰 قيمة الحصص المحضرة", f"{total:,.2f} جنيه")
         if is_academy_president:
-            platform_total = max(total - teacher_total - academy_total, 0.0)
-            d4.metric("🌐 نصيب المنصة", f"{platform_total:,.2f} جنيه")
-        else:
             d4.metric("🏫 نصيب الأكاديمية", f"{academy_total:,.2f} جنيه")
+        else:
+            d4.metric("📚 الطلاب النشطون", int((ast_a["الحالة"].astype(str).str.strip() == "نشط").sum()))
         st.info("كل بيانات هذا النظام خاصة بالأكاديمية نفسها، ولا يتم سحب الطلاب أو الحضور من المنصة التعليمية الأساسية.")
         # كشف موحد يظهر للرئيس والمشرف: الطالب + المشرف + المنهج + المرحلة + المدرس + الحضور + الاشتراك والرصيد.
         _academy_full_rows=[]
@@ -3826,6 +3825,12 @@ if is_academy_mode:
             })
         _academy_full_df=pd.DataFrame(_academy_full_rows)
         if not _academy_full_df.empty:
+            _bal_total=float(pd.to_numeric(_academy_full_df["الرصيد المتبقي"],errors="coerce").fillna(0).sum())
+            _sub_total=float(pd.to_numeric(_academy_full_df["قيمة الاشتراك"],errors="coerce").fillna(0).sum())
+            b1,b2,b3=st.columns(3)
+            b1.metric("💳 إجمالي الاشتراكات", f"{_sub_total:,.2f} جنيه")
+            b2.metric("💰 الرصيد الحالي للطلاب", f"{_bal_total:,.2f} جنيه")
+            b3.metric("📝 عدد الطلاب المشمولين", len(_academy_full_df))
             st.markdown("### 📋 الكشف الشامل للطلاب")
             st.dataframe(_academy_full_df,use_container_width=True,hide_index=True)
 
@@ -3845,7 +3850,7 @@ if is_academy_mode:
                 student_teacher = st.selectbox("المدرس المسؤول:", ["بدون تحديد"] + _stu_teachers)
             with c2:
                 student_price = st.number_input("سعر الحصة (جنيه):", min_value=0.0, step=10.0, value=0.0)
-                student_teacher_share = st.number_input("سعر/نصيب المدرس (جنيه):", min_value=0.0, max_value=max(float(student_price),0.0), step=1.0, value=0.0)
+                student_teacher_share = st.number_input("سعر/نصيب المدرس (جنيه):", min_value=0.0, step=1.0, value=0.0, key="academy_student_teacher_share")
                 student_academy_share = max(float(student_price)-float(student_teacher_share),0.0)
                 st.number_input("نصيب الأكاديمية (جنيه) — تلقائي:", min_value=0.0, value=student_academy_share, step=1.0, disabled=True)
                 student_status = st.selectbox("الحالة:", ["نشط","موقوف"])
@@ -3898,7 +3903,7 @@ if is_academy_mode:
                     _teacher_idx = teacher_options.index(_default_teacher) if _default_teacher in teacher_options else 0
                     att_teacher = st.selectbox("المدرس:", teacher_options, index=_teacher_idx) if teacher_options else st.text_input("المدرس:", value=_default_teacher)
                     att_price = st.number_input("سعر الحصة للطالب (جنيه):", min_value=0.0, step=10.0, value=_default_price)
-                    att_teacher_share = st.number_input("سعر/نصيب المدرس (جنيه):", min_value=0.0, max_value=max(float(att_price),0.0), step=1.0, value=min(_default_teacher_share,float(att_price)))
+                    att_teacher_share = st.number_input("سعر/نصيب المدرس (جنيه):", min_value=0.0, step=1.0, value=_default_teacher_share, key="academy_att_teacher_share")
                     att_academy_share = max(float(att_price) - float(att_teacher_share), 0.0)
                     st.number_input("نصيب الأكاديمية (جنيه) — تلقائي:", min_value=0.0, value=att_academy_share, step=1.0, disabled=True)
                     att_notes = st.text_input("ملاحظات:")
@@ -4027,7 +4032,7 @@ if is_academy_mode:
                 _rate_price = float(pd.to_numeric(_rate_existing.iloc[0].get("سعر الحصة",0), errors="coerce") or 0) if not _rate_existing.empty else 0.0
                 _rate_teacher_share = float(pd.to_numeric(_rate_existing.iloc[0].get("نصيب المدرس",0), errors="coerce") or 0) if not _rate_existing.empty else 0.0
                 _rate_price = st.number_input("سعر الحصة لهذا الطالب (جنيه):", min_value=0.0, step=10.0, value=_rate_price)
-                _rate_teacher_share = st.number_input("سعر/نصيب المدرس (جنيه):", min_value=0.0, max_value=max(float(_rate_price),0.0), step=1.0, value=min(_rate_teacher_share,float(_rate_price)))
+                _rate_teacher_share = st.number_input("سعر/نصيب المدرس (جنيه):", min_value=0.0, step=1.0, value=_rate_teacher_share, key="academy_rate_teacher_share")
                 _rate_academy_share = max(float(_rate_price)-float(_rate_teacher_share),0.0)
                 st.number_input("نصيب الأكاديمية (جنيه) — تلقائي:", min_value=0.0, value=_rate_academy_share, step=1.0, disabled=True)
                 if st.form_submit_button("💾 حفظ سعر ونصيب الطالب", use_container_width=True, type="primary"):
@@ -6923,7 +6928,7 @@ elif t_page == "academies":
         st.markdown("### 📊 لوحة متابعة الأكاديمية — للمعلم / الإدارة")
         m1,m2,m3,m4,m5=st.columns(5)
         m1.metric("👥 الطلاب",len(_admin_students)); m2.metric("🟢 الحصص الحاضرة",int(len(_admin_present))); m3.metric("💰 إجمالي الحصص",f"{_admin_total:,.2f} جنيه"); m4.metric("👨‍🏫 رواتب المدرسين",f"{_admin_teacher_due:,.2f} جنيه"); m5.metric("🏫 مستحق الأكاديمية",f"{_admin_ac_due:,.2f} جنيه")
-        st.metric("🌐 مستحق المنصة",f"{_admin_platform_due:,.2f} جنيه")
+        # نصيب المنصة غير معروض في نظام الأكاديميات.
         _subs_admin = st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)).copy()
         _subs_admin = _subs_admin[_subs_admin["اسم الأكاديمية"].astype(str).str.strip()==selected].copy()
         _student_report=[]
@@ -6974,7 +6979,7 @@ elif t_page == "academies":
             _admin_att.drop(columns=["معرف السجل"],errors="ignore").to_excel(_writer,sheet_name="الحضور",index=False)
         _pdf_rows="".join(f"<tr><td>{html.escape(str(x.get('اسم الطالب','')))}</td><td>{x.get('عدد حصص الحضور',0)}</td><td>{x.get('إجمالي قيمة الحصص',0):,.2f}</td><td>{html.escape(str(x.get('المدرس','')))}</td></tr>" for _,x in _student_report_df.iterrows())
         _pdf_teacher_rows="".join(f"<tr><td>{html.escape(str(x.get('اسم المدرس','')))}</td><td>{x.get('عدد حصص الحضور',0)}</td><td>{x.get('الراتب المستحق',0):,.2f}</td></tr>" for _,x in _teacher_report_df.iterrows())
-        _academy_report_html=f"""<!DOCTYPE html><html dir='rtl' lang='ar'><head><meta charset='utf-8'><title>تقرير أكاديمية {html.escape(selected)}</title><style>@page{{size:A4 landscape;margin:10mm}}body{{font-family:Arial;color:#102a52;font-weight:700}}h1,h2{{color:#0b5fe7}}table{{width:100%;border-collapse:collapse;margin:10px 0}}th,td{{border:1px solid #cbd5e1;padding:7px;text-align:center}}th{{background:#eaf4ff}}.box{{padding:10px;background:#f3f8ff;border-radius:10px}}</style></head><body><h1>🏫 تقرير إدارة أكاديمية {html.escape(selected)}</h1><div class='box'>الطلاب: {len(_admin_students)} | الحصص الحاضرة: {len(_admin_present)} | إجمالي الحصص: {_admin_total:,.2f} جنيه | رواتب المدرسين: {_admin_teacher_due:,.2f} جنيه | مستحق الأكاديمية: {_admin_ac_due:,.2f} جنيه | مستحق المنصة: {_admin_platform_due:,.2f} جنيه</div><h2>كشف الطلاب</h2><table><tr><th>الطالب</th><th>حصص الحضور</th><th>إجمالي قيمة الحصص</th><th>المدرس</th></tr>{_pdf_rows}</table><h2>رواتب المدرسين</h2><table><tr><th>المدرس</th><th>عدد الحصص</th><th>الراتب المستحق</th></tr>{_pdf_teacher_rows}</table></body></html>"""
+        _academy_report_html=f"""<!DOCTYPE html><html dir='rtl' lang='ar'><head><meta charset='utf-8'><title>تقرير أكاديمية {html.escape(selected)}</title><style>@page{{size:A4 landscape;margin:10mm}}body{{font-family:Arial;color:#102a52;font-weight:700}}h1,h2{{color:#0b5fe7}}table{{width:100%;border-collapse:collapse;margin:10px 0}}th,td{{border:1px solid #cbd5e1;padding:7px;text-align:center}}th{{background:#eaf4ff}}.box{{padding:10px;background:#f3f8ff;border-radius:10px}}</style></head><body><h1>🏫 تقرير إدارة أكاديمية {html.escape(selected)}</h1><div class='box'>الطلاب: {len(_admin_students)} | الحصص الحاضرة: {len(_admin_present)} | إجمالي الحصص: {_admin_total:,.2f} جنيه | رواتب المدرسين: {_admin_teacher_due:,.2f} جنيه | مستحق الأكاديمية: {_admin_ac_due:,.2f} جنيه</div><h2>كشف الطلاب</h2><table><tr><th>الطالب</th><th>حصص الحضور</th><th>إجمالي قيمة الحصص</th><th>المدرس</th></tr>{_pdf_rows}</table><h2>رواتب المدرسين</h2><table><tr><th>المدرس</th><th>عدد الحصص</th><th>الراتب المستحق</th></tr>{_pdf_teacher_rows}</table></body></html>"""
         _academy_report_pdf=html_to_pdf_bytes(_academy_report_html)
         ec1,ec2=st.columns(2)
         with ec1: st.download_button("📥 تصدير تقرير الأكاديمية Excel",_export_buf.getvalue(),file_name=f"تقرير_أكاديمية_{selected}.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True)
