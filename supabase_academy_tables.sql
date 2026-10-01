@@ -94,6 +94,7 @@ create table if not exists public.academy_schedule (
 );
 
 -- ترقية الجداول التي تم إنشاؤها بالنسخة القديمة من الملف.
+alter table public.academy_teachers add column if not exists "المادة" text default '';
 alter table public.academy_assignments add column if not exists "سعر الحصة" numeric default 0;
 alter table public.academy_assignments add column if not exists "نسبة المدرس" numeric default 0;
 alter table public.academy_assignments add column if not exists "نسبة الأكاديمية" numeric default 0;
