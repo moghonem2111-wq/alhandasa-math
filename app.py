@@ -6799,7 +6799,9 @@ elif t_page == "academies":
             _subv=_sub.iloc[-1] if not _sub.empty else {}
             _assign=ax[(ax["اسم الأكاديمية"].astype(str).str.strip()==selected)&(ax["اسم الطالب"].astype(str).str.strip()==_sn)]
             _assignv=_assign.iloc[-1] if not _assign.empty else {}
-            _student_report.append({"اسم الطالب":_sn,"المنهج":str(_sv.get("المنهج","")),"المرحلة":str(_sv.get("المرحلة","")),"المادة":str(_sv.get("المادة","")),"اسم المشرف":str(_sv.get("اسم المشرف","")),"اسم المدرس":str(_sr.iloc[-1].get("اسم المدرس","")) if not _sr.empty else str(_assignv.get("اسم المدرس","")),"عدد حصص الحضور":len(_sr),"قيمة الحصص":round(float(_sr["_price"].sum()) if not _sr.empty else 0,2),"قيمة الاشتراك":round(float(pd.to_numeric(_subv.get("قيمة الاشتراك",0),errors="coerce") or 0),2),"نوع الدفع":str(_subv.get("نوع الدفع","")),"حالة الاشتراك":str(_subv.get("الحالة",""))})
+            _sub_initial=float(pd.to_numeric(_subv.get("قيمة الاشتراك",0),errors="coerce") or 0)
+            _sub_used=float(_sr["_price"].sum()) if not _sr.empty else 0.0
+            _student_report.append({"اسم الطالب":_sn,"المنهج":str(_sv.get("المنهج","")),"المرحلة":str(_sv.get("المرحلة","")),"المادة":str(_sv.get("المادة","")),"اسم المشرف":str(_sv.get("اسم المشرف","")),"اسم المدرس":str(_sr.iloc[-1].get("اسم المدرس","")) if not _sr.empty else str(_assignv.get("اسم المدرس","")),"عدد حصص الحضور":len(_sr),"قيمة الحصص":round(_sub_used,2),"قيمة الاشتراك":round(_sub_initial,2),"المخصوم":round(_sub_used,2),"الرصيد المتبقي":round(max(_sub_initial-_sub_used,0.0),2),"نوع الدفع":str(_subv.get("نوع الدفع","")),"حالة الاشتراك":str(_subv.get("الحالة",""))})
         _student_report_df=pd.DataFrame(_student_report)
         st.markdown("### 👥 كشف الطلاب والبيانات التعليمية والمالية")
         st.dataframe(_student_report_df,use_container_width=True,hide_index=True)
@@ -6818,7 +6820,9 @@ elif t_page == "academies":
         _salary_rows=[]
         for _tn in sorted(_admin_teachers[_admin_teachers["اسم الأكاديمية"].astype(str).str.strip()==selected]["اسم المدرس"].astype(str).str.strip().unique()):
             _tr=_month_att[_month_att["اسم المدرس"].astype(str).str.strip()==_tn]
-            _salary_rows.append({"اسم المدرس":_tn,"عدد الحصص":len(_tr),"إجمالي قيمة الحصص":round(float(_tr["_price"].sum()) if not _tr.empty else 0,2),"مرتب المدرس":round(float(_tr["نصيب المدرس"].sum()) if not _tr.empty else 0,2)})
+            _teacher_info=_admin_teachers[(_admin_teachers["اسم الأكاديمية"].astype(str).str.strip()==selected)&(_admin_teachers["اسم المدرس"].astype(str).str.strip()==_tn)]
+            _teacher_subject=str(_teacher_info.iloc[0].get("المادة","")) if not _teacher_info.empty else ""
+            _salary_rows.append({"اسم المدرس":_tn,"المادة":_teacher_subject,"عدد الحصص":len(_tr),"إجمالي قيمة الحصص":round(float(_tr["_price"].sum()) if not _tr.empty else 0,2),"مرتب المدرس":round(float(_tr["نصيب المدرس"].sum()) if not _tr.empty else 0,2)})
         _teacher_report_df=pd.DataFrame(_salary_rows)
         st.markdown("### 👨‍🏫 مرتب المدرسين للشهر")
         st.dataframe(_teacher_report_df,use_container_width=True,hide_index=True)
