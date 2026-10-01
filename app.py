@@ -2871,6 +2871,29 @@ if is_student_mode:
                             st.success(f"مرحباً بك مجدداً يا {user_info['اسم الطالب']}!"); st.rerun()
                     else: st.error("رقم الهاتف أو الرقم السري غير صحيح.")
 
+        elif st.session_state.page_view == "academy_login":
+            st.markdown("<div class='about-panel' style='max-width:760px;margin:auto;text-align:center'><h3>🏫 دخول الأكاديمية</h3><p>حساب مستقل لإدارة الطلاب والحضور والحصص والحسابات.</p></div>", unsafe_allow_html=True)
+            with st.form("academy_login_form"):
+                ac_phone = st.text_input("رقم الهاتف / اسم المستخدم:")
+                ac_pass = st.text_input("كلمة المرور:", type="password")
+                c_a1, c_a2 = st.columns(2)
+                with c_a1:
+                    ac_submit = st.form_submit_button("🔐 دخول الأكاديمية", use_container_width=True)
+                with c_a2:
+                    if st.form_submit_button("⬅️ العودة للرئيسية", use_container_width=True):
+                        st.session_state.page_view = "home"
+                        st.rerun()
+                if ac_submit:
+                    aa = st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS))
+                    match = aa[(aa["رقم الهاتف"].astype(str).str.strip() == ac_phone.strip()) & (aa["كلمة المرور"].astype(str).str.strip() == ac_pass.strip()) & (aa["الحالة"].astype(str).str.strip() != "موقوف")]
+                    if match.empty:
+                        st.error("❌ بيانات الدخول غير صحيحة أو حساب الأكاديمية موقوف.")
+                    else:
+                        st.session_state.logged_academy = match.iloc[0].to_dict()
+                        st.session_state.academy_page = "dashboard"
+                        st.query_params["role"] = "academy"
+                        st.rerun()
+
         elif st.session_state.page_view == "register":
             st.markdown("<div class='about-panel' style='max-width:820px;margin:auto;text-align:center'><h3>✨ إنشاء حساب جديد</h3><p>أنشئ حسابك مجاناً وابدأ رحلتك التعليمية مع البشمهندس x الرياضه.</p></div>", unsafe_allow_html=True)
             with st.form("student_register_form"):
@@ -3524,6 +3547,118 @@ if is_student_mode:
     """, unsafe_allow_html=True)
     st.stop()
 
+
+elif is_academy_mode:
+    if not st.session_state.logged_academy:
+        st.query_params["role"] = "student"
+        st.session_state.page_view = "home"
+        st.stop()
+
+    academy = st.session_state.logged_academy
+    academy_name = str(academy.get("اسم الأكاديمية", "")).strip()
+    aa = st.session_state.academy_accounts_df
+    at = st.session_state.academy_teachers_df
+    ax = st.session_state.academy_assignments_df
+
+    st.markdown(f"<div class='vertical-section-header'>🏫 لوحة إدارة {html.escape(academy_name)}</div>", unsafe_allow_html=True)
+    st.caption("الحساب المالي يعتمد فقط على الحصص التي تم تسجيلها كـ «حاضر» أو «متأخر».")
+
+    nav = st.columns(6)
+    academy_pages = [("الرئيسية","dashboard"),("👥 الطلاب","students"),("📝 الحضور","attendance"),("💰 الحسابات","finance"),("👨‍🏫 المدرسون","teachers"),("↪ خروج","logout")]
+    for i, (label, target) in enumerate(academy_pages):
+        with nav[i]:
+            if st.button(label, key=f"academy_nav_{i}", use_container_width=True, type="primary" if st.session_state.academy_page == target else "secondary"):
+                if target == "logout":
+                    st.session_state.logged_academy = None
+                    st.query_params.clear()
+                    st.query_params["role"] = "student"
+                    st.session_state.page_view = "home"
+                else:
+                    st.session_state.academy_page = target
+                st.rerun()
+
+    weekly = st.session_state.weekly_schedule_df.copy()
+    weekly["_academy"] = weekly["اسم الأكاديمية"].astype(str).str.strip()
+    academy_students = sorted(set(weekly.loc[weekly["_academy"] == academy_name, "اسم الطالب"].astype(str).str.strip()))
+    sessions = st.session_state.sessions_df.copy()
+    sessions["_student"] = sessions["اسم الطالب"].astype(str).str.strip()
+    sessions["_status"] = sessions["الحالة"].astype(str).str.strip()
+    sessions["_price"] = pd.to_numeric(sessions["سعر الحصة"], errors="coerce").fillna(0)
+    academy_sessions = sessions[sessions["_student"].isin(academy_students)].copy()
+    attended = academy_sessions[academy_sessions["_status"].isin(["حاضر", "متأخر"])].copy()
+
+    if st.session_state.academy_page == "dashboard":
+        pct = float(pd.to_numeric(academy.get("نسبة الأكاديمية", 0), errors="coerce") or 0)
+        total = float(attended["_price"].sum())
+        d1,d2,d3,d4 = st.columns(4)
+        d1.metric("👥 الطلاب", len(academy_students))
+        d2.metric("✅ الحصص المحضرة", len(attended))
+        d3.metric("💰 قيمة الحصص", f"{total:,.2f} جنيه")
+        d4.metric("🏫 مستحق الأكاديمية", f"{total*pct/100:,.2f} جنيه")
+        st.info(f"نسبة الأكاديمية الحالية: {pct:g}% — يتم الحساب من سعر كل حصة حضرها الطالب.")
+
+    elif st.session_state.academy_page == "students":
+        st.markdown("### 👥 طلاب الأكاديمية")
+        if not academy_students:
+            st.info("لا يوجد طلاب مرتبطون بهذه الأكاديمية في جدول المواعيد.")
+        else:
+            rows = []
+            for sn in academy_students:
+                u = st.session_state.users_df[st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == sn]
+                grade = str(u.iloc[0].get("المجموعة/الصف","")) if not u.empty else ""
+                curr = str(u.iloc[0].get("المنهج/الدولة","")) if not u.empty else ""
+                ss = attended[attended["_student"] == sn]
+                rows.append({"الطالب":sn,"المنهج":curr,"المرحلة":grade,"عدد الحصص":len(ss),"أيام الحضور":"، ".join(sorted(set(str(x)[:10] for x in ss["التاريخ"]))) if not ss.empty else "—"})
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+
+    elif st.session_state.academy_page == "attendance":
+        st.markdown("### 📝 حضور وغياب طلاب الأكاديمية")
+        if academy_sessions.empty:
+            st.info("لا توجد سجلات حضور أو غياب لهذه الأكاديمية.")
+        else:
+            cols = ["التاريخ","اسم الطالب","الحالة","سعر الحصة"]
+            st.dataframe(academy_sessions[[x for x in cols if x in academy_sessions.columns]].sort_values("التاريخ", ascending=False), use_container_width=True)
+
+    elif st.session_state.academy_page == "teachers":
+        st.markdown("### 👨‍🏫 المدرسون ونِسبهم")
+        tv = at[(at["اسم الأكاديمية"].astype(str).str.strip() == academy_name) & (at["الحالة"].astype(str).str.strip() != "موقوف")].copy()
+        if tv.empty:
+            st.info("لم يتم إضافة مدرسين للأكاديمية بعد.")
+        else:
+            st.dataframe(tv, use_container_width=True)
+
+    elif st.session_state.academy_page == "finance":
+        st.markdown("### 💰 الحسابات المالية")
+        academy_row = aa[aa["اسم الأكاديمية"].astype(str).str.strip() == academy_name]
+        academy_pct = float(pd.to_numeric(academy_row.iloc[0].get("نسبة الأكاديمية",0), errors="coerce") or 0) if not academy_row.empty else 0.0
+        rows = []
+        for _, sr in attended.iterrows():
+            sn = sr["_student"]
+            link = ax[(ax["اسم الأكاديمية"].astype(str).str.strip() == academy_name) & (ax["اسم الطالب"].astype(str).str.strip() == sn) & (ax["الحالة"].astype(str).str.strip() != "موقوف")]
+            teacher = str(link.iloc[0].get("اسم المدرس","")).strip() if not link.empty else "غير محدد"
+            tr = at[(at["اسم الأكاديمية"].astype(str).str.strip() == academy_name) & (at["اسم المدرس"].astype(str).str.strip() == teacher) & (at["الحالة"].astype(str).str.strip() != "موقوف")]
+            teacher_pct = float(pd.to_numeric(tr.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) if not tr.empty else 0.0
+            price = float(sr["_price"])
+            rows.append({"التاريخ":sr.get("التاريخ",""),"الطالب":sn,"المدرس":teacher,"الحالة":sr.get("الحالة",""),"سعر الحصة":price,"نسبة الأكاديمية %":academy_pct,"مستحق الأكاديمية":round(price*academy_pct/100,2),"نسبة المدرس %":teacher_pct,"مستحق المدرس":round(price*teacher_pct/100,2)})
+        report = pd.DataFrame(rows)
+        if report.empty:
+            st.info("لا توجد حصص مستحقة حتى الآن.")
+        else:
+            f1,f2,f3 = st.columns(3)
+            f1.metric("💰 قيمة الحصص", f"{report['سعر الحصة'].sum():,.2f} جنيه")
+            f2.metric("🏫 مستحق الأكاديمية", f"{report['مستحق الأكاديمية'].sum():,.2f} جنيه")
+            f3.metric("👨‍🏫 مستحق المدرسين", f"{report['مستحق المدرس'].sum():,.2f} جنيه")
+            st.dataframe(report, use_container_width=True)
+            summary = report.groupby("الطالب").agg(عدد_الحصص=("الطالب","size"), أيام_الحضور=("التاريخ", lambda s: "، ".join(sorted(set(str(x)[:10] for x in s))))).reset_index()
+            st.markdown("### 📅 أيام حضور الطلاب")
+            st.dataframe(summary, use_container_width=True)
+            out = io.BytesIO()
+            with pd.ExcelWriter(out, engine="openpyxl") as writer:
+                report.to_excel(writer, sheet_name="الحسابات", index=False)
+                summary.to_excel(writer, sheet_name="حضور_الطلاب", index=False)
+            st.download_button("📥 تحميل كشف الحساب Excel", out.getvalue(), file_name=f"كشف_حساب_{academy_name}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+
+    st.stop()
 
 # ==============================================================================# 2. لوحة تحكم المعلم (الشاملة بجميع الأقسام وزوم الأونلاين والتقارير المالية)
 # ==============================================================================
