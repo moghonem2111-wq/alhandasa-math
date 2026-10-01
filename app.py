@@ -230,6 +230,26 @@ def _cloud_save_excel_bytes(excel_bytes, reason="autosave"):
         return False
 
 
+def _cloud_load_academy_login_records():
+    """قراءة حسابات الأكاديميات مباشرة من Supabase عند الحاجة لتسجيل الدخول."""
+    if not _cloud_storage_enabled():
+        return pd.DataFrame(columns=COL_ACADEMY_ACCESS), pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)
+    def _get(table, cols):
+        try:
+            url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{table}?select=*"
+            req = urllib.request.Request(url, headers=_supabase_headers(), method="GET")
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            df = pd.DataFrame(data if isinstance(data, list) else [])
+            for col in cols:
+                if col not in df.columns:
+                    df[col] = ""
+            return df[cols]
+        except Exception as exc:
+            st.session_state["academy_login_cloud_error"] = str(exc)
+            return pd.DataFrame(columns=cols)
+    return _get("academy_access", COL_ACADEMY_ACCESS), _get("academy_accounts", COL_ACADEMY_ACCOUNTS)
+
 def _cloud_sync_dataframe(table_name, df, label=None):
     """مزامنة جدول DataFrame كاملًا مع جدول Supabase المقابل.
 
@@ -2999,12 +3019,38 @@ if is_student_mode:
                     _role_series = _access_work["نوع الحساب"].astype(str).str.strip()
                     _status_series = _access_work["الحالة"].astype(str).str.strip()
                     match = _access_work[(_phone_series == _phone_norm) & (_pass_series == _pass) & (_role_series == _role_clean) & _status_series.map(_active)]
+                    # لو لم تكن النسخة المحلية محدثة، نقرأ الحساب مباشرة من Supabase.
                     if match.empty:
-                        st.error("❌ اسم المستخدم/رقم الهاتف أو كلمة المرور غير صحيحة، أو الحساب غير نشط. استخدم نفس البيانات التي أنشأها صاحب المنصة.")
+                        _cloud_access, _cloud_accounts = _cloud_load_academy_login_records()
+                        if not _cloud_access.empty:
+                            _ca = _cloud_access.copy()
+                            _ca_phone = _ca["رقم الهاتف"].astype(str).str.strip().str.replace(" ","",regex=False).str.replace("-","",regex=False)
+                            _ca_pass = _ca["كلمة المرور"].astype(str).str.strip()
+                            _ca_role = _ca["نوع الحساب"].astype(str).str.strip()
+                            _ca_role = _ca_role.replace({"رئيس":"رئيس الأكاديمية","رئيس اكاديمية":"رئيس الأكاديمية","مشرف":"مشرف أكاديمي","مشرف اكاديمي":"مشرف أكاديمي"})
+                            _ca_status = _ca["الحالة"].astype(str).str.strip()
+                            match = _ca[(_ca_phone == _phone_norm) & (_ca_pass == _pass) & (_ca_role == _role_clean) & _ca_status.map(_active)]
+                            if not match.empty:
+                                st.session_state.academy_access_df = _cloud_access
+                        # توافق مع الحسابات القديمة التي كان الرئيس يُنشأ بها قبل AcademyAccess.
+                        if match.empty and _role_clean == "رئيس الأكاديمية" and not _cloud_accounts.empty:
+                            _lp = _cloud_accounts["رقم الهاتف"].astype(str).str.strip().str.replace(" ","",regex=False).str.replace("-","",regex=False)
+                            _lpass = _cloud_accounts["كلمة المرور"].astype(str).str.strip()
+                            _ls = _cloud_accounts["الحالة"].astype(str).str.strip()
+                            _lm = _cloud_accounts[(_lp == _phone_norm) & (_lpass == _pass) & _ls.map(_active)]
+                            if not _lm.empty:
+                                _lr = _lm.iloc[0].to_dict()
+                                match = pd.DataFrame([{"اسم الأكاديمية":str(_lr.get("اسم الأكاديمية","")).strip(),"رقم الهاتف":_phone,"كلمة المرور":_pass,"نوع الحساب":"رئيس الأكاديمية","الحالة":"نشط"}])
+                    if match.empty:
+                        st.error("❌ بيانات الدخول غير صحيحة أو الحساب غير نشط. استخدم نفس اسم المستخدم وكلمة المرور اللذين أنشأهما صاحب المنصة.")
                     else:
                         row = match.iloc[0].to_dict()
                         row["اسم الأكاديمية"] = str(row.get("اسم الأكاديمية","")).strip()
                         academy_rows = aa[aa["اسم الأكاديمية"].astype(str).str.strip() == row["اسم الأكاديمية"]]
+                        if academy_rows.empty:
+                            _cloud_access2, _cloud_accounts2 = _cloud_load_academy_login_records()
+                            if not _cloud_accounts2.empty:
+                                academy_rows = _cloud_accounts2[_cloud_accounts2["اسم الأكاديمية"].astype(str).str.strip() == row["اسم الأكاديمية"]]
                         if academy_rows.empty:
                             st.error("❌ الأكاديمية المرتبطة بهذا الحساب غير موجودة. يجب أن ينشئ صاحب المنصة الأكاديمية أولًا.")
                             st.stop()
@@ -3012,9 +3058,7 @@ if is_student_mode:
                         st.session_state.academy_login_role = _role_clean
                         st.session_state.academy_page = "dashboard"
                         st.query_params["role"] = "academy"
-                        st.rerun()
-
-        elif st.session_state.page_view == "register":
+                        st.rerun()        elif st.session_state.page_view == "register":
             st.markdown("<div class='about-panel' style='max-width:820px;margin:auto;text-align:center'><h3>✨ إنشاء حساب جديد</h3><p>أنشئ حسابك مجاناً وابدأ رحلتك التعليمية مع البشمهندس x الرياضه.</p></div>", unsafe_allow_html=True)
             with st.form("student_register_form"):
                 reg_name=st.text_input("اسمك بالكامل:"); reg_phone=st.text_input("رقم الهاتف المحمول (لتسجيل الدخول به لاحقاً):*")
