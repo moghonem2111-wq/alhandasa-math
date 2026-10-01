@@ -3688,8 +3688,19 @@ if is_academy_mode:
         d1.metric("👥 الطلاب", len(academy_students))
         d2.metric("✅ الحصص المحضرة", len(attended))
         d3.metric("💰 قيمة الحصص", f"{total:,.2f} جنيه")
-        d4.metric("🏫 مستحق الأكاديمية", f"{total*pct/100:,.2f} جنيه")
-        st.info(f"نسبة الأكاديمية الحالية: {pct:g}% — يتم الحساب من سعر كل حصة حضرها الطالب.")
+        if is_academy_president:
+            platform_total = 0.0
+            for _, sr in attended.iterrows():
+                sn = str(sr["_student"]).strip()
+                link = ax[(ax["اسم الأكاديمية"].astype(str).str.strip() == academy_name) & (ax["اسم الطالب"].astype(str).str.strip() == sn) & (ax["الحالة"].astype(str).str.strip() != "موقوف")]
+                teacher = str(link.iloc[0].get("اسم المدرس","")).strip() if not link.empty else ""
+                tr = at[(at["اسم الأكاديمية"].astype(str).str.strip() == academy_name) & (at["اسم المدرس"].astype(str).str.strip() == teacher) & (at["الحالة"].astype(str).str.strip() != "موقوف")]
+                teacher_pct = float(pd.to_numeric(tr.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) if not tr.empty else 0.0
+                platform_total += max(float(sr["_price"]) * (100.0 - pct - teacher_pct) / 100.0, 0.0)
+            d4.metric("🌐 إجمالي مستحق المنصة", f"{platform_total:,.2f} جنيه")
+        else:
+            d4.metric("🏫 مستحق الأكاديمية", f"{total*pct/100:,.2f} جنيه")
+        st.info(f"نسبة الأكاديمية الحالية: {pct:g}% — يتم الحساب من سعر كل حصة حضرها الطالب." + (" أنت رئيس الأكاديمية." if is_academy_president else " أنت مشرف أكاديمي؛ تجميعة نسبة ومستحق المنصة مخفية عن حسابك."))
 
     elif st.session_state.academy_page == "students":
         st.markdown("### 👥 طلاب الأكاديمية")
@@ -3721,8 +3732,23 @@ if is_academy_mode:
         else:
             st.dataframe(tv, use_container_width=True)
 
+    elif st.session_state.academy_page == "subscriptions":
+        st.markdown("### 💳 اشتراكات الطلاب")
+        sub_report = _academy_subscription_rows(academy_name)
+        if sub_report.empty:
+            st.info("لا توجد اشتراكات مسجلة لهذه الأكاديمية بعد.")
+        else:
+            sr1,sr2,sr3 = st.columns(3)
+            sr1.metric("💳 إجمالي الاشتراكات", f"{sub_report['قيمة الاشتراك'].sum():,.2f} جنيه")
+            sr2.metric("➖ إجمالي المخصوم", f"{sub_report['المخصوم'].sum():,.2f} جنيه")
+            sr3.metric("💰 إجمالي المتبقي", f"{sub_report['المتبقي'].sum():,.2f} جنيه")
+            st.caption("الخصم تلقائي عند تسجيل الطالب حاضر أو متأخر فقط. الغائب وبعذر لا يخصمان من الاشتراك.")
+            st.dataframe(sub_report, use_container_width=True, hide_index=True)
+
     elif st.session_state.academy_page == "finance":
         st.markdown("### 💰 الحسابات المالية")
+        if not is_academy_president:
+            st.info("👁️ أنت مشرف أكاديمي. تجميعة نسبة المنصة ومستحق المنصة غير ظاهرة لهذا الحساب.")
         academy_row = aa[aa["اسم الأكاديمية"].astype(str).str.strip() == academy_name]
         academy_pct = float(pd.to_numeric(academy_row.iloc[0].get("نسبة الأكاديمية",0), errors="coerce") or 0) if not academy_row.empty else 0.0
         rows = []
@@ -3733,15 +3759,27 @@ if is_academy_mode:
             tr = at[(at["اسم الأكاديمية"].astype(str).str.strip() == academy_name) & (at["اسم المدرس"].astype(str).str.strip() == teacher) & (at["الحالة"].astype(str).str.strip() != "موقوف")]
             teacher_pct = float(pd.to_numeric(tr.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) if not tr.empty else 0.0
             price = float(sr["_price"])
-            rows.append({"التاريخ":sr.get("التاريخ",""),"الطالب":sn,"المدرس":teacher,"الحالة":sr.get("الحالة",""),"سعر الحصة":price,"نسبة الأكاديمية %":academy_pct,"مستحق الأكاديمية":round(price*academy_pct/100,2),"نسبة المدرس %":teacher_pct,"مستحق المدرس":round(price*teacher_pct/100,2)})
+            platform_pct = max(100.0 - academy_pct - teacher_pct, 0.0)
+            row_data = {"التاريخ":sr.get("التاريخ",""),"الطالب":sn,"المدرس":teacher,"الحالة":sr.get("الحالة",""),"سعر الحصة":price,"نسبة الأكاديمية %":academy_pct,"مستحق الأكاديمية":round(price*academy_pct/100,2),"نسبة المدرس %":teacher_pct,"مستحق المدرس":round(price*teacher_pct/100,2)}
+            if is_academy_president:
+                row_data["نسبة المنصة %"] = platform_pct
+                row_data["مستحق المنصة"] = round(price*platform_pct/100,2)
+            rows.append(row_data)
         report = pd.DataFrame(rows)
         if report.empty:
             st.info("لا توجد حصص مستحقة حتى الآن.")
         else:
-            f1,f2,f3 = st.columns(3)
-            f1.metric("💰 قيمة الحصص", f"{report['سعر الحصة'].sum():,.2f} جنيه")
-            f2.metric("🏫 مستحق الأكاديمية", f"{report['مستحق الأكاديمية'].sum():,.2f} جنيه")
-            f3.metric("👨‍🏫 مستحق المدرسين", f"{report['مستحق المدرس'].sum():,.2f} جنيه")
+            if is_academy_president:
+                f1,f2,f3,f4 = st.columns(4)
+                f1.metric("💰 قيمة الحصص", f"{report['سعر الحصة'].sum():,.2f} جنيه")
+                f2.metric("🏫 مستحق الأكاديمية", f"{report['مستحق الأكاديمية'].sum():,.2f} جنيه")
+                f3.metric("👨‍🏫 مستحق المدرسين", f"{report['مستحق المدرس'].sum():,.2f} جنيه")
+                f4.metric("🌐 مستحق المنصة", f"{report['مستحق المنصة'].sum():,.2f} جنيه")
+            else:
+                f1,f2,f3 = st.columns(3)
+                f1.metric("💰 قيمة الحصص", f"{report['سعر الحصة'].sum():,.2f} جنيه")
+                f2.metric("🏫 مستحق الأكاديمية", f"{report['مستحق الأكاديمية'].sum():,.2f} جنيه")
+                f3.metric("👨‍🏫 مستحق المدرسين", f"{report['مستحق المدرس'].sum():,.2f} جنيه")
             st.dataframe(report, use_container_width=True)
             summary = report.groupby("الطالب").agg(عدد_الحصص=("الطالب","size"), أيام_الحضور=("التاريخ", lambda s: "، ".join(sorted(set(str(x)[:10] for x in s))))).reset_index()
             st.markdown("### 📅 أيام حضور الطلاب")
