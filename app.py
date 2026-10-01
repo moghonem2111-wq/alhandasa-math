@@ -3894,6 +3894,39 @@ if is_academy_mode:
         if not at_a.empty:
             st.dataframe(at_a, use_container_width=True, hide_index=True)
 
+        st.markdown("### 🎯 تحديد سعر ونِسب كل طالب بشكل مستقل")
+        _rate_students = sorted([str(x).strip() for x in ast_a["اسم الطالب"].dropna().unique() if str(x).strip()])
+        _rate_teachers = sorted([str(x).strip() for x in at_a["اسم المدرس"].dropna().unique() if str(x).strip()])
+        if _rate_students and _rate_teachers:
+            with st.form("academy_student_rate_form"):
+                _rate_student = st.selectbox("الطالب:", _rate_students)
+                _rate_existing = ax[(ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name) & (ax["اسم الطالب"].astype(str).str.strip()==_rate_student)]
+                _rate_teacher_old = str(_rate_existing.iloc[0].get("اسم المدرس","")).strip() if not _rate_existing.empty else ""
+                _rate_teacher_idx = _rate_teachers.index(_rate_teacher_old) if _rate_teacher_old in _rate_teachers else 0
+                _rate_teacher = st.selectbox("المدرس المسؤول:", _rate_teachers, index=_rate_teacher_idx)
+                _rate_price = float(pd.to_numeric(_rate_existing.iloc[0].get("سعر الحصة",0), errors="coerce") or 0) if not _rate_existing.empty else 0.0
+                _rate_tp = float(pd.to_numeric(_rate_existing.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) if not _rate_existing.empty else float(pd.to_numeric(at_a[at_a["اسم المدرس"].astype(str).str.strip()==_rate_teacher].iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) if not at_a[at_a["اسم المدرس"].astype(str).str.strip()==_rate_teacher].empty else 0.0
+                _rate_ap = float(pd.to_numeric(_rate_existing.iloc[0].get("نسبة الأكاديمية",0), errors="coerce") or 0) if not _rate_existing.empty else float(pd.to_numeric(academy.get("نسبة الأكاديمية",0), errors="coerce") or 0)
+                _rate_price = st.number_input("سعر الحصة لهذا الطالب (جنيه):", min_value=0.0, step=10.0, value=_rate_price)
+                _rate_tp = st.number_input("نسبة المدرس لهذا الطالب (%):", min_value=0.0, max_value=100.0, step=1.0, value=_rate_tp)
+                _rate_ap = st.number_input("نسبة الأكاديمية لهذا الطالب (%):", min_value=0.0, max_value=100.0, step=1.0, value=_rate_ap)
+                if st.form_submit_button("💾 حفظ سعر ونِسب الطالب", use_container_width=True, type="primary"):
+                    if _rate_tp + _rate_ap > 100:
+                        st.error("مجموع نسبة المدرس والأكاديمية لا يمكن أن يتجاوز 100%.")
+                    else:
+                        _mask = (ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name) & (ax["اسم الطالب"].astype(str).str.strip()==_rate_student)
+                        _rec = {"اسم الأكاديمية":academy_name,"اسم الطالب":_rate_student,"اسم المدرس":_rate_teacher,"سعر الحصة":float(_rate_price),"نسبة المدرس":float(_rate_tp),"نسبة الأكاديمية":float(_rate_ap),"الحالة":"نشط"}
+                        if _mask.any(): ax.loc[_mask,list(_rec.keys())]=list(_rec.values())
+                        else: ax=pd.concat([ax,pd.DataFrame([_rec])],ignore_index=True)
+                        st.session_state.academy_assignments_df=ax[COL_ACADEMY_ASSIGNMENTS]
+                        _save_academy_system()
+                        st.success(f"تم حفظ سعر ونِسب الطالب {_rate_student} بشكل مستقل.")
+                        st.rerun()
+            _rate_view=ax[ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name].copy()
+            st.dataframe(_rate_view,use_container_width=True,hide_index=True)
+        elif _rate_students:
+            st.info("أضف مدرسًا أولاً حتى تستطيع تحديد سعر ونِسب كل طالب.")
+
     elif st.session_state.academy_page == "finance":
         st.markdown("### 💰 حسابات الأكاديمية")
         academy_pct = float(pd.to_numeric(academy.get("نسبة الأكاديمية",0), errors="coerce") or 0)
