@@ -3647,7 +3647,7 @@ if is_student_mode:
     st.stop()
 
 
-eldef _academy_subscription_rows(academy_name, student_name=""):
+def _academy_subscription_rows(academy_name, student_name=""):
     """حساب استهلاك اشتراك أكاديمي مستقل؛ لا يعتمد على طلاب المنصة أو جلساتها."""
     subs = st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)).copy()
     attendance = st.session_state.get("academy_attendance_df", pd.DataFrame(columns=COL_ACADEMY_ATTENDANCE)).copy()
