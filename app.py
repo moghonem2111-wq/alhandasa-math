@@ -3784,7 +3784,7 @@ if is_academy_mode:
             _sub_used=float(_srr.iloc[0]["المخصوم"]) if not _srr.empty else 0.0
             _sub_remaining=float(_srr.iloc[0]["المتبقي"]) if not _srr.empty else 0.0
             _sub_type=str(_sr.iloc[-1].get("نوع الدفع","")) if not _sr.empty else ""
-            _teacher=str(_arow.get("اسم المدرس","")) if _arow else (str(_av.iloc[-1].get("اسم المدرس","")) if not _av.empty else "")
+            _teacher=str(_arow.get("اسم المدرس","")) if not _assignment.empty else (str(_av.iloc[-1].get("اسم المدرس","")) if not _av.empty else "")
             _academy_full_rows.append({
                 "اسم الطالب":_sn,
                 "اسم المشرف":str(_srow.get("اسم المشرف","")),
