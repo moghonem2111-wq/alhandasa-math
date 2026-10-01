@@ -3723,11 +3723,22 @@ if is_academy_mode:
         aat.loc[_m, "نصيب الأكاديمية"] = pd.to_numeric(aat.loc[_m, "سعر الحصة"], errors="coerce").fillna(0) * pd.to_numeric(aat.loc[_m, "نسبة الأكاديمية"], errors="coerce").fillna(0) / 100
 
     def _save_academy_system():
-        return save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df,
+        # حفظ بيانات الأكاديمية نفسها أيضًا، وليس بيانات المنصة الأساسية فقط.
+        return save_all_data(
+            st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df,
             st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df,
             st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df,
             st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df,
-            st.session_state.online_schedule_df, st.session_state.weekly_schedule_df, st.session_state.payment_records_df)
+            st.session_state.online_schedule_df, st.session_state.weekly_schedule_df, st.session_state.payment_records_df,
+            st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)),
+            st.session_state.get("academy_teachers_df", pd.DataFrame(columns=COL_ACADEMY_TEACHERS)),
+            st.session_state.get("academy_assignments_df", pd.DataFrame(columns=COL_ACADEMY_ASSIGNMENTS)),
+            st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS)),
+            st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)),
+            st.session_state.get("academy_students_df", pd.DataFrame(columns=COL_ACADEMY_STUDENTS)),
+            st.session_state.get("academy_attendance_df", pd.DataFrame(columns=COL_ACADEMY_ATTENDANCE)),
+            st.session_state.get("academy_schedule_df", pd.DataFrame(columns=COL_ACADEMY_SCHEDULE)),
+        )
 
     st.markdown(f"<div class='vertical-section-header'>🏫 نظام إدارة {html.escape(academy_name)}</div>", unsafe_allow_html=True)
     st.caption(f"حساب مستقل للأكاديمية — {academy_role}. هذا النظام منفصل عن طلاب المنصة ومواعيدها وحضورها.")
@@ -6786,7 +6797,7 @@ elif t_page == "academies":
                 else:
                     access_df = pd.concat([access_df,pd.DataFrame([access_rec])],ignore_index=True)
                 st.session_state.academy_access_df = access_df[COL_ACADEMY_ACCESS]
-                save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                _save_academy_system()
                 st.success("تم حفظ حساب الأكاديمية.")
                 st.rerun()
 
@@ -6817,7 +6828,7 @@ elif t_page == "academies":
                     else:
                         _access=pd.concat([_access,pd.DataFrame([_rec])],ignore_index=True)
                     st.session_state.academy_access_df=_access[COL_ACADEMY_ACCESS]
-                    save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                    _save_academy_system()
                     st.success(f"تم إنشاء حساب {_login_role} بنجاح. أرسل له اسم المستخدم/رقم الهاتف وكلمة المرور التي أدخلتها.")
                     st.rerun()
 
@@ -6864,7 +6875,7 @@ elif t_page == "academies":
                         if str(st.session_state.get("logged_academy","")).strip() == selected.strip():
                             st.session_state.logged_academy = None
                             st.session_state.academy_page = "dashboard"
-                        save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                        _save_academy_system()
                         st.success(f"تم حذف الأكاديمية «{selected}» وجميع بياناتها بنجاح.")
                         st.rerun()
 
@@ -6969,7 +6980,7 @@ elif t_page == "academies":
                     if mask.any(): access_df.loc[mask,list(rec.keys())]=list(rec.values())
                     else: access_df=pd.concat([access_df,pd.DataFrame([rec])],ignore_index=True)
                     st.session_state.academy_access_df=access_df[COL_ACADEMY_ACCESS]
-                    save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                    _save_academy_system()
                     st.success("تم حفظ حساب المشرف.")
                     st.rerun()
         sup_view=access_df[(access_df["اسم الأكاديمية"].astype(str).str.strip()==selected)&(access_df["نوع الحساب"].astype(str).str.strip()=="مشرف أكاديمي")].copy()
@@ -7010,7 +7021,7 @@ elif t_page == "academies":
                         if _am.any(): ax.loc[_am,list(_arec.keys())]=list(_arec.values())
                         else: ax=pd.concat([ax,pd.DataFrame([_arec])],ignore_index=True)
                         st.session_state.academy_assignments_df=ax
-                    save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                    _save_academy_system()
                     st.success("تم حفظ الطالب وبيانات المنهج والمرحلة وسعر الحصة.")
                     st.rerun()
         admin_students=academy_students_admin[academy_students_admin["اسم الأكاديمية"].astype(str).str.strip()==selected]
@@ -7042,7 +7053,7 @@ elif t_page == "academies":
                         else:
                             _owner_subs=pd.concat([_owner_subs,pd.DataFrame([{"اسم الأكاديمية":selected,"اسم الطالب":_os_student,"قيمة الاشتراك":float(_os_amount),"تاريخ البداية":str(_os_date),"تاريخ النهاية":str(_os_end),"نوع الدفع":_os_type,"الحالة":"نشط","ملاحظات":f"دفع/إضافة رصيد {_os_amount:,.2f} جنيه بتاريخ {_os_date} ({_os_type})"}])],ignore_index=True)
                         st.session_state.academy_subscriptions_df=_owner_subs[COL_ACADEMY_SUBSCRIPTIONS]
-                        save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                        _save_academy_system()
                         st.success(f"تم إضافة {float(_os_amount):,.2f} جنيه لرصيد {_os_student}.")
                         st.rerun()
 
@@ -7062,7 +7073,7 @@ elif t_page == "academies":
                     if mask.any(): at.loc[mask,list(rec.keys())]=list(rec.values())
                     else: at=pd.concat([at,pd.DataFrame([rec])],ignore_index=True)
                     st.session_state.academy_teachers_df=at
-                    save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                    _save_academy_system()
                     st.success("تم حفظ المدرس والمادة.")
                     st.rerun()
 
@@ -7096,7 +7107,7 @@ elif t_page == "academies":
                     if mask.any(): ax.loc[mask,list(rec.keys())]=list(rec.values())
                     else: ax=pd.concat([ax,pd.DataFrame([rec])],ignore_index=True)
                     st.session_state.academy_assignments_df=ax
-                    save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                    _save_academy_system()
                     st.success("تم ربط الطالب بالمدرس.")
                     st.rerun()
             st.dataframe(ax[ax["اسم الأكاديمية"].astype(str).str.strip()==selected],use_container_width=True)
