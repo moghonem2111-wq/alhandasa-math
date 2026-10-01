@@ -4190,6 +4190,35 @@ if is_academy_mode:
                 st.rerun()
         if not at_a.empty:
             st.dataframe(at_a, use_container_width=True, hide_index=True)
+            st.markdown("### ✏️ تعديل أو حذف مدرس")
+            _tm_names=sorted([str(x).strip() for x in at_a["اسم المدرس"].dropna().unique() if str(x).strip()])
+            if _tm_names:
+                _tm=st.selectbox("اختر المدرس:",_tm_names,key="academy_manage_teacher")
+                _trm=at[(at["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(at["اسم المدرس"].astype(str).str.strip()==_tm)]
+                if not _trm.empty:
+                    _tmi=_trm.index[-1]; _trow=at.loc[_tmi]
+                    with st.form("academy_edit_teacher_form"):
+                        _tn2=st.text_input("اسم المدرس",value=str(_trow.get("اسم المدرس","")))
+                        _ts2=st.text_input("المادة",value=str(_trow.get("المادة","")))
+                        _tc2=st.selectbox("الحالة",["نشط","موقوف"],index=0 if str(_trow.get("الحالة","نشط"))!="موقوف" else 1)
+                        _tu=st.form_submit_button("💾 حفظ تعديل المدرس",use_container_width=True)
+                        _td=st.form_submit_button("🗑️ حذف المدرس",use_container_width=True)
+                    if _tu:
+                        _newt=_tn2.strip()
+                        if not _newt: st.error("اكتب اسم المدرس.")
+                        else:
+                            at.loc[_tmi,["اسم المدرس","المادة","الحالة"]]=[_newt,_ts2.strip(),_tc2]
+                            ax.loc[(ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(ax["اسم المدرس"].astype(str).str.strip()==_tm),"اسم المدرس"]=_newt
+                            aat.loc[(aat["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(aat["اسم المدرس"].astype(str).str.strip()==_tm),"اسم المدرس"]=_newt
+                            st.session_state.academy_teachers_df=at[COL_ACADEMY_TEACHERS]; st.session_state.academy_assignments_df=ax[COL_ACADEMY_ASSIGNMENTS]; st.session_state.academy_attendance_df=aat[COL_ACADEMY_ATTENDANCE]
+                            _save_academy_system(); st.success("تم تعديل بيانات المدرس."); st.rerun()
+                    if _td:
+                        at=at.drop(_tmi)
+                        ax=ax[~((ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(ax["اسم المدرس"].astype(str).str.strip()==_tm))]
+                        st.session_state.academy_teachers_df=at[COL_ACADEMY_TEACHERS]; st.session_state.academy_assignments_df=ax[COL_ACADEMY_ASSIGNMENTS]
+                        _save_academy_system(); st.success("تم حذف المدرس من الأكاديمية. تم الاحتفاظ بسجلات الحضور التاريخية."); st.rerun()
+
+
 
         st.markdown("### 🎯 تحديد سعر ونصيب كل طالب بشكل مستقل")
         _rate_students = sorted([str(x).strip() for x in ast_a["اسم الطالب"].dropna().unique() if str(x).strip()])
