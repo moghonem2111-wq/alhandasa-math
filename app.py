@@ -3752,25 +3752,18 @@ if is_academy_mode:
     attended["_price"] = pd.to_numeric(attended["سعر الحصة"], errors="coerce").fillna(0)
 
     if st.session_state.academy_page == "dashboard":
-        academy_pct = float(pd.to_numeric(academy.get("نسبة الأكاديمية", 0), errors="coerce") or 0)
         total = float(attended["_price"].sum()) if not attended.empty else 0.0
+        academy_total = float(pd.to_numeric(attended.get("نصيب الأكاديمية",0),errors="coerce").fillna(0).sum()) if not attended.empty else 0.0
+        teacher_total = float(pd.to_numeric(attended.get("نصيب المدرس",0),errors="coerce").fillna(0).sum()) if not attended.empty else 0.0
         d1,d2,d3,d4 = st.columns(4)
         d1.metric("👥 الطلاب", len(ast_a))
         d2.metric("📝 سجلات الحضور", len(aat_a))
         d3.metric("💰 قيمة الحصص المحضرة", f"{total:,.2f} جنيه")
         if is_academy_president:
-            platform_total = 0.0
-            for _, row in attended.iterrows():
-                teacher = str(row.get("اسم المدرس","")).strip()
-                tr = at_a[at_a["اسم المدرس"].astype(str).str.strip() == teacher]
-                _ts = pd.to_numeric(row.get("نصيب المدرس", float("nan")), errors="coerce")
-                _as = pd.to_numeric(row.get("نصيب الأكاديمية", float("nan")), errors="coerce")
-                if pd.isna(_ts): _ts = float(row["_price"]) * float(pd.to_numeric(tr.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) / 100.0 if not tr.empty else 0.0
-                if pd.isna(_as): _as = max(float(row["_price"])-float(_ts),0.0)
-                platform_total += max(float(row["_price"]) - float(_ts) - float(_as), 0.0)
-            d4.metric("🌐 مستحق المنصة", f"{platform_total:,.2f} جنيه")
+            platform_total = max(total - teacher_total - academy_total, 0.0)
+            d4.metric("🌐 نصيب المنصة", f"{platform_total:,.2f} جنيه")
         else:
-            d4.metric("🏫 مستحق الأكاديمية", f"{total*academy_pct/100:,.2f} جنيه")
+            d4.metric("🏫 نصيب الأكاديمية", f"{academy_total:,.2f} جنيه")
         st.info("كل بيانات هذا النظام خاصة بالأكاديمية نفسها، ولا يتم سحب الطلاب أو الحضور من المنصة التعليمية الأساسية.")
 
     elif st.session_state.academy_page == "students":
@@ -6691,7 +6684,6 @@ elif t_page == "academies":
         ac_phone = st.text_input("رقم الهاتف / اسم المستخدم:")
         ac_password = st.text_input("كلمة المرور:", type="password")
         ac_role = "رئيس الأكاديمية"
-        ac_pct = st.number_input("النسبة المرجعية القديمة (للتوافق فقط)", min_value=0.0, max_value=100.0, value=0.0, step=1.0)
         ac_status = st.selectbox("الحالة:", ["نشط","موقوف"])
         ac_save = st.form_submit_button("💾 حفظ حساب الأكاديمية", use_container_width=True)
         if ac_save:
