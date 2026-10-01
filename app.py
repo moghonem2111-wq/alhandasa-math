@@ -3771,16 +3771,22 @@ if is_academy_mode:
 
     elif st.session_state.academy_page == "students":
         st.markdown("### 👥 إدارة طلاب الأكاديمية")
+        _stu_curr = st.selectbox("المنهج / الدولة:", list(CURRICULUM_DATA.keys()), key="academy_student_curriculum")
+        _stu_grade = st.selectbox("المرحلة / الصف:", CURRICULUM_DATA.get(_stu_curr, ["المرحلة / الصف"]), key="academy_student_grade")
+        _stu_teachers = sorted([str(x).strip() for x in at_a["اسم المدرس"].dropna().unique() if str(x).strip()])
         with st.form("academy_add_student_form"):
             c1,c2 = st.columns(2)
             with c1:
                 student_name = st.text_input("اسم الطالب:")
                 student_phone = st.text_input("رقم الهاتف:")
-                student_curriculum = st.text_input("المنهج / الدولة:")
-                student_grade = st.text_input("المرحلة / الصف:")
+                student_subject = st.text_input("المادة التي يدرسها الطالب:", value="رياضيات")
+                student_supervisor = st.text_input("اسم المشرف الأكاديمي:")
+                student_teacher = st.selectbox("المدرس المسؤول:", ["بدون تحديد"] + _stu_teachers)
             with c2:
-                student_subject = st.text_input("المادة:")
-                student_supervisor = st.text_input("اسم المشرف:")
+                student_price = st.number_input("سعر الحصة (جنيه):", min_value=0.0, step=10.0, value=0.0)
+                student_teacher_share = st.number_input("نصيب المدرس (جنيه):", min_value=0.0, max_value=max(float(student_price),0.0), step=1.0, value=0.0)
+                student_academy_share = max(float(student_price)-float(student_teacher_share),0.0)
+                st.number_input("نصيب الأكاديمية (جنيه):", min_value=0.0, value=student_academy_share, step=1.0, disabled=True)
                 student_status = st.selectbox("الحالة:", ["نشط","موقوف"])
                 student_notes = st.text_input("ملاحظات:")
             save_student = st.form_submit_button("💾 إضافة / تحديث الطالب", use_container_width=True)
@@ -3789,12 +3795,19 @@ if is_academy_mode:
                     st.error("اكتب اسم الطالب.")
                 else:
                     mask = (ast["اسم الأكاديمية"].astype(str).str.strip() == academy_name) & (ast["اسم الطالب"].astype(str).str.strip() == student_name.strip())
-                    rec = {"معرف الطالب": (str(uuid.uuid4()) if not mask.any() else str(ast.loc[mask, "معرف الطالب"].iloc[0])), "اسم الأكاديمية":academy_name, "اسم الطالب":student_name.strip(), "رقم الهاتف":student_phone.strip(), "المنهج":student_curriculum.strip(), "المرحلة":student_grade.strip(), "المادة":student_subject.strip(), "اسم المشرف":student_supervisor.strip(), "الحالة":student_status, "ملاحظات":student_notes.strip()}
+                    _sid = str(ast.loc[mask,"معرف الطالب"].iloc[0]) if mask.any() else str(uuid.uuid4())
+                    rec = {"معرف الطالب":_sid,"اسم الأكاديمية":academy_name,"اسم الطالب":student_name.strip(),"رقم الهاتف":student_phone.strip(),"المنهج":_stu_curr,"المرحلة":_stu_grade,"المادة":student_subject.strip(),"اسم المشرف":student_supervisor.strip(),"الحالة":student_status,"ملاحظات":student_notes.strip()}
                     if mask.any(): ast.loc[mask, list(rec.keys())] = list(rec.values())
                     else: ast = pd.concat([ast, pd.DataFrame([rec])], ignore_index=True)
+                    if student_teacher != "بدون تحديد":
+                        _amask=(ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(ax["اسم الطالب"].astype(str).str.strip()==student_name.strip())
+                        _arec={"اسم الأكاديمية":academy_name,"اسم الطالب":student_name.strip(),"اسم المدرس":student_teacher,"سعر الحصة":float(student_price),"نصيب المدرس":float(student_teacher_share),"نصيب الأكاديمية":float(student_academy_share),"الحالة":"نشط"}
+                        if _amask.any(): ax.loc[_amask,list(_arec.keys())]=list(_arec.values())
+                        else: ax=pd.concat([ax,pd.DataFrame([_arec])],ignore_index=True)
+                        st.session_state.academy_assignments_df=ax[COL_ACADEMY_ASSIGNMENTS]
                     st.session_state.academy_students_df = ast[COL_ACADEMY_STUDENTS]
                     _save_academy_system()
-                    st.success("تم حفظ الطالب داخل نظام الأكاديمية فقط.")
+                    st.success("تم حفظ الطالب بالمنهج والمرحلة والمادة والمدرس وسعر الحصة.")
                     st.rerun()
         if ast_a.empty:
             st.info("لم تتم إضافة طلاب للأكاديمية بعد.")
@@ -3889,6 +3902,34 @@ if is_academy_mode:
                 c2.metric("➖ المخصوم", f"{sub_report['المخصوم'].sum():,.2f}")
                 c3.metric("💰 المتبقي", f"{sub_report['المتبقي'].sum():,.2f}")
                 st.dataframe(sub_report, use_container_width=True, hide_index=True)
+        
+        if student_options:
+            st.markdown("### ➕ إضافة رصيد للطالب عند الدفع")
+            with st.form("academy_add_balance_form"):
+                balance_student = st.selectbox("الطالب:", student_options, key="academy_balance_student")
+                balance_amount = st.number_input("المبلغ المدفوع / الرصيد المضاف (جنيه):", min_value=0.0, step=50.0, value=0.0)
+                balance_type = st.selectbox("نوع الدفع:", ["مقدم","مؤخر"], key="academy_balance_type")
+                balance_date = st.date_input("تاريخ الدفع:", value=date.today(), key="academy_balance_date")
+                if st.form_submit_button("💳 إضافة الرصيد", use_container_width=True, type="primary"):
+                    if balance_amount <= 0:
+                        st.error("اكتب مبلغًا أكبر من صفر.")
+                    else:
+                        subs = st.session_state.academy_subscriptions_df.copy()
+                        smask=(subs["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(subs["اسم الطالب"].astype(str).str.strip()==balance_student)
+                        if smask.any():
+                            idx=subs[smask].index[-1]
+                            old_amount=float(pd.to_numeric(subs.loc[idx,"قيمة الاشتراك"],errors="coerce") or 0)
+                            subs.loc[idx,"قيمة الاشتراك"]=old_amount+float(balance_amount)
+                            subs.loc[idx,"نوع الدفع"]=balance_type
+                            old_notes=str(subs.loc[idx,"ملاحظات"]) if pd.notna(subs.loc[idx,"ملاحظات"]) else ""
+                            note=f"دفع {balance_amount:,.2f} جنيه بتاريخ {balance_date} ({balance_type})"
+                            subs.loc[idx,"ملاحظات"]=(old_notes+" | "+note).strip(" |")
+                        else:
+                            subs=pd.concat([subs,pd.DataFrame([{"اسم الأكاديمية":academy_name,"اسم الطالب":balance_student,"قيمة الاشتراك":float(balance_amount),"تاريخ البداية":str(balance_date),"تاريخ النهاية":str(balance_date),"نوع الدفع":balance_type,"الحالة":"نشط","ملاحظات":f"دفع {balance_amount:,.2f} جنيه بتاريخ {balance_date} ({balance_type})"}])],ignore_index=True)
+                        st.session_state.academy_subscriptions_df=subs[COL_ACADEMY_SUBSCRIPTIONS]
+                        _save_academy_system()
+                        st.success(f"تم إضافة {balance_amount:,.2f} جنيه إلى رصيد الطالب {balance_student}.")
+                        st.rerun()
         else:
             st.info("أضف الطلاب أولاً.")
 
@@ -3896,17 +3937,18 @@ if is_academy_mode:
         st.markdown("### 👨‍🏫 إدارة المدرسين")
         with st.form("academy_teacher_form"):
             teacher_name = st.text_input("اسم المدرس:")
-            st.caption("نصيب المدرس يتم تحديده لكل طالب عند ربط الطالب بالمدرس، وليس كنسبة ثابتة.")
+            teacher_subject = st.text_input("المادة التي يشرحها:", placeholder="مثال: الرياضيات")
+            st.caption("نصيب المدرس يحدد لكل طالب، وليس كنسبة ثابتة.")
             teacher_status = st.selectbox("الحالة:", ["نشط","موقوف"])
             save_teacher = st.form_submit_button("💾 حفظ المدرس", use_container_width=True)
             if save_teacher:
                 mask = (at["اسم الأكاديمية"].astype(str).str.strip()==academy_name) & (at["اسم المدرس"].astype(str).str.strip()==teacher_name.strip())
-                rec={"اسم الأكاديمية":academy_name,"اسم المدرس":teacher_name.strip(),"نسبة المدرس":0.0,"الحالة":teacher_status}
+                rec={"اسم الأكاديمية":academy_name,"اسم المدرس":teacher_name.strip(),"المادة":teacher_subject.strip(),"نسبة المدرس":0.0,"الحالة":teacher_status}
                 if mask.any(): at.loc[mask,list(rec.keys())]=list(rec.values())
                 else: at=pd.concat([at,pd.DataFrame([rec])],ignore_index=True)
                 st.session_state.academy_teachers_df=at[COL_ACADEMY_TEACHERS]
                 _save_academy_system()
-                st.success("تم حفظ المدرس.")
+                st.success("تم حفظ المدرس والمادة.")
                 st.rerun()
         if not at_a.empty:
             st.dataframe(at_a, use_container_width=True, hide_index=True)
