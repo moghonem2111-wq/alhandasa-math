@@ -1621,8 +1621,8 @@ def load_all_data():
     return users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df, bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df, abqary_df, online_schedule_df, weekly_schedule_df, payment_records_df, academy_accounts_df, academy_teachers_df, academy_assignments_df
 
 def load_all_data_from_excel_bytes(excel_bytes):
-    cols=[COL_USERS,COL_SESSIONS,COL_ASSESSMENTS,COL_MESSAGES,COL_EXAMS,COL_ESSAYS,COL_BOOKINGS,COL_BANK_REQUESTS,COL_QUESTION_BANK,COL_VIDEOS,COL_VIDEO_COMMENTS,COL_ABQARY,COL_ONLINE_SCHEDULE,COL_WEEKLY_SCHEDULE,COL_PAYMENT_RECORDS]
-    sheets=["Users","Sessions","Assessments","Messages","Exams","Essays","Bookings","BankRequests","QuestionBank","Videos","VideoComments","AbqaryExams","OnlineSchedule","WeeklySchedule","PaymentRecords"]
+    cols=[COL_USERS,COL_SESSIONS,COL_ASSESSMENTS,COL_MESSAGES,COL_EXAMS,COL_ESSAYS,COL_BOOKINGS,COL_BANK_REQUESTS,COL_QUESTION_BANK,COL_VIDEOS,COL_VIDEO_COMMENTS,COL_ABQARY,COL_ONLINE_SCHEDULE,COL_WEEKLY_SCHEDULE,COL_PAYMENT_RECORDS,COL_ACADEMY_ACCOUNTS,COL_ACADEMY_TEACHERS,COL_ACADEMY_ASSIGNMENTS]
+    sheets=["Users","Sessions","Assessments","Messages","Exams","Essays","Bookings","BankRequests","QuestionBank","Videos","VideoComments","AbqaryExams","OnlineSchedule","WeeklySchedule","PaymentRecords","AcademyAccounts","AcademyTeachers","AcademyAssignments"]
     out=[]
     with pd.ExcelFile(io.BytesIO(excel_bytes), engine="openpyxl") as xls:
         for sheet, columns in zip(sheets, cols):
@@ -1650,6 +1650,9 @@ def _backup_tables_map():
         "OnlineSchedule": st.session_state.get("online_schedule_df", pd.DataFrame()),
         "WeeklySchedule": st.session_state.get("weekly_schedule_df", pd.DataFrame()),
         "PaymentRecords": st.session_state.get("payment_records_df", pd.DataFrame()),
+        "AcademyAccounts": st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)),
+        "AcademyTeachers": st.session_state.get("academy_teachers_df", pd.DataFrame(columns=COL_ACADEMY_TEACHERS)),
+        "AcademyAssignments": st.session_state.get("academy_assignments_df", pd.DataFrame(columns=COL_ACADEMY_ASSIGNMENTS)),
         "Ads": st.session_state.get("ads_df", pd.DataFrame(columns=COL_ADS)),
         "StudentInterface": st.session_state.get("student_interface_df", load_student_interface()),
         "TeacherProfile": st.session_state.get("teacher_profile_df", load_teacher_profile()),
@@ -1789,7 +1792,7 @@ def _restore_complete_backup(excel_bytes):
                     if c not in t.columns: t[c]=""
                 profile=t[COL_TEACHER_PROFILE].copy()
     if sum(len(x) for x in rec)==0 and ads.empty: raise ValueError("النسخة الاحتياطية لا تحتوي على بيانات أساسية.")
-    names=["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df"]
+    names=["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df","academy_accounts_df","academy_teachers_df","academy_assignments_df"]
     for n,df in zip(names,rec): st.session_state[n]=df
     st.session_state.ads_df=ads; st.session_state.student_interface_df=interface; st.session_state.teacher_profile_df=profile
     ok=save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df,st.session_state.ads_df)
@@ -6340,6 +6343,81 @@ elif t_page == "all_records":
                 file_name="تقرير_السجلات_الشاملة_لجميع_الطلاب.html",
                 mime="application/octet-stream"
             )
+
+elif t_page == "academies":
+    st.markdown("<div class='vertical-section-header'>🏫 إدارة الأكاديميات</div>", unsafe_allow_html=True)
+    st.caption("أنشئ حساب الأكاديمية، وحدد نسبة الأكاديمية ونسبة كل مدرس، ثم اربط كل طالب بالمدرس المسؤول عنه.")
+
+    aa = st.session_state.academy_accounts_df.copy()
+    at = st.session_state.academy_teachers_df.copy()
+    ax = st.session_state.academy_assignments_df.copy()
+
+    with st.form("teacher_create_academy"):
+        ac_name = st.text_input("اسم الأكاديمية:")
+        ac_phone = st.text_input("رقم الهاتف / اسم المستخدم:")
+        ac_password = st.text_input("كلمة المرور:", type="password")
+        ac_pct = st.number_input("نسبة الأكاديمية من سعر الحصة (%)", min_value=0.0, max_value=100.0, value=20.0, step=1.0)
+        ac_status = st.selectbox("الحالة:", ["نشط","موقوف"])
+        ac_save = st.form_submit_button("💾 حفظ حساب الأكاديمية", use_container_width=True)
+        if ac_save:
+            if not ac_name.strip() or not ac_phone.strip() or not ac_password.strip():
+                st.error("اكتب اسم الأكاديمية وبيانات الدخول.")
+            else:
+                mask = aa["اسم الأكاديمية"].astype(str).str.strip() == ac_name.strip()
+                rec = {"اسم الأكاديمية":ac_name.strip(),"رقم الهاتف":ac_phone.strip(),"كلمة المرور":ac_password.strip(),"نسبة الأكاديمية":float(ac_pct),"الحالة":ac_status}
+                if mask.any():
+                    aa.loc[mask, list(rec.keys())] = list(rec.values())
+                else:
+                    aa = pd.concat([aa,pd.DataFrame([rec])],ignore_index=True)
+                st.session_state.academy_accounts_df=aa
+                save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                st.success("تم حفظ حساب الأكاديمية.")
+                st.rerun()
+
+    if aa.empty:
+        st.info("لا توجد أكاديميات. أنشئ أول حساب من النموذج.")
+    else:
+        st.markdown("### 🏫 الأكاديميات")
+        st.dataframe(aa,use_container_width=True)
+        selected = st.selectbox("اختر أكاديمية للإدارة:",sorted(aa["اسم الأكاديمية"].astype(str).str.strip().unique()),key="academy_admin_selected")
+
+        st.markdown("### 👨‍🏫 المدرسون ونِسبهم")
+        with st.form("teacher_academy_teacher"):
+            teacher_name = st.text_input("اسم المدرس:")
+            teacher_pct = st.number_input("نسبة المدرس من سعر الحصة (%)",min_value=0.0,max_value=100.0,value=50.0,step=1.0)
+            teacher_status = st.selectbox("حالة المدرس:",["نشط","موقوف"])
+            teacher_save = st.form_submit_button("💾 حفظ المدرس",use_container_width=True)
+            if teacher_save:
+                mask=(at["اسم الأكاديمية"].astype(str).str.strip()==selected)&(at["اسم المدرس"].astype(str).str.strip()==teacher_name.strip())
+                rec={"اسم الأكاديمية":selected,"اسم المدرس":teacher_name.strip(),"نسبة المدرس":float(teacher_pct),"الحالة":teacher_status}
+                if mask.any(): at.loc[mask,list(rec.keys())]=list(rec.values())
+                else: at=pd.concat([at,pd.DataFrame([rec])],ignore_index=True)
+                st.session_state.academy_teachers_df=at
+                save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                st.success("تم حفظ المدرس ونسبته.")
+                st.rerun()
+
+        teacher_list=sorted([str(x).strip() for x in at.loc[at["اسم الأكاديمية"].astype(str).str.strip()==selected,"اسم المدرس"].dropna().unique() if str(x).strip()])
+        students=sorted([str(x).strip() for x in st.session_state.weekly_schedule_df.loc[st.session_state.weekly_schedule_df["اسم الأكاديمية"].astype(str).str.strip()==selected,"اسم الطالب"].dropna().unique() if str(x).strip()])
+        if teacher_list and students:
+            st.markdown("### 🔗 ربط الطلاب بالمدرسين")
+            with st.form("teacher_academy_assignment"):
+                student_name=st.selectbox("الطالب:",students)
+                teacher_for_student=st.selectbox("المدرس:",teacher_list)
+                assignment_status=st.selectbox("الحالة:",["نشط","موقوف"])
+                assignment_save=st.form_submit_button("💾 حفظ الربط",use_container_width=True)
+                if assignment_save:
+                    mask=(ax["اسم الأكاديمية"].astype(str).str.strip()==selected)&(ax["اسم الطالب"].astype(str).str.strip()==student_name)
+                    rec={"اسم الأكاديمية":selected,"اسم الطالب":student_name,"اسم المدرس":teacher_for_student,"الحالة":assignment_status}
+                    if mask.any(): ax.loc[mask,list(rec.keys())]=list(rec.values())
+                    else: ax=pd.concat([ax,pd.DataFrame([rec])],ignore_index=True)
+                    st.session_state.academy_assignments_df=ax
+                    save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                    st.success("تم ربط الطالب بالمدرس.")
+                    st.rerun()
+            st.dataframe(ax[ax["اسم الأكاديمية"].astype(str).str.strip()==selected],use_container_width=True)
+        elif students:
+            st.info("أضف مدرسًا أولاً حتى تستطيع ربط الطلاب به.")
 
 elif t_page == "online_backup":
     st.subheader("💾 النسخ الاحتياطية — على الموقع + على جهازك")
