@@ -6910,6 +6910,35 @@ elif t_page == "academies":
         if not admin_students.empty:
             st.dataframe(admin_students.drop(columns=["معرف الطالب"],errors="ignore"),use_container_width=True,hide_index=True)
 
+        st.markdown("### 💳 اشتراكات الطلاب وإضافة الرصيد")
+        _owner_subs = st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)).copy()
+        _owner_students_names = sorted([str(x).strip() for x in academy_students_admin[academy_students_admin["اسم الأكاديمية"].astype(str).str.strip()==selected]["اسم الطالب"].dropna().unique() if str(x).strip()])
+        if _owner_students_names:
+            with st.form("owner_academy_add_balance_form"):
+                _os_student=st.selectbox("الطالب:",_owner_students_names)
+                _os_amount=st.number_input("قيمة الاشتراك / الرصيد المضاف (جنيه):",min_value=0.0,step=50.0,value=0.0)
+                _os_type=st.selectbox("نوع الدفع:",["مقدم","مؤخر"])
+                _os_date=st.date_input("تاريخ الدفع:",value=date.today())
+                _os_end=st.date_input("تاريخ نهاية الاشتراك:",value=date.today())
+                if st.form_submit_button("💳 حفظ الدفع / إضافة الرصيد",use_container_width=True,type="primary"):
+                    if _os_amount<=0:
+                        st.error("اكتب مبلغًا أكبر من صفر.")
+                    else:
+                        _sm=(_owner_subs["اسم الأكاديمية"].astype(str).str.strip()==selected)&(_owner_subs["اسم الطالب"].astype(str).str.strip()==_os_student)
+                        if _sm.any():
+                            _si=_owner_subs[_sm].index[-1]
+                            _owner_subs.loc[_si,"قيمة الاشتراك"]=float(pd.to_numeric(_owner_subs.loc[_si,"قيمة الاشتراك"],errors="coerce") or 0)+float(_os_amount)
+                            _owner_subs.loc[_si,"نوع الدفع"]=_os_type
+                            _owner_subs.loc[_si,"تاريخ النهاية"]=str(_os_end)
+                            _oldn=str(_owner_subs.loc[_si,"ملاحظات"]) if pd.notna(_owner_subs.loc[_si,"ملاحظات"]) else ""
+                            _owner_subs.loc[_si,"ملاحظات"]=(_oldn+f" | دفع/إضافة رصيد {_os_amount:,.2f} جنيه بتاريخ {_os_date} ({_os_type})").strip(" |")
+                        else:
+                            _owner_subs=pd.concat([_owner_subs,pd.DataFrame([{"اسم الأكاديمية":selected,"اسم الطالب":_os_student,"قيمة الاشتراك":float(_os_amount),"تاريخ البداية":str(_os_date),"تاريخ النهاية":str(_os_end),"نوع الدفع":_os_type,"الحالة":"نشط","ملاحظات":f"دفع/إضافة رصيد {_os_amount:,.2f} جنيه بتاريخ {_os_date} ({_os_type})"}])],ignore_index=True)
+                        st.session_state.academy_subscriptions_df=_owner_subs[COL_ACADEMY_SUBSCRIPTIONS]
+                        save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                        st.success(f"تم إضافة {float(_os_amount):,.2f} جنيه لرصيد {_os_student}.")
+                        st.rerun()
+
         st.markdown("### 👨‍🏫 المدرسون")
         with st.form("teacher_academy_teacher"):
             teacher_name = st.text_input("اسم المدرس:")
