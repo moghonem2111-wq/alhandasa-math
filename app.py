@@ -6785,7 +6785,7 @@ elif t_page == "online_backup":
                     total=sum(len(x) for x in rec)
                     if core_total == 0: st.error("❌ ملف Excel صالح لكنه لا يحتوي على بيانات أساسية للطلاب/الحصص؛ تم إلغاء الاسترجاع لحماية بيانات الموقع.")
                     else:
-                        names=["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df"]
+                        names=["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df","academy_accounts_df","academy_teachers_df","academy_assignments_df","academy_access_df","academy_subscriptions_df","academy_students_df","academy_attendance_df","academy_schedule_df"]
                         for n,df in zip(names,rec): st.session_state[n]=df
                         st.session_state['ads_df']=load_ads()
                         st.session_state['_last_autosave_signature']=_autosave_signature()
