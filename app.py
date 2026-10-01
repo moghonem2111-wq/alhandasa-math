@@ -3852,7 +3852,10 @@ if is_academy_mode:
                 student_price = st.number_input("سعر الحصة (جنيه):", min_value=0.0, step=10.0, value=0.0)
                 student_teacher_share = st.number_input("سعر/نصيب المدرس (جنيه):", min_value=0.0, step=1.0, value=0.0, key="academy_student_teacher_share")
                 student_academy_share = max(float(student_price)-float(student_teacher_share),0.0)
-                st.number_input("نصيب الأكاديمية (جنيه) — تلقائي:", min_value=0.0, value=student_academy_share, step=1.0, disabled=True)
+                if is_academy_president:
+                    st.number_input("نصيب الأكاديمية (جنيه) — تلقائي:", min_value=0.0, value=student_academy_share, step=1.0, disabled=True, key="academy_student_academy_share")
+                else:
+                    st.caption("نصيب الأكاديمية محفوظ تلقائيًا ولا يظهر للمشرف.")
                 student_status = st.selectbox("الحالة:", ["نشط","موقوف"])
                 student_notes = st.text_input("ملاحظات:")
             save_student = st.form_submit_button("💾 إضافة / تحديث الطالب", use_container_width=True)
@@ -3905,7 +3908,10 @@ if is_academy_mode:
                     att_price = st.number_input("سعر الحصة للطالب (جنيه):", min_value=0.0, step=10.0, value=_default_price)
                     att_teacher_share = st.number_input("سعر/نصيب المدرس (جنيه):", min_value=0.0, step=1.0, value=_default_teacher_share, key="academy_att_teacher_share")
                     att_academy_share = max(float(att_price) - float(att_teacher_share), 0.0)
-                    st.number_input("نصيب الأكاديمية (جنيه) — تلقائي:", min_value=0.0, value=att_academy_share, step=1.0, disabled=True)
+                    if is_academy_president:
+                        st.number_input("نصيب الأكاديمية (جنيه) — تلقائي:", min_value=0.0, value=att_academy_share, step=1.0, disabled=True, key="academy_att_academy_share")
+                    else:
+                        st.caption("نصيب الأكاديمية محفوظ تلقائيًا ولا يظهر للمشرف.")
                     att_notes = st.text_input("ملاحظات:")
                 save_att = st.form_submit_button("✅ حفظ التحضير", use_container_width=True, type="primary")
                 if save_att:
@@ -3932,7 +3938,10 @@ if is_academy_mode:
                     st.rerun()
         if not aat_a.empty:
             show = aat_a.copy().sort_values(["التاريخ","الوقت"], ascending=False)
-            st.dataframe(show.drop(columns=["معرف السجل"], errors="ignore"), use_container_width=True, hide_index=True)
+            _show_att=show.drop(columns=["معرف السجل"], errors="ignore")
+            if not is_academy_president:
+                _show_att=_show_att.drop(columns=["نصيب الأكاديمية"],errors="ignore")
+            st.dataframe(_show_att, use_container_width=True, hide_index=True)
 
     elif st.session_state.academy_page == "subscriptions":
         st.markdown("### 💳 اشتراكات طلاب الأكاديمية")
@@ -4034,7 +4043,10 @@ if is_academy_mode:
                 _rate_price = st.number_input("سعر الحصة لهذا الطالب (جنيه):", min_value=0.0, step=10.0, value=_rate_price)
                 _rate_teacher_share = st.number_input("سعر/نصيب المدرس (جنيه):", min_value=0.0, step=1.0, value=_rate_teacher_share, key="academy_rate_teacher_share")
                 _rate_academy_share = max(float(_rate_price)-float(_rate_teacher_share),0.0)
-                st.number_input("نصيب الأكاديمية (جنيه) — تلقائي:", min_value=0.0, value=_rate_academy_share, step=1.0, disabled=True)
+                if is_academy_president:
+                    st.number_input("نصيب الأكاديمية (جنيه) — تلقائي:", min_value=0.0, value=_rate_academy_share, step=1.0, disabled=True, key="academy_rate_academy_share")
+                else:
+                    st.caption("نصيب الأكاديمية محفوظ تلقائيًا ولا يظهر للمشرف.")
                 if st.form_submit_button("💾 حفظ سعر ونصيب الطالب", use_container_width=True, type="primary"):
                         _mask = (ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name) & (ax["اسم الطالب"].astype(str).str.strip()==_rate_student)
                         _rec = {"اسم الأكاديمية":academy_name,"اسم الطالب":_rate_student,"اسم المدرس":_rate_teacher,"سعر الحصة":float(_rate_price),"نصيب المدرس":float(_rate_teacher_share),"نصيب الأكاديمية":float(_rate_academy_share),"الحالة":"نشط"}
@@ -4045,6 +4057,8 @@ if is_academy_mode:
                         st.success(f"تم حفظ سعر ونصيب الطالب {_rate_student} بشكل مستقل.")
                         st.rerun()
             _rate_view=ax[ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name].copy()
+            if not is_academy_president:
+                _rate_view=_rate_view.drop(columns=["نصيب الأكاديمية"],errors="ignore")
             st.dataframe(_rate_view,use_container_width=True,hide_index=True)
         elif _rate_students:
             st.info("أضف مدرسًا أولاً حتى تستطيع تحديد سعر ونِسب كل طالب.")
