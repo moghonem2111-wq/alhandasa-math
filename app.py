@@ -5975,6 +5975,13 @@ elif t_page == "add_session":
         return 100.0
 
     _registered_price = _get_registered_session_price(student_name, t_curriculum)
+    _active_subs = st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS))
+    _student_subs = _active_subs[_active_subs["اسم الطالب"].astype(str).str.strip()==str(student_name).strip()] if not _active_subs.empty else pd.DataFrame()
+    if not _student_subs.empty:
+        _sub_academy_preview = str(_student_subs.iloc[0].get("اسم الأكاديمية","")).strip()
+        _sub_preview = _academy_subscription_rows(_sub_academy_preview, student_name)
+        if not _sub_preview.empty:
+            st.info(f"💳 اشتراك الطالب: {float(_sub_preview.iloc[0].get('قيمة الاشتراك',0)):,.2f} جنيه — المخصوم: {float(_sub_preview.iloc[0].get('المخصوم',0)):,.2f} جنيه — المتبقي: {float(_sub_preview.iloc[0].get('المتبقي',0)):,.2f} جنيه. عند تسجيل «حاضر» أو «متأخر» يُخصم سعر الحصة تلقائياً.")
     status = st.selectbox(
         "حالة الحضور",
         ["حاضر", "غائب", "متأخر", "بعذر"],
@@ -6021,7 +6028,16 @@ elif t_page == "add_session":
                 }
                 st.session_state.sessions_df = pd.concat([st.session_state.sessions_df, pd.DataFrame([new_row])], ignore_index=True)
                 save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
-                st.success(f"✓ تم حفظ سجل الحصة للطالب ({student_name}) بنجاح!")
+                if status in ["حاضر","متأخر"] and not _student_subs.empty:
+                    _sub_academy_after = str(_student_subs.iloc[0].get("اسم الأكاديمية","")).strip()
+                    _after_sub = _academy_subscription_rows(_sub_academy_after, student_name)
+                    if not _after_sub.empty:
+                        _remaining_after = float(_after_sub.iloc[0].get("المتبقي",0))
+                        st.success(f"✓ تم حفظ سجل الحصة للطالب ({student_name}) — تم خصم {float(price):,.2f} جنيه من الاشتراك، والمتبقي {_remaining_after:,.2f} جنيه.")
+                    else:
+                        st.success(f"✓ تم حفظ سجل الحصة للطالب ({student_name}) بنجاح!")
+                else:
+                    st.success(f"✓ تم حفظ سجل الحصة للطالب ({student_name}) بنجاح!")
                 st.session_state.pop("prefill_student", None)
                 st.session_state.pop("prefill_schedule_idx", None)
                 st.session_state.pop("prefill_curriculum", None)
