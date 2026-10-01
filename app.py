@@ -4069,7 +4069,48 @@ if is_academy_mode:
             _salary_rows=[]
             for _tn in sorted(at_a["اسم المدرس"].astype(str).str.strip().unique()):
                 _tr=_fm[_fm["اسم المدرس"].astype(str).str.strip()==_tn]
-                _salary_rows.append({"اسم المدرس":_tn,"عدد الحصص":len(_tr),"قيمة الحصص":round(float(_tr["_price"].sum()) if not _tr.empty else 0,2),"مرتب المدرس":round(float(_tr["نصيب المدرس"].sum()) if not _tr.empty else 0,2)})
+                _due=float(_tr["نصيب المدرس"].sum()) if not _tr.empty else 0.0
+                _trow=at_a[at_a["اسم المدرس"].astype(str).str.strip()==_tn]
+                _pay_map={}
+                try:
+                    _raw_pay=str(_trow.iloc[0].get("سجل القبض","{}")) if not _trow.empty else "{}"
+                    _pay_map=json.loads(_raw_pay) if _raw_pay.strip() not in ("","nan") else {}
+                except Exception:
+                    _pay_map={}
+                _paid=float(pd.to_numeric(_pay_map.get(_fin_month,0),errors="coerce") or 0)
+                _salary_rows.append({"اسم المدرس":_tn,"عدد الحصص":len(_tr),"قيمة الحصص":round(float(_tr["_price"].sum()) if not _tr.empty else 0,2),"مرتب المدرس":round(_due,2),"المقبوض":round(_paid,2),"المتبقي":round(max(_due-_paid,0),2)})
+            
+            st.markdown("### 💳 قبض المدرسين")
+            _pay_teachers=sorted([str(x).strip() for x in at_a["اسم المدرس"].dropna().unique() if str(x).strip()])
+            if _pay_teachers:
+                with st.form("academy_teacher_payment_form"):
+                    _pay_teacher=st.selectbox("المدرس:",_pay_teachers,key="academy_pay_teacher")
+                    _pay_due=float(_fm[_fm["اسم المدرس"].astype(str).str.strip()==_pay_teacher]["نصيب المدرس"].sum()) if not _fm.empty else 0.0
+                    _pay_row=at_a[at_a["اسم المدرس"].astype(str).str.strip()==_pay_teacher]
+                    _pay_map={}
+                    try:
+                        _raw_pay=str(_pay_row.iloc[0].get("سجل القبض","{}")) if not _pay_row.empty else "{}"
+                        _pay_map=json.loads(_raw_pay) if _raw_pay.strip() not in ("","nan") else {}
+                    except Exception:
+                        _pay_map={}
+                    _pay_old=float(pd.to_numeric(_pay_map.get(_fin_month,0),errors="coerce") or 0)
+                    _pay_amount=st.number_input("المبلغ المقبوض لهذا الشهر (جنيه):",min_value=0.0,step=50.0,value=_pay_old)
+                    st.caption(f"المستحق: {_pay_due:,.2f} جنيه — المتبقي بعد القبض: {max(_pay_due-float(_pay_amount),0):,.2f} جنيه")
+                    if st.form_submit_button("💳 تسجيل القبض",use_container_width=True,type="primary"):
+                        _idx=at.index[(at["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(at["اسم المدرس"].astype(str).str.strip()==_pay_teacher)]
+                        if len(_idx):
+                            _m={}
+                            try:
+                                _raw=str(at.loc[_idx[-1],"سجل القبض"])
+                                _m=json.loads(_raw) if _raw.strip() not in ("","nan") else {}
+                            except Exception:
+                                _m={}
+                            _m[_fin_month]=float(_pay_amount)
+                            at.loc[_idx[-1],"سجل القبض"]=json.dumps(_m,ensure_ascii=False)
+                            st.session_state.academy_teachers_df=at[COL_ACADEMY_TEACHERS]
+                            _save_academy_system()
+                            st.success("تم تسجيل قبض المدرس للشهر المحدد.")
+                            st.rerun()
             st.markdown("### 👨‍🏫 مرتب كل مدرس من الحصص التي أعطاها")
             st.dataframe(pd.DataFrame(_salary_rows),use_container_width=True,hide_index=True)
             _student_month=[]
