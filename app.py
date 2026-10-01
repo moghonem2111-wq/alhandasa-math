@@ -591,6 +591,8 @@ COL_ADS = ["معرف_الإعلان", "تاريخ_النشر", "العنوان",
 COL_ACADEMY_ACCOUNTS = ["اسم الأكاديمية", "رقم الهاتف", "كلمة المرور", "نسبة الأكاديمية", "الحالة"]
 COL_ACADEMY_TEACHERS = ["اسم الأكاديمية", "اسم المدرس", "نسبة المدرس", "الحالة"]
 COL_ACADEMY_ASSIGNMENTS = ["اسم الأكاديمية", "اسم الطالب", "اسم المدرس", "الحالة"]
+COL_ACADEMY_ACCESS = ["اسم الأكاديمية", "رقم الهاتف", "نوع الحساب", "الحالة"]
+COL_ACADEMY_SUBSCRIPTIONS = ["اسم الأكاديمية", "اسم الطالب", "قيمة الاشتراك", "تاريخ البداية", "تاريخ النهاية", "الحالة", "ملاحظات"]
 
 def load_teacher_profile():
     profile = pd.DataFrame(columns=COL_TEACHER_PROFILE)
@@ -1545,6 +1547,8 @@ def load_all_data():
     academy_accounts_df = pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)
     academy_teachers_df = pd.DataFrame(columns=COL_ACADEMY_TEACHERS)
     academy_assignments_df = pd.DataFrame(columns=COL_ACADEMY_ASSIGNMENTS)
+    academy_access_df = pd.DataFrame(columns=COL_ACADEMY_ACCESS)
+    academy_subscriptions_df = pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)
 
     excel_source = _get_excel_source()
     if excel_source is not None:
@@ -1577,6 +1581,8 @@ def load_all_data():
                 if "AcademyAccounts" in xls.sheet_names: academy_accounts_df = pd.read_excel(xls, "AcademyAccounts")
                 if "AcademyTeachers" in xls.sheet_names: academy_teachers_df = pd.read_excel(xls, "AcademyTeachers")
                 if "AcademyAssignments" in xls.sheet_names: academy_assignments_df = pd.read_excel(xls, "AcademyAssignments")
+                if "AcademyAccess" in xls.sheet_names: academy_access_df = pd.read_excel(xls, "AcademyAccess")
+                if "AcademySubscriptions" in xls.sheet_names: academy_subscriptions_df = pd.read_excel(xls, "AcademySubscriptions")
         except Exception:
             pass
 
@@ -1615,14 +1621,32 @@ def load_all_data():
     for col in COL_ACADEMY_ASSIGNMENTS:
         if col not in academy_assignments_df.columns:
             academy_assignments_df[col] = "نشط" if col == "الحالة" else ""
+    for col in COL_ACADEMY_ACCESS:
+        if col not in academy_access_df.columns:
+            academy_access_df[col] = "رئيس الأكاديمية" if col == "نوع الحساب" else ("نشط" if col == "الحالة" else "")
+    for col in COL_ACADEMY_SUBSCRIPTIONS:
+        if col not in academy_subscriptions_df.columns:
+            academy_subscriptions_df[col] = "نشط" if col == "الحالة" else ""
     academy_accounts_df = academy_accounts_df[COL_ACADEMY_ACCOUNTS]
     academy_teachers_df = academy_teachers_df[COL_ACADEMY_TEACHERS]
     academy_assignments_df = academy_assignments_df[COL_ACADEMY_ASSIGNMENTS]
-    return users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df, bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df, abqary_df, online_schedule_df, weekly_schedule_df, payment_records_df, academy_accounts_df, academy_teachers_df, academy_assignments_df
+    academy_access_df = academy_access_df[COL_ACADEMY_ACCESS]
+    academy_subscriptions_df = academy_subscriptions_df[COL_ACADEMY_SUBSCRIPTIONS]
+    if not academy_accounts_df.empty:
+        existing_keys = set((str(r.get("اسم الأكاديمية","")).strip(), str(r.get("رقم الهاتف","")).strip()) for _, r in academy_access_df.iterrows())
+        legacy_rows = []
+        for _, r in academy_accounts_df.iterrows():
+            key = (str(r.get("اسم الأكاديمية","")).strip(), str(r.get("رقم الهاتف","")).strip())
+            if key[0] and key[1] and key not in existing_keys:
+                legacy_rows.append({"اسم الأكاديمية":key[0],"رقم الهاتف":key[1],"نوع الحساب":"رئيس الأكاديمية","الحالة":str(r.get("الحالة","نشط")).strip() or "نشط"})
+        if legacy_rows:
+            academy_access_df = pd.concat([academy_access_df, pd.DataFrame(legacy_rows)], ignore_index=True)
+            academy_access_df = academy_access_df[COL_ACADEMY_ACCESS]
+    return users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df, bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df, abqary_df, online_schedule_df, weekly_schedule_df, payment_records_df, academy_accounts_df, academy_teachers_df, academy_assignments_df, academy_access_df, academy_subscriptions_df
 
 def load_all_data_from_excel_bytes(excel_bytes):
-    cols=[COL_USERS,COL_SESSIONS,COL_ASSESSMENTS,COL_MESSAGES,COL_EXAMS,COL_ESSAYS,COL_BOOKINGS,COL_BANK_REQUESTS,COL_QUESTION_BANK,COL_VIDEOS,COL_VIDEO_COMMENTS,COL_ABQARY,COL_ONLINE_SCHEDULE,COL_WEEKLY_SCHEDULE,COL_PAYMENT_RECORDS,COL_ACADEMY_ACCOUNTS,COL_ACADEMY_TEACHERS,COL_ACADEMY_ASSIGNMENTS]
-    sheets=["Users","Sessions","Assessments","Messages","Exams","Essays","Bookings","BankRequests","QuestionBank","Videos","VideoComments","AbqaryExams","OnlineSchedule","WeeklySchedule","PaymentRecords","AcademyAccounts","AcademyTeachers","AcademyAssignments"]
+    cols=[COL_USERS,COL_SESSIONS,COL_ASSESSMENTS,COL_MESSAGES,COL_EXAMS,COL_ESSAYS,COL_BOOKINGS,COL_BANK_REQUESTS,COL_QUESTION_BANK,COL_VIDEOS,COL_VIDEO_COMMENTS,COL_ABQARY,COL_ONLINE_SCHEDULE,COL_WEEKLY_SCHEDULE,COL_PAYMENT_RECORDS,COL_ACADEMY_ACCOUNTS,COL_ACADEMY_TEACHERS,COL_ACADEMY_ASSIGNMENTS,COL_ACADEMY_ACCESS,COL_ACADEMY_SUBSCRIPTIONS]
+    sheets=["Users","Sessions","Assessments","Messages","Exams","Essays","Bookings","BankRequests","QuestionBank","Videos","VideoComments","AbqaryExams","OnlineSchedule","WeeklySchedule","PaymentRecords","AcademyAccounts","AcademyTeachers","AcademyAssignments","AcademyAccess","AcademySubscriptions"]
     out=[]
     with pd.ExcelFile(io.BytesIO(excel_bytes), engine="openpyxl") as xls:
         for sheet, columns in zip(sheets, cols):
@@ -1653,6 +1677,8 @@ def _backup_tables_map():
         "AcademyAccounts": st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)),
         "AcademyTeachers": st.session_state.get("academy_teachers_df", pd.DataFrame(columns=COL_ACADEMY_TEACHERS)),
         "AcademyAssignments": st.session_state.get("academy_assignments_df", pd.DataFrame(columns=COL_ACADEMY_ASSIGNMENTS)),
+        "AcademyAccess": st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS)),
+        "AcademySubscriptions": st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)),
         "Ads": st.session_state.get("ads_df", pd.DataFrame(columns=COL_ADS)),
         "StudentInterface": st.session_state.get("student_interface_df", load_student_interface()),
         "TeacherProfile": st.session_state.get("teacher_profile_df", load_teacher_profile()),
@@ -1792,7 +1818,7 @@ def _restore_complete_backup(excel_bytes):
                     if c not in t.columns: t[c]=""
                 profile=t[COL_TEACHER_PROFILE].copy()
     if sum(len(x) for x in rec)==0 and ads.empty: raise ValueError("النسخة الاحتياطية لا تحتوي على بيانات أساسية.")
-    names=["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df","academy_accounts_df","academy_teachers_df","academy_assignments_df"]
+    names=["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df","academy_accounts_df","academy_teachers_df","academy_assignments_df","academy_access_df","academy_subscriptions_df"]
     for n,df in zip(names,rec): st.session_state[n]=df
     st.session_state.ads_df=ads; st.session_state.student_interface_df=interface; st.session_state.teacher_profile_df=profile
     ok=save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df,st.session_state.ads_df)
@@ -1827,6 +1853,8 @@ def save_all_data(users_df, sessions_df, assessments_df, messages_df, exams_df, 
         st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)).to_excel(writer, sheet_name="AcademyAccounts", index=False)
         st.session_state.get("academy_teachers_df", pd.DataFrame(columns=COL_ACADEMY_TEACHERS)).to_excel(writer, sheet_name="AcademyTeachers", index=False)
         st.session_state.get("academy_assignments_df", pd.DataFrame(columns=COL_ACADEMY_ASSIGNMENTS)).to_excel(writer, sheet_name="AcademyAssignments", index=False)
+        st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS)).to_excel(writer, sheet_name="AcademyAccess", index=False)
+        st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)).to_excel(writer, sheet_name="AcademySubscriptions", index=False)
         # بيانات الإعلان النصية/الوصفية في Ads، بينما الوسائط الكبيرة تُخزن على أجزاء داخل AdsMedia
         # حتى لا تتجاوز الصورة الأصلية حد Excel للخلية ولا يتم قصها أو فقدان جودتها.
         ads_meta = ads_df.copy()
@@ -1863,7 +1891,7 @@ def save_all_data(users_df, sessions_df, assessments_df, messages_df, exams_df, 
     return bool(_cloud_ok and _structured_ok)
 
 if "users_df" not in st.session_state:
-    u_df, s_df, a_df, m_df, e_df, es_df, b_df, br_df, qb_df, v_df, vc_df, ab_df, os_df, ws_df, pr_df, aa_df, at_df, ax_df = load_all_data()
+    u_df, s_df, a_df, m_df, e_df, es_df, b_df, br_df, qb_df, v_df, vc_df, ab_df, os_df, ws_df, pr_df, aa_df, at_df, ax_df, acs_df, asub_df = load_all_data()
     st.session_state.users_df = u_df
     st.session_state.sessions_df = s_df
     st.session_state.assessments_df = a_df
@@ -1882,6 +1910,8 @@ if "users_df" not in st.session_state:
     st.session_state.academy_accounts_df = aa_df
     st.session_state.academy_teachers_df = at_df
     st.session_state.academy_assignments_df = ax_df
+    st.session_state.academy_access_df = acs_df
+    st.session_state.academy_subscriptions_df = asub_df
     st.session_state.ads_df = load_ads()
     st.session_state.teacher_profile_df = load_teacher_profile()
     # استخدم صورة المعلم المحفوظة داخل TeacherProfile/التخزين السحابي في كل صفحات الطالب
