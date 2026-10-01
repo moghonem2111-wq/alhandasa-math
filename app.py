@@ -3685,6 +3685,25 @@ def _academy_subscription_rows(academy_name, student_name=""):
         out.append({"اسم الأكاديمية":academy_clean,"اسم الطالب":name,"قيمة الاشتراك":initial,"المخصوم":consumed,"المتبقي":max(initial-consumed,0.0),"الحصص المستخدمة":int(len(ss)),"الحالة":str(sub.get("الحالة","نشط")).strip() or "نشط","تاريخ البداية":start,"تاريخ النهاية":end,"ملاحظات":str(sub.get("ملاحظات","")).strip()})
     return pd.DataFrame(out)
 
+
+def _save_academy_system():
+    """حفظ جميع بيانات المنصة والأكاديميات في التخزين السحابي."""
+    return save_all_data(
+        st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df,
+        st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df,
+        st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df,
+        st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df,
+        st.session_state.online_schedule_df, st.session_state.weekly_schedule_df, st.session_state.payment_records_df,
+        st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)),
+        st.session_state.get("academy_teachers_df", pd.DataFrame(columns=COL_ACADEMY_TEACHERS)),
+        st.session_state.get("academy_assignments_df", pd.DataFrame(columns=COL_ACADEMY_ASSIGNMENTS)),
+        st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS)),
+        st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)),
+        st.session_state.get("academy_students_df", pd.DataFrame(columns=COL_ACADEMY_STUDENTS)),
+        st.session_state.get("academy_attendance_df", pd.DataFrame(columns=COL_ACADEMY_ATTENDANCE)),
+        st.session_state.get("academy_schedule_df", pd.DataFrame(columns=COL_ACADEMY_SCHEDULE)),
+    )
+
 if is_academy_mode:
     if not st.session_state.logged_academy:
         st.query_params["role"] = "student"
@@ -3721,24 +3740,6 @@ if is_academy_mode:
     if "نسبة الأكاديمية" in aat.columns:
         _m = pd.to_numeric(aat["نصيب الأكاديمية"], errors="coerce").fillna(0).eq(0) & pd.to_numeric(aat["نسبة الأكاديمية"], errors="coerce").notna()
         aat.loc[_m, "نصيب الأكاديمية"] = pd.to_numeric(aat.loc[_m, "سعر الحصة"], errors="coerce").fillna(0) * pd.to_numeric(aat.loc[_m, "نسبة الأكاديمية"], errors="coerce").fillna(0) / 100
-
-    def _save_academy_system():
-        # حفظ بيانات الأكاديمية نفسها أيضًا، وليس بيانات المنصة الأساسية فقط.
-        return save_all_data(
-            st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df,
-            st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df,
-            st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df,
-            st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df,
-            st.session_state.online_schedule_df, st.session_state.weekly_schedule_df, st.session_state.payment_records_df,
-            st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)),
-            st.session_state.get("academy_teachers_df", pd.DataFrame(columns=COL_ACADEMY_TEACHERS)),
-            st.session_state.get("academy_assignments_df", pd.DataFrame(columns=COL_ACADEMY_ASSIGNMENTS)),
-            st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS)),
-            st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)),
-            st.session_state.get("academy_students_df", pd.DataFrame(columns=COL_ACADEMY_STUDENTS)),
-            st.session_state.get("academy_attendance_df", pd.DataFrame(columns=COL_ACADEMY_ATTENDANCE)),
-            st.session_state.get("academy_schedule_df", pd.DataFrame(columns=COL_ACADEMY_SCHEDULE)),
-        )
 
     st.markdown(f"<div class='vertical-section-header'>🏫 نظام إدارة {html.escape(academy_name)}</div>", unsafe_allow_html=True)
     st.caption(f"حساب مستقل للأكاديمية — {academy_role}. هذا النظام منفصل عن طلاب المنصة ومواعيدها وحضورها.")
