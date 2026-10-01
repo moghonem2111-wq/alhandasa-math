@@ -48,6 +48,7 @@ create table if not exists public.academy_subscriptions (
   "قيمة الاشتراك" numeric default 0,
   "تاريخ البداية" text,
   "تاريخ النهاية" text,
+  "نوع الدفع" text default 'مقدم',
   "الحالة" text,
   "ملاحظات" text
 );
@@ -58,8 +59,10 @@ create table if not exists public.academy_students (
   "اسم الأكاديمية" text,
   "اسم الطالب" text,
   "رقم الهاتف" text,
+  "المنهج" text,
   "المرحلة" text,
   "المادة" text,
+  "اسم المشرف" text,
   "الحالة" text,
   "ملاحظات" text
 );
