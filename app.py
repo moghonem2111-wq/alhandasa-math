@@ -4116,6 +4116,32 @@ if is_academy_mode:
                 st.dataframe(sub_report, use_container_width=True, hide_index=True)
         
         if student_options:
+            st.markdown("### ✏️ تعديل أو حذف اشتراك")
+            _smng=st.session_state.academy_subscriptions_df.copy()
+            _smng=_smng[_smng["اسم الأكاديمية"].astype(str).str.strip()==academy_name]
+            _slabels={idx:f"{_smng.loc[idx,'اسم الطالب']} — {_smng.loc[idx,'قيمة الاشتراك']} جنيه — {_smng.loc[idx,'نوع الدفع']}" for idx in _smng.index}
+            if _slabels:
+                _si=st.selectbox("اختر الاشتراك:",list(_slabels.keys()),format_func=lambda x:_slabels[x],key="academy_manage_subscription")
+                _sr=_smng.loc[_si]
+                try: _sbd=datetime.strptime(str(_sr.get("تاريخ البداية","")),"%Y-%m-%d").date()
+                except Exception: _sbd=date.today()
+                try: _sed=datetime.strptime(str(_sr.get("تاريخ النهاية","")),"%Y-%m-%d").date()
+                except Exception: _sed=date.today()
+                with st.form("academy_edit_subscription_form"):
+                    _samt=st.number_input("قيمة الاشتراك",min_value=0.0,step=50.0,value=float(pd.to_numeric(_sr.get("قيمة الاشتراك",0),errors="coerce") or 0))
+                    _sbs=st.date_input("تاريخ البداية",value=_sbd); _ses=st.date_input("تاريخ النهاية",value=_sed)
+                    _pt=["مقدم","مؤخر"]; _spt=st.selectbox("نوع الدفع",_pt,index=(_pt.index(str(_sr.get("نوع الدفع","مقدم"))) if str(_sr.get("نوع الدفع","مقدم")) in _pt else 0))
+                    _stt=["نشط","موقوف","منتهي"]; _sst=st.selectbox("الحالة",_stt,index=(_stt.index(str(_sr.get("الحالة","نشط"))) if str(_sr.get("الحالة","نشط")) in _stt else 0))
+                    _sno=st.text_input("ملاحظات",value=str(_sr.get("ملاحظات","")))
+                    _us=st.form_submit_button("💾 حفظ تعديل الاشتراك",use_container_width=True); _ds=st.form_submit_button("🗑️ حذف الاشتراك",use_container_width=True)
+                if _us:
+                    subs=st.session_state.academy_subscriptions_df.copy()
+                    subs.loc[_si,["قيمة الاشتراك","تاريخ البداية","تاريخ النهاية","نوع الدفع","الحالة","ملاحظات"]]=[float(_samt),str(_sbs),str(_ses),_spt,_sst,_sno.strip()]
+                    st.session_state.academy_subscriptions_df=subs[COL_ACADEMY_SUBSCRIPTIONS]; _save_academy_system(); st.success("تم تعديل الاشتراك."); st.rerun()
+                if _ds:
+                    subs=st.session_state.academy_subscriptions_df.copy().drop(_si)
+                    st.session_state.academy_subscriptions_df=subs[COL_ACADEMY_SUBSCRIPTIONS]; _save_academy_system(); st.success("تم حذف الاشتراك."); st.rerun()
+
             st.markdown("### ➕ إضافة رصيد للطالب عند الدفع")
             with st.form("academy_add_balance_form"):
                 balance_student = st.selectbox("الطالب:", student_options, key="academy_balance_student")
