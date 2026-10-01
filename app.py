@@ -3725,6 +3725,43 @@ if is_academy_mode:
             st.dataframe(academy_sessions[[x for x in cols if x in academy_sessions.columns]].sort_values("التاريخ", ascending=False), use_container_width=True)
 
     elif st.session_state.academy_page == "teachers":
+        st.markdown("### 💳 اشتراك طلاب الأكاديمية")
+        academy_student_options = sorted([str(x).strip() for x in st.session_state.weekly_schedule_df.loc[st.session_state.weekly_schedule_df["اسم الأكاديمية"].astype(str).str.strip()==selected,"اسم الطالب"].dropna().unique() if str(x).strip()])
+        if not academy_student_options:
+            academy_student_options = sorted([str(x).strip() for x in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(x).strip()])
+        with st.form("academy_subscription_form"):
+            sub_student = st.selectbox("اسم الطالب:", academy_student_options) if academy_student_options else st.text_input("اسم الطالب:")
+            existing_subs = st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS))
+            current_sub = existing_subs[(existing_subs["اسم الأكاديمية"].astype(str).str.strip()==selected) & (existing_subs["اسم الطالب"].astype(str).str.strip()==str(sub_student).strip())] if sub_student else pd.DataFrame()
+            default_amount = float(pd.to_numeric(current_sub.iloc[0].get("قيمة الاشتراك",0), errors="coerce") or 0) if not current_sub.empty else 0.0
+            sub_amount = st.number_input("قيمة الاشتراك (جنيه):", min_value=0.0, step=50.0, value=default_amount)
+            sub_start = st.date_input("تاريخ بداية الاشتراك:", value=date.today())
+            sub_end = st.date_input("تاريخ نهاية الاشتراك:", value=date.today())
+            sub_status = st.selectbox("حالة الاشتراك:", ["نشط","موقوف","منتهي"])
+            sub_notes = st.text_input("ملاحظات الاشتراك:", value=str(current_sub.iloc[0].get("ملاحظات","")) if not current_sub.empty else "")
+            sub_save = st.form_submit_button("💾 حفظ / تحديث الاشتراك", use_container_width=True)
+            if sub_save:
+                if not str(sub_student).strip():
+                    st.error("اختر الطالب.")
+                elif sub_end < sub_start:
+                    st.error("تاريخ نهاية الاشتراك يجب أن يكون بعد تاريخ البداية.")
+                else:
+                    subs = existing_subs.copy()
+                    mask = (subs["اسم الأكاديمية"].astype(str).str.strip()==selected) & (subs["اسم الطالب"].astype(str).str.strip()==str(sub_student).strip())
+                    rec = {"اسم الأكاديمية":selected,"اسم الطالب":str(sub_student).strip(),"قيمة الاشتراك":float(sub_amount),"تاريخ البداية":str(sub_start),"تاريخ النهاية":str(sub_end),"الحالة":sub_status,"ملاحظات":sub_notes.strip()}
+                    if mask.any():
+                        subs.loc[mask, list(rec.keys())] = list(rec.values())
+                    else:
+                        subs = pd.concat([subs,pd.DataFrame([rec])],ignore_index=True)
+                    st.session_state.academy_subscriptions_df = subs[COL_ACADEMY_SUBSCRIPTIONS]
+                    save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                    st.success("تم حفظ الاشتراك. سيُخصم منه تلقائياً عند تسجيل الحضور.")
+                    st.rerun()
+
+        _teacher_sub_report = _academy_subscription_rows(selected)
+        if not _teacher_sub_report.empty:
+            st.dataframe(_teacher_sub_report,use_container_width=True,hide_index=True)
+
         st.markdown("### 👨‍🏫 المدرسون ونِسبهم")
         tv = at[(at["اسم الأكاديمية"].astype(str).str.strip() == academy_name) & (at["الحالة"].astype(str).str.strip() != "موقوف")].copy()
         if tv.empty:
@@ -6485,6 +6522,7 @@ elif t_page == "academies":
         ac_name = st.text_input("اسم الأكاديمية:")
         ac_phone = st.text_input("رقم الهاتف / اسم المستخدم:")
         ac_password = st.text_input("كلمة المرور:", type="password")
+        ac_role = st.selectbox("نوع حساب الدخول:", ["رئيس الأكاديمية","مشرف أكاديمي"])
         ac_pct = st.number_input("نسبة الأكاديمية من سعر الحصة (%)", min_value=0.0, max_value=100.0, value=20.0, step=1.0)
         ac_status = st.selectbox("الحالة:", ["نشط","موقوف"])
         ac_save = st.form_submit_button("💾 حفظ حساب الأكاديمية", use_container_width=True)
@@ -6499,6 +6537,14 @@ elif t_page == "academies":
                 else:
                     aa = pd.concat([aa,pd.DataFrame([rec])],ignore_index=True)
                 st.session_state.academy_accounts_df=aa
+                access_df = st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS)).copy()
+                access_mask = (access_df["اسم الأكاديمية"].astype(str).str.strip()==ac_name.strip()) & (access_df["رقم الهاتف"].astype(str).str.strip()==ac_phone.strip())
+                access_rec = {"اسم الأكاديمية":ac_name.strip(),"رقم الهاتف":ac_phone.strip(),"نوع الحساب":ac_role,"الحالة":ac_status}
+                if access_mask.any():
+                    access_df.loc[access_mask, list(access_rec.keys())] = list(access_rec.values())
+                else:
+                    access_df = pd.concat([access_df,pd.DataFrame([access_rec])],ignore_index=True)
+                st.session_state.academy_access_df = access_df[COL_ACADEMY_ACCESS]
                 save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
                 st.success("تم حفظ حساب الأكاديمية.")
                 st.rerun()
