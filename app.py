@@ -3908,7 +3908,7 @@ if is_academy_mode:
         if not at_a.empty:
             st.dataframe(at_a, use_container_width=True, hide_index=True)
 
-        st.markdown("### 🎯 تحديد سعر ونِسب كل طالب بشكل مستقل")
+        st.markdown("### 🎯 تحديد سعر ونصيب كل طالب بشكل مستقل")
         _rate_students = sorted([str(x).strip() for x in ast_a["اسم الطالب"].dropna().unique() if str(x).strip()])
         _rate_teachers = sorted([str(x).strip() for x in at_a["اسم المدرس"].dropna().unique() if str(x).strip()])
         if _rate_students and _rate_teachers:
@@ -3931,7 +3931,7 @@ if is_academy_mode:
                         else: ax=pd.concat([ax,pd.DataFrame([_rec])],ignore_index=True)
                         st.session_state.academy_assignments_df=ax[COL_ACADEMY_ASSIGNMENTS]
                         _save_academy_system()
-                        st.success(f"تم حفظ سعر ونِسب الطالب {_rate_student} بشكل مستقل.")
+                        st.success(f"تم حفظ سعر ونصيب الطالب {_rate_student} بشكل مستقل.")
                         st.rerun()
             _rate_view=ax[ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name].copy()
             st.dataframe(_rate_view,use_container_width=True,hide_index=True)
@@ -6886,7 +6886,7 @@ elif t_page == "academies":
                 assignment_academy_share=max(float(assignment_price)-float(assignment_teacher_share),0.0)
                 st.number_input("نصيب الأكاديمية (جنيه):",min_value=0.0,value=assignment_academy_share,step=1.0,disabled=True)
                 assignment_status=st.selectbox("الحالة:",["نشط","موقوف"])
-                assignment_save=st.form_submit_button("💾 حفظ المدرس والسعر والنِسب لهذا الطالب",use_container_width=True)
+                assignment_save=st.form_submit_button("💾 حفظ المدرس وسعر ونصيب هذا الطالب",use_container_width=True)
                 if assignment_save:
                     mask=(ax["اسم الأكاديمية"].astype(str).str.strip()==selected)&(ax["اسم الطالب"].astype(str).str.strip()==student_name)
                     rec={"اسم الأكاديمية":selected,"اسم الطالب":student_name,"اسم المدرس":teacher_for_student,"سعر الحصة":float(assignment_price),"نصيب المدرس":float(assignment_teacher_share),"نصيب الأكاديمية":float(assignment_academy_share),"الحالة":assignment_status}
