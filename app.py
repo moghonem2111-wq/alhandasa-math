@@ -4048,6 +4048,9 @@ if is_academy_mode:
                 else:
                     st.caption("نصيب الأكاديمية محفوظ تلقائيًا ولا يظهر للمشرف.")
                 if st.form_submit_button("💾 حفظ سعر ونصيب الطالب", use_container_width=True, type="primary"):
+                        if float(_rate_teacher_share) > float(_rate_price):
+                            st.error("نصيب المدرس لا يمكن أن يكون أكبر من سعر الحصة.")
+                            st.stop()
                         _mask = (ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name) & (ax["اسم الطالب"].astype(str).str.strip()==_rate_student)
                         _rec = {"اسم الأكاديمية":academy_name,"اسم الطالب":_rate_student,"اسم المدرس":_rate_teacher,"سعر الحصة":float(_rate_price),"نصيب المدرس":float(_rate_teacher_share),"نصيب الأكاديمية":float(_rate_academy_share),"الحالة":"نشط"}
                         if _mask.any(): ax.loc[_mask,list(_rec.keys())]=list(_rec.values())
