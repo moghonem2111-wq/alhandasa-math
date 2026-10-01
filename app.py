@@ -3893,12 +3893,12 @@ if is_academy_mode:
         st.markdown("### 👨‍🏫 إدارة المدرسين")
         with st.form("academy_teacher_form"):
             teacher_name = st.text_input("اسم المدرس:")
-            teacher_pct = st.number_input("نسبة المدرس من سعر الحصة (%)", min_value=0.0, max_value=100.0, value=50.0, step=1.0)
+            st.caption("نصيب المدرس يتم تحديده لكل طالب عند ربط الطالب بالمدرس، وليس كنسبة ثابتة.")
             teacher_status = st.selectbox("الحالة:", ["نشط","موقوف"])
             save_teacher = st.form_submit_button("💾 حفظ المدرس", use_container_width=True)
             if save_teacher:
                 mask = (at["اسم الأكاديمية"].astype(str).str.strip()==academy_name) & (at["اسم المدرس"].astype(str).str.strip()==teacher_name.strip())
-                rec={"اسم الأكاديمية":academy_name,"اسم المدرس":teacher_name.strip(),"نسبة المدرس":float(teacher_pct),"الحالة":teacher_status}
+                rec={"اسم الأكاديمية":academy_name,"اسم المدرس":teacher_name.strip(),"نسبة المدرس":0.0,"الحالة":teacher_status}
                 if mask.any(): at.loc[mask,list(rec.keys())]=list(rec.values())
                 else: at=pd.concat([at,pd.DataFrame([rec])],ignore_index=True)
                 st.session_state.academy_teachers_df=at[COL_ACADEMY_TEACHERS]
@@ -6761,12 +6761,10 @@ elif t_page == "academies":
             _tr=_admin_present[_admin_present["اسم المدرس"].astype(str).str.strip()==_tn]
             _vals=pd.to_numeric(_tr.get("نصيب المدرس",pd.Series(dtype=float)),errors="coerce")
             _salary=float(_vals.fillna(0).sum()) if not _tr.empty else 0.0
-            _teacher_row=_admin_teachers[(_admin_teachers["اسم الأكاديمية"].astype(str).str.strip()==selected)&(_admin_teachers["اسم المدرس"].astype(str).str.strip()==_tn)]
-            _default_pct=float(pd.to_numeric(_teacher_row.iloc[0].get("نسبة المدرس",0),errors="coerce") or 0) if not _teacher_row.empty else 0.0
-            _teacher_report.append({"اسم المدرس":_tn,"نسبة المدرس الافتراضية":_default_pct,"عدد حصص الحضور":len(_tr),"إجمالي قيمة الحصص":round(float(_tr["_price"].sum()),2) if not _tr.empty else 0.0,"الراتب المستحق":round(_salary,2)})
+            _teacher_report.append({"اسم المدرس":_tn,"عدد حصص الحضور":len(_tr),"إجمالي قيمة الحصص":round(float(_tr["_price"].sum()),2) if not _tr.empty else 0.0,"الراتب المستحق":round(_salary,2)})
         _teacher_report_df=pd.DataFrame(_teacher_report)
         with st.expander("👥 كشف الطلاب وعدد حصص الحضور",expanded=True): st.dataframe(_student_report_df,use_container_width=True,hide_index=True)
-        with st.expander("💵 رواتب المدرسين ونِسبهم",expanded=True): st.dataframe(_teacher_report_df,use_container_width=True,hide_index=True)
+        with st.expander("💵 رواتب المدرسين",expanded=True): st.dataframe(_teacher_report_df,use_container_width=True,hide_index=True)
         with st.expander("📝 سجل الحضور الكامل",expanded=False): st.dataframe(_admin_att.drop(columns=["معرف السجل"],errors="ignore"),use_container_width=True,hide_index=True)
         _export_buf=io.BytesIO()
         with pd.ExcelWriter(_export_buf,engine="openpyxl") as _writer:
@@ -6774,8 +6772,8 @@ elif t_page == "academies":
             _teacher_report_df.to_excel(_writer,sheet_name="رواتب المدرسين",index=False)
             _admin_att.drop(columns=["معرف السجل"],errors="ignore").to_excel(_writer,sheet_name="الحضور",index=False)
         _pdf_rows="".join(f"<tr><td>{html.escape(str(x.get('اسم الطالب','')))}</td><td>{x.get('عدد حصص الحضور',0)}</td><td>{x.get('إجمالي قيمة الحصص',0):,.2f}</td><td>{html.escape(str(x.get('المدرس','')))}</td></tr>" for _,x in _student_report_df.iterrows())
-        _pdf_teacher_rows="".join(f"<tr><td>{html.escape(str(x.get('اسم المدرس','')))}</td><td>{x.get('نسبة المدرس الافتراضية',0):,.1f}%</td><td>{x.get('عدد حصص الحضور',0)}</td><td>{x.get('الراتب المستحق',0):,.2f}</td></tr>" for _,x in _teacher_report_df.iterrows())
-        _academy_report_html=f"""<!DOCTYPE html><html dir='rtl' lang='ar'><head><meta charset='utf-8'><title>تقرير أكاديمية {html.escape(selected)}</title><style>@page{{size:A4 landscape;margin:10mm}}body{{font-family:Arial;color:#102a52;font-weight:700}}h1,h2{{color:#0b5fe7}}table{{width:100%;border-collapse:collapse;margin:10px 0}}th,td{{border:1px solid #cbd5e1;padding:7px;text-align:center}}th{{background:#eaf4ff}}.box{{padding:10px;background:#f3f8ff;border-radius:10px}}</style></head><body><h1>🏫 تقرير إدارة أكاديمية {html.escape(selected)}</h1><div class='box'>الطلاب: {len(_admin_students)} | الحصص الحاضرة: {len(_admin_present)} | إجمالي الحصص: {_admin_total:,.2f} جنيه | رواتب المدرسين: {_admin_teacher_due:,.2f} جنيه | مستحق الأكاديمية: {_admin_ac_due:,.2f} جنيه | مستحق المنصة: {_admin_platform_due:,.2f} جنيه</div><h2>كشف الطلاب</h2><table><tr><th>الطالب</th><th>حصص الحضور</th><th>إجمالي قيمة الحصص</th><th>المدرس</th></tr>{_pdf_rows}</table><h2>رواتب المدرسين</h2><table><tr><th>المدرس</th><th>النسبة المرجعية</th><th>الحصص</th><th>الراتب المستحق</th></tr>{_pdf_teacher_rows}</table></body></html>"""
+        _pdf_teacher_rows="".join(f"<tr><td>{html.escape(str(x.get('اسم المدرس','')))}</td><td>{x.get('عدد حصص الحضور',0)}</td><td>{x.get('الراتب المستحق',0):,.2f}</td></tr>" for _,x in _teacher_report_df.iterrows())
+        _academy_report_html=f"""<!DOCTYPE html><html dir='rtl' lang='ar'><head><meta charset='utf-8'><title>تقرير أكاديمية {html.escape(selected)}</title><style>@page{{size:A4 landscape;margin:10mm}}body{{font-family:Arial;color:#102a52;font-weight:700}}h1,h2{{color:#0b5fe7}}table{{width:100%;border-collapse:collapse;margin:10px 0}}th,td{{border:1px solid #cbd5e1;padding:7px;text-align:center}}th{{background:#eaf4ff}}.box{{padding:10px;background:#f3f8ff;border-radius:10px}}</style></head><body><h1>🏫 تقرير إدارة أكاديمية {html.escape(selected)}</h1><div class='box'>الطلاب: {len(_admin_students)} | الحصص الحاضرة: {len(_admin_present)} | إجمالي الحصص: {_admin_total:,.2f} جنيه | رواتب المدرسين: {_admin_teacher_due:,.2f} جنيه | مستحق الأكاديمية: {_admin_ac_due:,.2f} جنيه | مستحق المنصة: {_admin_platform_due:,.2f} جنيه</div><h2>كشف الطلاب</h2><table><tr><th>الطالب</th><th>حصص الحضور</th><th>إجمالي قيمة الحصص</th><th>المدرس</th></tr>{_pdf_rows}</table><h2>رواتب المدرسين</h2><table><tr><th>المدرس</th><th>عدد الحصص</th><th>الراتب المستحق</th></tr>{_pdf_teacher_rows}</table></body></html>"""
         _academy_report_pdf=html_to_pdf_bytes(_academy_report_html)
         ec1,ec2=st.columns(2)
         with ec1: st.download_button("📥 تصدير تقرير الأكاديمية Excel",_export_buf.getvalue(),file_name=f"تقرير_أكاديمية_{selected}.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True)
@@ -6836,12 +6834,12 @@ elif t_page == "academies":
         st.markdown("### 👨‍🏫 المدرسون ونِسبهم")
         with st.form("teacher_academy_teacher"):
             teacher_name = st.text_input("اسم المدرس:")
-            teacher_pct = st.number_input("نسبة المدرس من سعر الحصة (%)",min_value=0.0,max_value=100.0,value=50.0,step=1.0)
+            st.caption("نصيب المدرس يتم تحديده لكل طالب عند تسجيل سعر الحصة، ويمكن أن يختلف من طالب لآخر.")
             teacher_status = st.selectbox("حالة المدرس:",["نشط","موقوف"])
             teacher_save = st.form_submit_button("💾 حفظ المدرس",use_container_width=True)
             if teacher_save:
                 mask=(at["اسم الأكاديمية"].astype(str).str.strip()==selected)&(at["اسم المدرس"].astype(str).str.strip()==teacher_name.strip())
-                rec={"اسم الأكاديمية":selected,"اسم المدرس":teacher_name.strip(),"نسبة المدرس":float(teacher_pct),"الحالة":teacher_status}
+                rec={"اسم الأكاديمية":selected,"اسم المدرس":teacher_name.strip(),"نسبة المدرس":0.0,"الحالة":teacher_status}
                 if mask.any(): at.loc[mask,list(rec.keys())]=list(rec.values())
                 else: at=pd.concat([at,pd.DataFrame([rec])],ignore_index=True)
                 st.session_state.academy_teachers_df=at
