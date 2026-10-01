@@ -26,6 +26,9 @@ create table if not exists public.academy_assignments (
   "اسم الأكاديمية" text,
   "اسم الطالب" text,
   "اسم المدرس" text,
+  "سعر الحصة" numeric default 0,
+  "نسبة المدرس" numeric default 0,
+  "نسبة الأكاديمية" numeric default 0,
   "الحالة" text
 );
 
@@ -71,6 +74,8 @@ create table if not exists public.academy_attendance (
   "الوقت" text,
   "الحالة" text,
   "سعر الحصة" numeric default 0,
+  "نسبة المدرس" numeric default 0,
+  "نسبة الأكاديمية" numeric default 0,
   "ملاحظات" text
 );
 
@@ -84,6 +89,13 @@ create table if not exists public.academy_schedule (
   "سعر الحصة" numeric default 0,
   "الحالة" text
 );
+
+-- ترقية الجداول التي تم إنشاؤها بالنسخة القديمة من الملف.
+alter table public.academy_assignments add column if not exists "سعر الحصة" numeric default 0;
+alter table public.academy_assignments add column if not exists "نسبة المدرس" numeric default 0;
+alter table public.academy_assignments add column if not exists "نسبة الأكاديمية" numeric default 0;
+alter table public.academy_attendance add column if not exists "نسبة المدرس" numeric default 0;
+alter table public.academy_attendance add column if not exists "نسبة الأكاديمية" numeric default 0;
 
 -- تفعيل القراءة/الإضافة/التعديل/الحذف من خلال مفتاح Supabase المستخدم في التطبيق.
 alter table public.academy_accounts enable row level security;
