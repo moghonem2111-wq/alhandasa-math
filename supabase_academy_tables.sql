@@ -17,6 +17,7 @@ create table if not exists public.academy_teachers (
   id uuid primary key default gen_random_uuid(),
   "اسم الأكاديمية" text,
   "اسم المدرس" text,
+  "المادة" text default '',
   "نسبة المدرس" numeric default 0,
   "الحالة" text
 );
@@ -29,6 +30,8 @@ create table if not exists public.academy_assignments (
   "سعر الحصة" numeric default 0,
   "نسبة المدرس" numeric default 0,
   "نسبة الأكاديمية" numeric default 0,
+  "نصيب المدرس" numeric default 0,
+  "نصيب الأكاديمية" numeric default 0,
   "الحالة" text
 );
 
@@ -79,6 +82,8 @@ create table if not exists public.academy_attendance (
   "سعر الحصة" numeric default 0,
   "نسبة المدرس" numeric default 0,
   "نسبة الأكاديمية" numeric default 0,
+  "نصيب المدرس" numeric default 0,
+  "نصيب الأكاديمية" numeric default 0,
   "ملاحظات" text
 );
 
@@ -98,8 +103,12 @@ alter table public.academy_teachers add column if not exists "المادة" text
 alter table public.academy_assignments add column if not exists "سعر الحصة" numeric default 0;
 alter table public.academy_assignments add column if not exists "نسبة المدرس" numeric default 0;
 alter table public.academy_assignments add column if not exists "نسبة الأكاديمية" numeric default 0;
+alter table public.academy_assignments add column if not exists "نصيب المدرس" numeric default 0;
+alter table public.academy_assignments add column if not exists "نصيب الأكاديمية" numeric default 0;
 alter table public.academy_attendance add column if not exists "نسبة المدرس" numeric default 0;
 alter table public.academy_attendance add column if not exists "نسبة الأكاديمية" numeric default 0;
+alter table public.academy_attendance add column if not exists "نصيب المدرس" numeric default 0;
+alter table public.academy_attendance add column if not exists "نصيب الأكاديمية" numeric default 0;
 
 -- تفعيل القراءة/الإضافة/التعديل/الحذف من خلال مفتاح Supabase المستخدم في التطبيق.
 alter table public.academy_accounts enable row level security;
