@@ -1770,10 +1770,15 @@ def _restore_complete_zip(zip_bytes):
                         out[col] = val
                 rows.append(out)
             tables[sheet] = pd.DataFrame(rows, columns=info.get("columns", []))
-        rec_names = ["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df"]
-        rec_sheets = ["Users","Sessions","Assessments","Messages","Exams","Essays","Bookings","BankRequests","QuestionBank","Videos","VideoComments","AbqaryExams","OnlineSchedule","WeeklySchedule","PaymentRecords"]
+        rec_names = ["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df","academy_accounts_df","academy_teachers_df","academy_assignments_df","academy_access_df","academy_subscriptions_df"]
+        rec_sheets = ["Users","Sessions","Assessments","Messages","Exams","Essays","Bookings","BankRequests","QuestionBank","Videos","VideoComments","AbqaryExams","OnlineSchedule","WeeklySchedule","PaymentRecords","AcademyAccounts","AcademyTeachers","AcademyAssignments","AcademyAccess","AcademySubscriptions"]
         for n, sheet in zip(rec_names, rec_sheets):
             st.session_state[n] = tables.get(sheet, pd.DataFrame())
+        for n, cols in [("academy_accounts_df",COL_ACADEMY_ACCOUNTS),("academy_teachers_df",COL_ACADEMY_TEACHERS),("academy_assignments_df",COL_ACADEMY_ASSIGNMENTS),("academy_access_df",COL_ACADEMY_ACCESS),("academy_subscriptions_df",COL_ACADEMY_SUBSCRIPTIONS)]:
+            for c in cols:
+                if c not in st.session_state[n].columns:
+                    st.session_state[n][c] = ""
+            st.session_state[n] = st.session_state[n][cols]
         st.session_state.ads_df = tables.get("Ads", pd.DataFrame(columns=COL_ADS))
         st.session_state.student_interface_df = tables.get("StudentInterface", load_student_interface())
         st.session_state.teacher_profile_df = tables.get("TeacherProfile", load_teacher_profile())
