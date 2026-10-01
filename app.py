@@ -3946,44 +3946,37 @@ if is_academy_mode:
             st.info("أضف مدرسًا أولاً حتى تستطيع تحديد سعر ونِسب كل طالب.")
 
     elif st.session_state.academy_page == "finance":
-        st.markdown("### 💰 حسابات الأكاديمية")
-        academy_pct = float(pd.to_numeric(academy.get("نسبة الأكاديمية",0), errors="coerce") or 0)
-        rows=[]
-        for _, row in attended.iterrows():
-            teacher=str(row.get("اسم المدرس","")).strip()
-            tr=at_a[at_a["اسم المدرس"].astype(str).str.strip()==teacher]
-            price=float(row["_price"])
-            teacher_share=pd.to_numeric(row.get("نصيب المدرس", float("nan")), errors="coerce")
-            academy_share=pd.to_numeric(row.get("نصيب الأكاديمية", float("nan")), errors="coerce")
-            if pd.isna(teacher_share):
-                old_pct=pd.to_numeric(row.get("نسبة المدرس", float("nan")), errors="coerce")
-                teacher_share=(price*float(old_pct)/100.0) if pd.notna(old_pct) else (price*float(pd.to_numeric(tr.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0)/100.0 if not tr.empty else 0.0)
-            if pd.isna(academy_share):
-                old_pct=pd.to_numeric(row.get("نسبة الأكاديمية", float("nan")), errors="coerce")
-                academy_share=(price*float(old_pct)/100.0) if pd.notna(old_pct) else max(price-teacher_share,0.0)
-            teacher_share=float(teacher_share); academy_share=float(academy_share)
-            data={"التاريخ":row.get("التاريخ",""),"الطالب":row.get("اسم الطالب",""),"المدرس":teacher,"الحالة":row.get("الحالة",""),"سعر الحصة":price,"نصيب الأكاديمية":round(academy_share,2),"نصيب المدرس":round(teacher_share,2)}
-            if is_academy_president:
-                platform_share=max(price-academy_share-teacher_share,0.0)
-                data["نصيب المنصة"]=round(platform_share,2)
-            rows.append(data)
-        report=pd.DataFrame(rows)
-        if report.empty:
-            st.info("لا توجد حصص محضرة حتى الآن.")
+        st.markdown("### 💰 الحسابات والمرتبات الشهرية")
+        _fin_att=aat_a[aat_a["الحالة"].astype(str).str.strip().isin(["حاضر","متأخر"])].copy()
+        _fin_att["_price"]=pd.to_numeric(_fin_att["سعر الحصة"],errors="coerce").fillna(0)
+        _fin_att["نصيب المدرس"]=pd.to_numeric(_fin_att["نصيب المدرس"],errors="coerce").fillna(0)
+        _fin_att["نصيب الأكاديمية"]=pd.to_numeric(_fin_att["نصيب الأكاديمية"],errors="coerce").fillna(0)
+        _fin_months=sorted(set([str(x)[:7] for x in _fin_att["التاريخ"].dropna().tolist() if str(x)[:7]]),reverse=True) or [date.today().strftime("%Y-%m")]
+        _fin_month=st.selectbox("اختر الشهر:",_fin_months,key="academy_finance_month")
+        _fm=_fin_att[_fin_att["التاريخ"].astype(str).str[:7]==_fin_month].copy()
+        if is_academy_president:
+            _teacher_total=float(_fm["نصيب المدرس"].sum()) if not _fm.empty else 0.0
+            _academy_total=float(_fm["نصيب الأكاديمية"].sum()) if not _fm.empty else 0.0
+            _gross=float(_fm["_price"].sum()) if not _fm.empty else 0.0
+            f1,f2,f3=st.columns(3)
+            f1.metric("👨‍🏫 مرتبات المدرسين للشهر",f"{_teacher_total:,.2f} جنيه")
+            f2.metric("🏫 نصيب الأكاديمية الشهري",f"{_academy_total:,.2f} جنيه")
+            f3.metric("💰 إجمالي الحصص للشهر",f"{_gross:,.2f} جنيه")
+            _salary_rows=[]
+            for _tn in sorted(at_a["اسم المدرس"].astype(str).str.strip().unique()):
+                _tr=_fm[_fm["اسم المدرس"].astype(str).str.strip()==_tn]
+                _salary_rows.append({"اسم المدرس":_tn,"عدد الحصص":len(_tr),"قيمة الحصص":round(float(_tr["_price"].sum()) if not _tr.empty else 0,2),"مرتب المدرس":round(float(_tr["نصيب المدرس"].sum()) if not _tr.empty else 0,2)})
+            st.markdown("### 👨‍🏫 مرتب كل مدرس من الحصص التي أعطاها")
+            st.dataframe(pd.DataFrame(_salary_rows),use_container_width=True,hide_index=True)
+            _student_month=[]
+            for _sn in sorted(_fm["اسم الطالب"].astype(str).str.strip().unique()):
+                _tr=_fm[_fm["اسم الطالب"].astype(str).str.strip()==_sn]
+                _student_month.append({"اسم الطالب":_sn,"اسم المدرس":str(_tr.iloc[0].get("اسم المدرس","")) if not _tr.empty else "","عدد الحصص":len(_tr),"نصيب الأكاديمية":round(float(_tr["نصيب الأكاديمية"].sum()),2)})
+            st.markdown("### 🧾 نصيب الأكاديمية الشهري حسب الطلاب")
+            st.dataframe(pd.DataFrame(_student_month),use_container_width=True,hide_index=True)
+            st.download_button("📥 تحميل الحسابات الشهرية",_fm.drop(columns=["_price"],errors="ignore").to_csv(index=False).encode("utf-8-sig"),file_name=f"حسابات_{academy_name}_{_fin_month}.csv",mime="text/csv",use_container_width=True)
         else:
-            if is_academy_president:
-                c1,c2,c3,c4=st.columns(4)
-                c1.metric("💰 إجمالي الحصص",f"{report['سعر الحصة'].sum():,.2f}")
-                c2.metric("🏫 الأكاديمية",f"{report['مستحق الأكاديمية'].sum():,.2f}")
-                c3.metric("👨‍🏫 المدرسون",f"{report['مستحق المدرس'].sum():,.2f}")
-                c4.metric("🌐 المنصة",f"{report['مستحق المنصة'].sum():,.2f}")
-            else:
-                c1,c2,c3=st.columns(3)
-                c1.metric("💰 إجمالي الحصص",f"{report['سعر الحصة'].sum():,.2f}")
-                c2.metric("🏫 الأكاديمية",f"{report['مستحق الأكاديمية'].sum():,.2f}")
-                c3.metric("👨‍🏫 المدرسون",f"{report['مستحق المدرس'].sum():,.2f}")
-            st.dataframe(report, use_container_width=True, hide_index=True)
-            st.download_button("📥 تحميل كشف الحساب Excel", report.to_csv(index=False).encode("utf-8-sig"), file_name=f"حسابات_{academy_name}.csv", mime="text/csv", use_container_width=True)
+            st.info("الحسابات التجميعية والمرتبات الشهرية تظهر لرئيس الأكاديمية فقط. يمكنك متابعة الطلاب والحضور والاشتراكات من الأقسام الأخرى.")
 
     st.stop()
     st.stop()
