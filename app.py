@@ -3840,44 +3840,46 @@ if is_academy_mode:
         _stu_curr = st.selectbox("المنهج / الدولة:", list(CURRICULUM_DATA.keys()), key="academy_student_curriculum")
         _stu_grade = st.selectbox("المرحلة / الصف:", CURRICULUM_DATA.get(_stu_curr, ["المرحلة / الصف"]), key="academy_student_grade")
         _stu_teachers = sorted([str(x).strip() for x in at_a["اسم المدرس"].dropna().unique() if str(x).strip()])
-        with st.form("academy_add_student_form"):
-            c1,c2 = st.columns(2)
-            with c1:
-                student_name = st.text_input("اسم الطالب:")
-                student_phone = st.text_input("رقم الهاتف:")
-                student_subject = st.text_input("المادة التي يدرسها الطالب:", value="رياضيات")
-                student_supervisor = st.text_input("اسم المشرف الأكاديمي:")
-                student_teacher = st.selectbox("المدرس المسؤول:", ["بدون تحديد"] + _stu_teachers)
-            with c2:
-                student_price = st.number_input("سعر الحصة (جنيه):", min_value=0.0, step=10.0, value=0.0)
-                student_teacher_share = st.number_input("سعر/نصيب المدرس (جنيه):", min_value=0.0, step=1.0, value=0.0, key="academy_student_teacher_share")
-                student_academy_share = max(float(student_price)-float(student_teacher_share),0.0)
-                if is_academy_president:
-                    st.number_input("نصيب الأكاديمية (جنيه) — تلقائي:", min_value=0.0, value=student_academy_share, step=1.0, disabled=True, key="academy_student_academy_share")
-                else:
-                    st.caption("نصيب الأكاديمية محفوظ تلقائيًا ولا يظهر للمشرف.")
-                student_status = st.selectbox("الحالة:", ["نشط","موقوف"])
-                student_notes = st.text_input("ملاحظات:")
-            save_student = st.form_submit_button("💾 إضافة / تحديث الطالب", use_container_width=True)
-            if save_student:
-                if not student_name.strip():
-                    st.error("اكتب اسم الطالب.")
-                else:
-                    mask = (ast["اسم الأكاديمية"].astype(str).str.strip() == academy_name) & (ast["اسم الطالب"].astype(str).str.strip() == student_name.strip())
-                    _sid = str(ast.loc[mask,"معرف الطالب"].iloc[0]) if mask.any() else str(uuid.uuid4())
-                    rec = {"معرف الطالب":_sid,"اسم الأكاديمية":academy_name,"اسم الطالب":student_name.strip(),"رقم الهاتف":student_phone.strip(),"المنهج":_stu_curr,"المرحلة":_stu_grade,"المادة":student_subject.strip(),"اسم المشرف":student_supervisor.strip(),"الحالة":student_status,"ملاحظات":student_notes.strip()}
-                    if mask.any(): ast.loc[mask, list(rec.keys())] = list(rec.values())
-                    else: ast = pd.concat([ast, pd.DataFrame([rec])], ignore_index=True)
-                    if student_teacher != "بدون تحديد":
-                        _amask=(ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(ax["اسم الطالب"].astype(str).str.strip()==student_name.strip())
-                        _arec={"اسم الأكاديمية":academy_name,"اسم الطالب":student_name.strip(),"اسم المدرس":student_teacher,"سعر الحصة":float(student_price),"نصيب المدرس":float(student_teacher_share),"نصيب الأكاديمية":float(student_academy_share),"الحالة":"نشط"}
-                        if _amask.any(): ax.loc[_amask,list(_arec.keys())]=list(_arec.values())
-                        else: ax=pd.concat([ax,pd.DataFrame([_arec])],ignore_index=True)
-                        st.session_state.academy_assignments_df=ax[COL_ACADEMY_ASSIGNMENTS]
-                    st.session_state.academy_students_df = ast[COL_ACADEMY_STUDENTS]
-                    _save_academy_system()
-                    st.success("تم حفظ الطالب بالمنهج والمرحلة والمادة والمدرس وسعر الحصة.")
-                    st.rerun()
+        # الحقول خارج الفورم حتى يتحدث نصيب الأكاديمية فورياً عند تغيير السعر أو نصيب المدرس.
+        c1,c2 = st.columns(2)
+        with c1:
+            student_name = st.text_input("اسم الطالب:", key="academy_student_name")
+            student_phone = st.text_input("رقم الهاتف:", key="academy_student_phone")
+            student_subject = st.text_input("المادة التي يدرسها الطالب:", value="رياضيات", key="academy_student_subject")
+            student_supervisor = st.text_input("اسم المشرف الأكاديمي:", key="academy_student_supervisor")
+            student_teacher = st.selectbox("المدرس المسؤول:", ["بدون تحديد"] + _stu_teachers, key="academy_student_teacher")
+        with c2:
+            student_price = st.number_input("سعر الحصة (جنيه):", min_value=0.0, step=10.0, value=0.0, key="academy_student_price")
+            student_teacher_share = st.number_input("نصيب المدرس (جنيه):", min_value=0.0, max_value=float(student_price), step=1.0, value=0.0, key="academy_student_teacher_share")
+            student_academy_share = max(float(student_price)-float(student_teacher_share),0.0)
+            if is_academy_president:
+                st.metric("🏫 نصيب الأكاديمية تلقائياً", f"{student_academy_share:,.2f} جنيه")
+            else:
+                st.caption("🏫 نصيب الأكاديمية محفوظ تلقائياً ولا يظهر للمشرف.")
+            student_status = st.selectbox("الحالة:", ["نشط","موقوف"], key="academy_student_status")
+            student_notes = st.text_input("ملاحظات:", key="academy_student_notes")
+        save_student = st.button("💾 إضافة / تحديث الطالب", use_container_width=True, type="primary", key="academy_add_student_btn")
+        if save_student:
+            if not student_name.strip():
+                st.error("اكتب اسم الطالب.")
+            elif float(student_teacher_share) > float(student_price):
+                st.error("نصيب المدرس لا يمكن أن يكون أكبر من سعر الحصة.")
+            else:
+                mask = (ast["اسم الأكاديمية"].astype(str).str.strip() == academy_name) & (ast["اسم الطالب"].astype(str).str.strip() == student_name.strip())
+                _sid = str(ast.loc[mask,"معرف الطالب"].iloc[0]) if mask.any() else str(uuid.uuid4())
+                rec = {"معرف الطالب":_sid,"اسم الأكاديمية":academy_name,"اسم الطالب":student_name.strip(),"رقم الهاتف":student_phone.strip(),"المنهج":_stu_curr,"المرحلة":_stu_grade,"المادة":student_subject.strip(),"اسم المشرف":student_supervisor.strip(),"الحالة":student_status,"ملاحظات":student_notes.strip()}
+                if mask.any(): ast.loc[mask, list(rec.keys())] = list(rec.values())
+                else: ast = pd.concat([ast, pd.DataFrame([rec])], ignore_index=True)
+                if student_teacher != "بدون تحديد":
+                    _amask=(ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(ax["اسم الطالب"].astype(str).str.strip()==student_name.strip())
+                    _arec={"اسم الأكاديمية":academy_name,"اسم الطالب":student_name.strip(),"اسم المدرس":student_teacher,"سعر الحصة":float(student_price),"نصيب المدرس":float(student_teacher_share),"نصيب الأكاديمية":float(student_academy_share),"الحالة":"نشط"}
+                    if _amask.any(): ax.loc[_amask,list(_arec.keys())]=list(_arec.values())
+                    else: ax=pd.concat([ax,pd.DataFrame([_arec])],ignore_index=True)
+                    st.session_state.academy_assignments_df=ax[COL_ACADEMY_ASSIGNMENTS]
+                st.session_state.academy_students_df = ast[COL_ACADEMY_STUDENTS]
+                _save_academy_system()
+                st.success("تم حفظ الطالب بالمنهج والمرحلة والمادة والمدرس وسعر الحصة ونصيب المدرس ونصيب الأكاديمية تلقائياً.")
+                st.rerun()
         if ast_a.empty:
             st.info("لم تتم إضافة طلاب للأكاديمية بعد.")
         else:
@@ -4070,79 +4072,128 @@ if is_academy_mode:
             st.info("أضف مدرسًا أولاً حتى تستطيع تحديد سعر ونِسب كل طالب.")
 
     elif st.session_state.academy_page == "finance":
-        st.markdown("### 💰 الحسابات والمرتبات الشهرية")
-        _fin_att=aat_a[aat_a["الحالة"].astype(str).str.strip().isin(["حاضر","متأخر"])].copy()
-        _fin_att["_price"]=pd.to_numeric(_fin_att["سعر الحصة"],errors="coerce").fillna(0)
-        _fin_att["نصيب المدرس"]=pd.to_numeric(_fin_att["نصيب المدرس"],errors="coerce").fillna(0)
-        _fin_att["نصيب الأكاديمية"]=pd.to_numeric(_fin_att["نصيب الأكاديمية"],errors="coerce").fillna(0)
-        _fin_months=sorted(set([str(x)[:7] for x in _fin_att["التاريخ"].dropna().tolist() if str(x)[:7]]),reverse=True) or [date.today().strftime("%Y-%m")]
-        _fin_month=st.selectbox("اختر الشهر:",_fin_months,key="academy_finance_month")
-        _fm=_fin_att[_fin_att["التاريخ"].astype(str).str[:7]==_fin_month].copy()
-        if is_academy_president:
-            _teacher_total=float(_fm["نصيب المدرس"].sum()) if not _fm.empty else 0.0
-            _academy_total=float(_fm["نصيب الأكاديمية"].sum()) if not _fm.empty else 0.0
-            _gross=float(_fm["_price"].sum()) if not _fm.empty else 0.0
-            f1,f2,f3=st.columns(3)
-            f1.metric("👨‍🏫 مرتبات المدرسين للشهر",f"{_teacher_total:,.2f} جنيه")
-            f2.metric("🏫 نصيب الأكاديمية الشهري",f"{_academy_total:,.2f} جنيه")
-            f3.metric("💰 إجمالي الحصص للشهر",f"{_gross:,.2f} جنيه")
-            _salary_rows=[]
-            for _tn in sorted(at_a["اسم المدرس"].astype(str).str.strip().unique()):
-                _tr=_fm[_fm["اسم المدرس"].astype(str).str.strip()==_tn]
-                _due=float(_tr["نصيب المدرس"].sum()) if not _tr.empty else 0.0
-                _trow=at_a[at_a["اسم المدرس"].astype(str).str.strip()==_tn]
-                _pay_map={}
+        st.markdown("### 💰 الحسابات ومرتبات المدرسين")
+        st.caption("اختر فترة زمنية لعرض الحصص، مستحقات كل مدرس، وقبض المدرسين. تسجيل القبض يحفظ تاريخ العملية ويُخصم من صافي نصيب الأكاديمية.")
+        _valid_att=aat_a[aat_a["الحالة"].astype(str).str.strip().isin(["حاضر","متأخر"])].copy()
+        _valid_att["_date_dt"]=pd.to_datetime(_valid_att["التاريخ"],errors="coerce",dayfirst=True)
+        _valid_att["_price"]=pd.to_numeric(_valid_att["سعر الحصة"],errors="coerce").fillna(0)
+        _valid_att["نصيب المدرس"]=pd.to_numeric(_valid_att["نصيب المدرس"],errors="coerce").fillna(0)
+        _valid_att["نصيب الأكاديمية"]=pd.to_numeric(_valid_att["نصيب الأكاديمية"],errors="coerce").fillna(0)
+        _default_start = _valid_att["_date_dt"].min().date() if not _valid_att.empty and _valid_att["_date_dt"].notna().any() else date.today().replace(day=1)
+        _default_end = _valid_att["_date_dt"].max().date() if not _valid_att.empty and _valid_att["_date_dt"].notna().any() else date.today()
+        dc1,dc2=st.columns(2)
+        with dc1: _fin_start=st.date_input("من تاريخ:",value=_default_start,key="academy_fin_start")
+        with dc2: _fin_end=st.date_input("إلى تاريخ:",value=_default_end,key="academy_fin_end")
+        if _fin_start>_fin_end:
+            st.error("تاريخ البداية يجب أن يكون قبل تاريخ النهاية.")
+            st.stop()
+        _fm=_valid_att[(_valid_att["_date_dt"].dt.date>=_fin_start)&(_valid_att["_date_dt"].dt.date<=_fin_end)].copy()
+
+        def _academy_payment_records(_teacher_row):
+            try:
+                raw=str(_teacher_row.get("سجل القبض","[]"))
+                if raw.strip() in ("","nan","{}"): return []
+                data=json.loads(raw)
+                if isinstance(data,dict):
+                    # توافق مع النسخة القديمة التي كانت تحفظ الشهر كمفتاح.
+                    return [{"التاريخ":f"{k}-01","من":f"{k}-01","إلى":f"{k}-31","المبلغ":float(v or 0)} for k,v in data.items()]
+                return data if isinstance(data,list) else []
+            except Exception:
+                return []
+
+        def _academy_period_paid(_teacher_row):
+            total=0.0
+            for p in _academy_payment_records(_teacher_row):
                 try:
-                    _raw_pay=str(_trow.iloc[0].get("سجل القبض","{}")) if not _trow.empty else "{}"
-                    _pay_map=json.loads(_raw_pay) if _raw_pay.strip() not in ("","nan") else {}
-                except Exception:
-                    _pay_map={}
-                _paid=float(pd.to_numeric(_pay_map.get(_fin_month,0),errors="coerce") or 0)
-                _salary_rows.append({"اسم المدرس":_tn,"عدد الحصص":len(_tr),"قيمة الحصص":round(float(_tr["_price"].sum()) if not _tr.empty else 0,2),"مرتب المدرس":round(_due,2),"المقبوض":round(_paid,2),"المتبقي":round(max(_due-_paid,0),2)})
-            
+                    pdte=pd.to_datetime(p.get("التاريخ",""),errors="coerce",dayfirst=True)
+                    if pd.notna(pdte) and _fin_start<=pdte.date()<=_fin_end:
+                        total += float(pd.to_numeric(p.get("المبلغ",0),errors="coerce") or 0)
+                except Exception: pass
+            return total
+
+        _salary_rows=[]
+        _teachers_for_period=sorted([str(x).strip() for x in at_a["اسم المدرس"].dropna().unique() if str(x).strip()])
+        for _tn in _teachers_for_period:
+            _tr=_fm[_fm["اسم المدرس"].astype(str).str.strip()==_tn]
+            _due=float(_tr["نصيب المدرس"].sum()) if not _tr.empty else 0.0
+            _tidx=at.index[(at["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(at["اسم المدرس"].astype(str).str.strip()==_tn)]
+            _trow=at.loc[_tidx[-1]] if len(_tidx) else pd.Series()
+            _paid=_academy_period_paid(_trow)
+            _salary_rows.append({"اسم المدرس":_tn,"عدد الحصص":len(_tr),"إجمالي قيمة الحصص":round(float(_tr["_price"].sum()),2),"المستحق":round(_due,2),"المقبوض":round(_paid,2),"المتبقي":round(max(_due-_paid,0),2)})
+
+        _academy_gross=float(_fm["نصيب الأكاديمية"].sum()) if not _fm.empty else 0.0
+        _all_paid_period=sum(float(x["المقبوض"]) for x in _salary_rows)
+        _academy_net=max(_academy_gross-_all_paid_period,0.0)
+
+        if is_academy_president:
+            k1,k2,k3,k4=st.columns(4)
+            k1.metric("🏫 نصيب الأكاديمية",f"{_academy_gross:,.2f} جنيه")
+            k2.metric("💳 المقبوض للمدرسين",f"{_all_paid_period:,.2f} جنيه")
+            k3.metric("🏦 صافي الأكاديمية بعد القبض",f"{_academy_net:,.2f} جنيه")
+            k4.metric("📝 عدد الحصص",len(_fm))
+            st.markdown("### 👨‍🏫 كشف مرتبات المدرسين للفترة")
+            st.dataframe(pd.DataFrame(_salary_rows),use_container_width=True,hide_index=True)
+
             st.markdown("### 💳 قبض المدرسين")
-            _pay_teachers=sorted([str(x).strip() for x in at_a["اسم المدرس"].dropna().unique() if str(x).strip()])
-            if _pay_teachers:
-                with st.form("academy_teacher_payment_form"):
-                    _pay_teacher=st.selectbox("المدرس:",_pay_teachers,key="academy_pay_teacher")
-                    _pay_due=float(_fm[_fm["اسم المدرس"].astype(str).str.strip()==_pay_teacher]["نصيب المدرس"].sum()) if not _fm.empty else 0.0
-                    _pay_row=at_a[at_a["اسم المدرس"].astype(str).str.strip()==_pay_teacher]
-                    _pay_map={}
-                    try:
-                        _raw_pay=str(_pay_row.iloc[0].get("سجل القبض","{}")) if not _pay_row.empty else "{}"
-                        _pay_map=json.loads(_raw_pay) if _raw_pay.strip() not in ("","nan") else {}
-                    except Exception:
-                        _pay_map={}
-                    _pay_old=float(pd.to_numeric(_pay_map.get(_fin_month,0),errors="coerce") or 0)
-                    _pay_amount=st.number_input("المبلغ المقبوض لهذا الشهر (جنيه):",min_value=0.0,step=50.0,value=_pay_old)
-                    st.caption(f"المستحق: {_pay_due:,.2f} جنيه — المتبقي بعد القبض: {max(_pay_due-float(_pay_amount),0):,.2f} جنيه")
-                    if st.form_submit_button("💳 تسجيل القبض",use_container_width=True,type="primary"):
+            if _teachers_for_period:
+                _pay_teacher=st.selectbox("اختر المدرس:",_teachers_for_period,key="academy_pay_teacher_v2")
+                _pay_due=next((float(x["المستحق"]) for x in _salary_rows if x["اسم المدرس"]==_pay_teacher),0.0)
+                _pay_paid=next((float(x["المقبوض"]) for x in _salary_rows if x["اسم المدرس"]==_pay_teacher),0.0)
+                _pay_remaining=max(_pay_due-_pay_paid,0.0)
+                p1,p2,p3=st.columns(3)
+                with p1: _pay_amount=st.number_input("مبلغ القبض (جنيه):",min_value=0.0,max_value=max(_pay_remaining,0.0),step=10.0,value=0.0,key="academy_pay_amount_v2")
+                with p2: _pay_date=st.date_input("تاريخ القبض:",value=date.today(),key="academy_pay_date_v2")
+                with p3: st.metric("المتبقي قبل القبض",f"{_pay_remaining:,.2f} جنيه")
+                st.caption(f"الفترة: {_fin_start} إلى {_fin_end} — المستحق: {_pay_due:,.2f} جنيه — المقبوض سابقاً: {_pay_paid:,.2f} جنيه")
+                if st.button("💾 تسجيل قبض المدرس",use_container_width=True,type="primary",key="academy_register_payment_v2"):
+                    if float(_pay_amount)<=0:
+                        st.error("اكتب مبلغ القبض.")
+                    elif float(_pay_amount)>_pay_remaining+0.001:
+                        st.error("مبلغ القبض أكبر من المتبقي للمدرس في هذه الفترة.")
+                    else:
                         _idx=at.index[(at["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(at["اسم المدرس"].astype(str).str.strip()==_pay_teacher)]
                         if len(_idx):
-                            _m={}
-                            try:
-                                _raw=str(at.loc[_idx[-1],"سجل القبض"])
-                                _m=json.loads(_raw) if _raw.strip() not in ("","nan") else {}
-                            except Exception:
-                                _m={}
-                            _m[_fin_month]=float(_pay_amount)
-                            at.loc[_idx[-1],"سجل القبض"]=json.dumps(_m,ensure_ascii=False)
+                            _row_idx=_idx[-1]
+                            _records=_academy_payment_records(at.loc[_row_idx])
+                            _records.append({"التاريخ":str(_pay_date),"من":str(_fin_start),"إلى":str(_fin_end),"المبلغ":float(_pay_amount)})
+                            at.loc[_row_idx,"سجل القبض"]=json.dumps(_records,ensure_ascii=False)
                             st.session_state.academy_teachers_df=at[COL_ACADEMY_TEACHERS]
                             _save_academy_system()
-                            st.success("تم تسجيل قبض المدرس للشهر المحدد.")
+                            st.success(f"تم تسجيل قبض {_pay_amount:,.2f} جنيه للمدرس {_pay_teacher} بتاريخ {_pay_date}.")
                             st.rerun()
-            st.markdown("### 👨‍🏫 مرتب كل مدرس من الحصص التي أعطاها")
-            st.dataframe(pd.DataFrame(_salary_rows),use_container_width=True,hide_index=True)
-            _student_month=[]
-            for _sn in sorted(_fm["اسم الطالب"].astype(str).str.strip().unique()):
-                _tr=_fm[_fm["اسم الطالب"].astype(str).str.strip()==_sn]
-                _student_month.append({"اسم الطالب":_sn,"اسم المدرس":str(_tr.iloc[0].get("اسم المدرس","")) if not _tr.empty else "","عدد الحصص":len(_tr),"نصيب الأكاديمية":round(float(_tr["نصيب الأكاديمية"].sum()),2)})
-            st.markdown("### 🧾 نصيب الأكاديمية الشهري حسب الطلاب")
-            st.dataframe(pd.DataFrame(_student_month),use_container_width=True,hide_index=True)
-            st.download_button("📥 تحميل الحسابات الشهرية",_fm.drop(columns=["_price"],errors="ignore").to_csv(index=False).encode("utf-8-sig"),file_name=f"حسابات_{academy_name}_{_fin_month}.csv",mime="text/csv",use_container_width=True)
-        else:
-            st.info("الحسابات التجميعية والمرتبات الشهرية تظهر لرئيس الأكاديمية فقط. يمكنك متابعة الطلاب والحضور والاشتراكات من الأقسام الأخرى.")
 
+            st.markdown("### 📒 سجل عمليات القبض")
+            _payment_rows=[]
+            for _tn in _teachers_for_period:
+                _tidx=at.index[(at["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(at["اسم المدرس"].astype(str).str.strip()==_tn)]
+                if not len(_tidx): continue
+                for _p in _academy_payment_records(at.loc[_tidx[-1]]):
+                    _payment_rows.append({"اسم المدرس":_tn,"تاريخ القبض":_p.get("التاريخ",""),"من":_p.get("من",""),"إلى":_p.get("إلى",""),"المبلغ":float(pd.to_numeric(_p.get("المبلغ",0),errors="coerce") or 0)})
+            if _payment_rows: st.dataframe(pd.DataFrame(_payment_rows),use_container_width=True,hide_index=True)
+
+        # كشف تفصيلي للمدرس: يظهر للرئيس والمشرف، دون أي تجميع لنصيب الأكاديمية للمشرف.
+        st.markdown("### 🧾 كشف حساب مدرس بالتفصيل")
+        if _teachers_for_period:
+            _statement_teacher=st.selectbox("اختر المدرس للكشف:",_teachers_for_period,key="academy_teacher_statement_v2")
+            _st=_fm[_fm["اسم المدرس"].astype(str).str.strip()==_statement_teacher].copy()
+            _statement_rows=[]
+            for _,rr in _st.iterrows():
+                _statement_rows.append({"التاريخ":str(rr.get("التاريخ","")),"اسم الطالب":str(rr.get("اسم الطالب","")),"عدد الحصص":1,"سعر الحصة":round(float(rr.get("_price",0)),2),"نصيب المدرس":round(float(rr.get("نصيب المدرس",0)),2)})
+            _statement_df=pd.DataFrame(_statement_rows)
+            if _statement_df.empty: st.info("لا توجد حصص لهذا المدرس في الفترة المحددة.")
+            else:
+                st.dataframe(_statement_df,use_container_width=True,hide_index=True)
+                _st_total=float(_statement_df["نصيب المدرس"].sum())
+                _st_price=float(_statement_df["سعر الحصة"].sum())
+                st.write(f"**إجمالي الحصص:** {len(_statement_df)} — **إجمالي أسعار الحصص:** {_st_price:,.2f} جنيه — **إجمالي مستحق المدرس:** {_st_total:,.2f} جنيه")
+                _rows_html="".join(f"<tr><td>{html.escape(str(r['التاريخ']))}</td><td>{html.escape(str(r['اسم الطالب']))}</td><td>1</td><td>{r['سعر الحصة']:,.2f}</td><td>{r['نصيب المدرس']:,.2f}</td></tr>" for _,r in _statement_df.iterrows())
+                _print_html=make_print_html(f"كشف حساب المدرس — {_statement_teacher}",_rows_html,"<th>التاريخ</th><th>اسم الطالب</th><th>عدد الحصص</th><th>سعر الحصة</th><th>نصيب المدرس</th>",f"الفترة من {_fin_start} إلى {_fin_end} — إجمالي المستحق: {_st_total:,.2f} جنيه")
+                _pdf=html_to_pdf_bytes(_print_html)
+                if _pdf: st.download_button("🖨️ طباعة كشف المدرس PDF",_pdf,file_name=f"كشف_{_statement_teacher}_{_fin_start}_{_fin_end}.pdf",mime="application/pdf",use_container_width=True,key="academy_teacher_statement_pdf")
+                else: st.download_button("🖨️ طباعة كشف المدرس",_print_html.encode("utf-8"),file_name=f"كشف_{_statement_teacher}_{_fin_start}_{_fin_end}.html",mime="text/html",use_container_width=True,key="academy_teacher_statement_html")
+                st.download_button("📥 تحميل كشف المدرس Excel/CSV",_statement_df.to_csv(index=False).encode("utf-8-sig"),file_name=f"كشف_{_statement_teacher}_{_fin_start}_{_fin_end}.csv",mime="text/csv",use_container_width=True,key="academy_teacher_statement_csv")
+        else:
+            st.info("لا يوجد مدرسون مسجلون في الأكاديمية بعد.")
     st.stop()
     st.stop()
 
