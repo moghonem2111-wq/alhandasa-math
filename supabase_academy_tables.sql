@@ -19,6 +19,7 @@ create table if not exists public.academy_teachers (
   "اسم المدرس" text,
   "المادة" text default '',
   "نسبة المدرس" numeric default 0,
+  "سجل القبض" text default '{}',
   "الحالة" text
 );
 
@@ -100,6 +101,7 @@ create table if not exists public.academy_schedule (
 
 -- ترقية الجداول التي تم إنشاؤها بالنسخة القديمة من الملف.
 alter table public.academy_teachers add column if not exists "المادة" text default '';
+alter table public.academy_teachers add column if not exists "سجل القبض" text default '{}';
 alter table public.academy_assignments add column if not exists "سعر الحصة" numeric default 0;
 alter table public.academy_assignments add column if not exists "نسبة المدرس" numeric default 0;
 alter table public.academy_assignments add column if not exists "نسبة الأكاديمية" numeric default 0;
