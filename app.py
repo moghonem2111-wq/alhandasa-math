@@ -432,6 +432,9 @@ CURRICULUM_DATA = {
         "الصف الحادي عشر (القسم العلمي)", "الصف الحادي عشر (القسم الأدبي)",
         "الصف الثاني عشر (القسم العلمي)", "الصف الثاني عشر (القسم الأدبي)"
     ],
+    "المنهج الدولي 🌎": [
+        "Primary / Elementary", "Middle School", "Grade 9", "Grade 10", "Grade 11", "Grade 12", "IGCSE", "A-Level", "IB", "American High School", "SAT / ACT"
+    ],
     "المنهج السوداني 🇸🇩": [
         "المرحلة المتوسطة (أولى / ثانية / ثالثة متوسط)", "الصف الأول الثانوي",
         "الصف الثاني الثانوي (علمي)", "الصف الثاني الثانوي (أدبي)",
@@ -598,7 +601,7 @@ COL_STUDENT_INTERFACE = ["عنوان_الواجهة", "الشارة", "عنوا�
 COL_PAYMENT_RECORDS = ["التاريخ", "الشهر", "اسم الطالب", "المبلغ", "طريقة الدفع", "حالة الدفع", "ملاحظات"]
 COL_ADS = ["معرف_الإعلان", "تاريخ_النشر", "العنوان", "نوع_الإعلان", "النص", "الوسائط_base64", "نوع_الوسائط", "الرابط", "نص_الزر", "الحالة"]
 COL_ACADEMY_ACCOUNTS = ["اسم الأكاديمية", "رقم الهاتف", "كلمة المرور", "نسبة الأكاديمية", "الحالة"]
-COL_ACADEMY_TEACHERS = ["اسم الأكاديمية", "اسم المدرس", "نسبة المدرس", "الحالة"]
+COL_ACADEMY_TEACHERS = ["اسم الأكاديمية", "اسم المدرس", "المادة", "نسبة المدرس", "الحالة"]
 COL_ACADEMY_ASSIGNMENTS = ["اسم الأكاديمية", "اسم الطالب", "اسم المدرس", "سعر الحصة", "نصيب المدرس", "نصيب الأكاديمية", "الحالة"]
 COL_ACADEMY_ACCESS = ["اسم الأكاديمية", "رقم الهاتف", "كلمة المرور", "نوع الحساب", "الحالة"]
 COL_ACADEMY_SUBSCRIPTIONS = ["اسم الأكاديمية", "اسم الطالب", "قيمة الاشتراك", "تاريخ البداية", "تاريخ النهاية", "نوع الدفع", "الحالة", "ملاحظات"]
@@ -6822,46 +6825,64 @@ elif t_page == "academies":
 
         st.markdown("### 👥 طلاب الأكاديمية المستقلة")
         academy_students_admin=st.session_state.get("academy_students_df",pd.DataFrame(columns=COL_ACADEMY_STUDENTS)).copy()
+        _owner_curr = st.selectbox("المنهج / الدولة:", list(CURRICULUM_DATA.keys()), key="owner_academy_curriculum")
+        _owner_grades = CURRICULUM_DATA.get(_owner_curr, ["المرحلة / الصف"])
+        _owner_grade = st.selectbox("المرحلة / الصف:", _owner_grades, key="owner_academy_grade")
+        _owner_teachers = sorted([str(x).strip() for x in at.loc[at["اسم الأكاديمية"].astype(str).str.strip()==selected,"اسم المدرس"].dropna().unique() if str(x).strip()])
         with st.form("academy_admin_student_form"):
             acs_name=st.text_input("اسم الطالب:")
             acs_phone=st.text_input("رقم هاتف الطالب:")
-            acs_grade=st.text_input("المرحلة / الصف:")
-            acs_subject=st.text_input("المادة:")
+            acs_subject=st.text_input("المادة التي يدرسها الطالب:", value="رياضيات")
+            acs_supervisor=st.text_input("اسم المشرف الأكاديمي:")
+            acs_teacher=st.selectbox("المدرس المسؤول:", ["بدون تحديد"] + _owner_teachers)
+            acs_price=st.number_input("سعر الحصة (جنيه):", min_value=0.0, step=10.0, value=0.0)
+            acs_teacher_share=st.number_input("نصيب المدرس (جنيه):", min_value=0.0, max_value=max(float(acs_price),0.0), step=1.0, value=0.0)
+            acs_academy_share=max(float(acs_price)-float(acs_teacher_share),0.0)
+            st.number_input("نصيب الأكاديمية (جنيه):", min_value=0.0, value=acs_academy_share, step=1.0, disabled=True)
             acs_status=st.selectbox("حالة الطالب:",["نشط","موقوف"])
-            acs_save=st.form_submit_button("💾 إضافة الطالب للأكاديمية",use_container_width=True)
+            acs_save=st.form_submit_button("💾 إضافة / تحديث الطالب",use_container_width=True)
             if acs_save:
                 if not acs_name.strip():
                     st.error("اكتب اسم الطالب.")
                 else:
                     mask=(academy_students_admin["اسم الأكاديمية"].astype(str).str.strip()==selected)&(academy_students_admin["اسم الطالب"].astype(str).str.strip()==acs_name.strip())
-                    rec={"معرف الطالب":str(uuid.uuid4()),"اسم الأكاديمية":selected,"اسم الطالب":acs_name.strip(),"رقم الهاتف":acs_phone.strip(),"المرحلة":acs_grade.strip(),"المادة":acs_subject.strip(),"الحالة":acs_status,"ملاحظات":""}
-                    if mask.any():
-                        rec["معرف الطالب"]=str(academy_students_admin.loc[mask,"معرف الطالب"].iloc[0])
-                        academy_students_admin.loc[mask,list(rec.keys())]=list(rec.values())
+                    _sid=str(academy_students_admin.loc[mask,"معرف الطالب"].iloc[0]) if mask.any() else str(uuid.uuid4())
+                    rec={"معرف الطالب":_sid,"اسم الأكاديمية":selected,"اسم الطالب":acs_name.strip(),"رقم الهاتف":acs_phone.strip(),"المنهج":_owner_curr,"المرحلة":_owner_grade,"المادة":acs_subject.strip(),"اسم المشرف":acs_supervisor.strip(),"الحالة":acs_status,"ملاحظات":""}
+                    if mask.any(): academy_students_admin.loc[mask,list(rec.keys())]=list(rec.values())
                     else: academy_students_admin=pd.concat([academy_students_admin,pd.DataFrame([rec])],ignore_index=True)
                     st.session_state.academy_students_df=academy_students_admin[COL_ACADEMY_STUDENTS]
+                    if acs_teacher != "بدون تحديد":
+                        _am=(ax["اسم الأكاديمية"].astype(str).str.strip()==selected)&(ax["اسم الطالب"].astype(str).str.strip()==acs_name.strip())
+                        _arec={"اسم الأكاديمية":selected,"اسم الطالب":acs_name.strip(),"اسم المدرس":acs_teacher,"سعر الحصة":float(acs_price),"نصيب المدرس":float(acs_teacher_share),"نصيب الأكاديمية":float(acs_academy_share),"الحالة":"نشط"}
+                        if _am.any(): ax.loc[_am,list(_arec.keys())]=list(_arec.values())
+                        else: ax=pd.concat([ax,pd.DataFrame([_arec])],ignore_index=True)
+                        st.session_state.academy_assignments_df=ax
                     save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
-                    st.success("تمت إضافة الطالب للنظام المستقل.")
+                    st.success("تم حفظ الطالب وبيانات المنهج والمرحلة وسعر الحصة.")
                     st.rerun()
         admin_students=academy_students_admin[academy_students_admin["اسم الأكاديمية"].astype(str).str.strip()==selected]
         if not admin_students.empty:
             st.dataframe(admin_students.drop(columns=["معرف الطالب"],errors="ignore"),use_container_width=True,hide_index=True)
 
-        st.markdown("### 👨‍🏫 المدرسون ونِسبهم")
+        st.markdown("### 👨‍🏫 المدرسون")
         with st.form("teacher_academy_teacher"):
             teacher_name = st.text_input("اسم المدرس:")
-            st.caption("نصيب المدرس يتم تحديده لكل طالب عند تسجيل سعر الحصة، ويمكن أن يختلف من طالب لآخر.")
+            teacher_subject = st.text_input("المادة التي يشرحها:", placeholder="مثال: الرياضيات")
+            st.caption("نصيب المدرس يتم تحديده لكل طالب عند تحديد سعر الحصة، ويمكن أن يختلف من طالب لآخر.")
             teacher_status = st.selectbox("حالة المدرس:",["نشط","موقوف"])
             teacher_save = st.form_submit_button("💾 حفظ المدرس",use_container_width=True)
             if teacher_save:
-                mask=(at["اسم الأكاديمية"].astype(str).str.strip()==selected)&(at["اسم المدرس"].astype(str).str.strip()==teacher_name.strip())
-                rec={"اسم الأكاديمية":selected,"اسم المدرس":teacher_name.strip(),"نسبة المدرس":0.0,"الحالة":teacher_status}
-                if mask.any(): at.loc[mask,list(rec.keys())]=list(rec.values())
-                else: at=pd.concat([at,pd.DataFrame([rec])],ignore_index=True)
-                st.session_state.academy_teachers_df=at
-                save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
-                st.success("تم حفظ المدرس ونسبته.")
-                st.rerun()
+                if not teacher_name.strip():
+                    st.error("اكتب اسم المدرس.")
+                else:
+                    mask=(at["اسم الأكاديمية"].astype(str).str.strip()==selected)&(at["اسم المدرس"].astype(str).str.strip()==teacher_name.strip())
+                    rec={"اسم الأكاديمية":selected,"اسم المدرس":teacher_name.strip(),"المادة":teacher_subject.strip(),"نسبة المدرس":0.0,"الحالة":teacher_status}
+                    if mask.any(): at.loc[mask,list(rec.keys())]=list(rec.values())
+                    else: at=pd.concat([at,pd.DataFrame([rec])],ignore_index=True)
+                    st.session_state.academy_teachers_df=at
+                    save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df)
+                    st.success("تم حفظ المدرس والمادة.")
+                    st.rerun()
 
         teacher_list=sorted([str(x).strip() for x in at.loc[at["اسم الأكاديمية"].astype(str).str.strip()==selected,"اسم المدرس"].dropna().unique() if str(x).strip()])
         students=sorted([str(x).strip() for x in st.session_state.get("academy_students_df",pd.DataFrame(columns=COL_ACADEMY_STUDENTS)).loc[st.session_state.get("academy_students_df",pd.DataFrame(columns=COL_ACADEMY_STUDENTS))["اسم الأكاديمية"].astype(str).str.strip()==selected,"اسم الطالب"].dropna().unique() if str(x).strip()])
