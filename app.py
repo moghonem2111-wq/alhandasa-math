@@ -3930,6 +3930,62 @@ if is_academy_mode:
         else:
             st.dataframe(ast_a.drop(columns=["معرف الطالب"], errors="ignore"), use_container_width=True, hide_index=True)
 
+        # تعديل أو حذف الطالب وجميع سجلاته التابعة — متاح للرئيس والمشرف.
+        if not ast_a.empty:
+            st.markdown("### ✏️ تعديل أو حذف طالب")
+            _ms_names=sorted([str(x).strip() for x in ast_a["اسم الطالب"].dropna().unique() if str(x).strip()])
+            _ms=st.selectbox("اختر الطالب:",_ms_names,key="academy_manage_student")
+            _mr=ast[(ast["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(ast["اسم الطالب"].astype(str).str.strip()==_ms)]
+            if not _mr.empty:
+                _mi=_mr.index[-1]; _row=ast.loc[_mi]
+                _am=ax[(ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(ax["اسم الطالب"].astype(str).str.strip()==_ms)]
+                _ar=_am.iloc[-1] if not _am.empty else {}
+                with st.form("academy_edit_student_form"):
+                    _en=st.text_input("اسم الطالب",value=str(_row.get("اسم الطالب","")))
+                    _ep=st.text_input("رقم الهاتف",value=str(_row.get("رقم الهاتف","")))
+                    _ec=st.selectbox("المنهج / الدولة",list(CURRICULUM_DATA.keys()),index=(list(CURRICULUM_DATA.keys()).index(str(_row.get("المنهج",""))) if str(_row.get("المنهج","")) in CURRICULUM_DATA else 0))
+                    _egl=CURRICULUM_DATA.get(_ec,["المرحلة / الصف"])
+                    _eg=st.selectbox("المرحلة / الصف",_egl,index=(_egl.index(str(_row.get("المرحلة",""))) if str(_row.get("المرحلة","")) in _egl else 0))
+                    _es=st.text_input("المادة",value=str(_row.get("المادة","")))
+                    _esu=st.text_input("اسم المشرف",value=str(_row.get("اسم المشرف","")))
+                    _etl=["بدون تحديد"]+sorted([str(x).strip() for x in at_a["اسم المدرس"].dropna().unique() if str(x).strip()])
+                    _ot=str(_ar.get("اسم المدرس","")) if not _am.empty else "بدون تحديد"
+                    _eti=_etl.index(_ot) if _ot in _etl else 0
+                    _et=st.selectbox("المدرس المسؤول",_etl,index=_eti)
+                    _epr=st.number_input("سعر الحصة",min_value=0.0,step=10.0,value=float(pd.to_numeric(_ar.get("سعر الحصة",0),errors="coerce") or 0))
+                    _esh=st.number_input("نصيب المدرس",min_value=0.0,max_value=max(float(_epr),0.0),step=1.0,value=min(float(pd.to_numeric(_ar.get("نصيب المدرس",0),errors="coerce") or 0),float(_epr)))
+                    if is_academy_president: st.metric("نصيب الأكاديمية",f"{max(float(_epr)-float(_esh),0.0):,.2f} جنيه")
+                    else: st.caption("نصيب الأكاديمية محفوظ ولا يظهر للمشرف.")
+                    _est=st.selectbox("الحالة",["نشط","موقوف"],index=0 if str(_row.get("الحالة","نشط"))!="موقوف" else 1)
+                    _eno=st.text_input("ملاحظات",value=str(_row.get("ملاحظات","")))
+                    _ue=st.form_submit_button("💾 حفظ التعديل",use_container_width=True)
+                    _de=st.form_submit_button("🗑️ حذف الطالب وبياناته",use_container_width=True)
+                if _ue:
+                    if not _en.strip() or float(_esh)>float(_epr): st.error("تحقق من اسم الطالب ونصيب المدرس.")
+                    else:
+                        _new=_en.strip()
+                        ast.loc[_mi,["اسم الطالب","رقم الهاتف","المنهج","المرحلة","المادة","اسم المشرف","الحالة","ملاحظات"]]=[_new,_ep.strip(),_ec,_eg,_es.strip(),_esu.strip(),_est,_eno.strip()]
+                        ax.loc[(ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(ax["اسم الطالب"].astype(str).str.strip()==_ms),"اسم الطالب"]=_new
+                        aat.loc[(aat["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(aat["اسم الطالب"].astype(str).str.strip()==_ms),"اسم الطالب"]=_new
+                        subs=st.session_state.academy_subscriptions_df.copy()
+                        subs.loc[(subs["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(subs["اسم الطالب"].astype(str).str.strip()==_ms),"اسم الطالب"]=_new
+                        if _et!="بدون تحديد":
+                            _mask=(ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(ax["اسم الطالب"].astype(str).str.strip()==_new)
+                            _rec={"اسم الأكاديمية":academy_name,"اسم الطالب":_new,"اسم المدرس":_et,"سعر الحصة":float(_epr),"نصيب المدرس":float(_esh),"نصيب الأكاديمية":max(float(_epr)-float(_esh),0.0),"الحالة":"نشط"}
+                            if _mask.any(): ax.loc[_mask,list(_rec.keys())]=list(_rec.values())
+                            else: ax=pd.concat([ax,pd.DataFrame([_rec])],ignore_index=True)
+                        st.session_state.academy_students_df=ast[COL_ACADEMY_STUDENTS]; st.session_state.academy_assignments_df=ax[COL_ACADEMY_ASSIGNMENTS]; st.session_state.academy_attendance_df=aat[COL_ACADEMY_ATTENDANCE]; st.session_state.academy_subscriptions_df=subs[COL_ACADEMY_SUBSCRIPTIONS]
+                        _save_academy_system(); st.success("تم تعديل بيانات الطالب."); st.rerun()
+                if _de:
+                    ast=ast.drop(_mi)
+                    ax=ax[~((ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(ax["اسم الطالب"].astype(str).str.strip()==_ms))]
+                    aat=aat[~((aat["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(aat["اسم الطالب"].astype(str).str.strip()==_ms))]
+                    subs=st.session_state.academy_subscriptions_df.copy()
+                    subs=subs[~((subs["اسم الأكاديمية"].astype(str).str.strip()==academy_name)&(subs["اسم الطالب"].astype(str).str.strip()==_ms))]
+                    st.session_state.academy_students_df=ast[COL_ACADEMY_STUDENTS]; st.session_state.academy_assignments_df=ax[COL_ACADEMY_ASSIGNMENTS]; st.session_state.academy_attendance_df=aat[COL_ACADEMY_ATTENDANCE]; st.session_state.academy_subscriptions_df=subs[COL_ACADEMY_SUBSCRIPTIONS]
+                    _save_academy_system(); st.success("تم حذف الطالب وجميع سجلاته الأكاديمية."); st.rerun()
+
+
     elif st.session_state.academy_page == "attendance":
         st.markdown("### 📝 تحضير وحضور طلاب الأكاديمية")
         student_options = sorted([str(x).strip() for x in ast_a.loc[ast_a["الحالة"].astype(str).str.strip() != "موقوف","اسم الطالب"].dropna().unique() if str(x).strip()])
@@ -3992,6 +4048,37 @@ if is_academy_mode:
             if not is_academy_president:
                 _show_att=_show_att.drop(columns=["نصيب الأكاديمية"],errors="ignore")
             st.dataframe(_show_att, use_container_width=True, hide_index=True)
+
+        # تعديل أو حذف التحضير — التاريخ والوقت والحالة والسعر ونصيب المدرس.
+        if not aat_a.empty:
+            st.markdown("### ✏️ تعديل أو حذف التحضير")
+            _amng=aat_a.sort_values(["التاريخ","الوقت"],ascending=False)
+            _alab={idx:f"{_amng.loc[idx,'التاريخ']} {_amng.loc[idx,'الوقت']} — {_amng.loc[idx,'اسم الطالب']} — {_amng.loc[idx,'الحالة']}" for idx in _amng.index}
+            _aid=st.selectbox("اختر سجل التحضير:",list(_alab.keys()),format_func=lambda x:_alab[x],key="academy_manage_attendance")
+            _ai=_aid; _arow=aat.loc[_ai]
+            try: _ad=datetime.strptime(str(_arow.get("التاريخ","")),"%Y-%m-%d").date()
+            except Exception: _ad=date.today()
+            try: _tm=datetime.strptime(str(_arow.get("الوقت","00:00")),"%H:%M").time()
+            except Exception: _tm=datetime.now().time().replace(second=0,microsecond=0)
+            with st.form("academy_edit_attendance_form"):
+                _as=st.selectbox("الطالب",student_options,index=(student_options.index(str(_arow.get("اسم الطالب",""))) if str(_arow.get("اسم الطالب","")) in student_options else 0))
+                _ad2=st.date_input("تاريخ الحصة",value=_ad); _tm2=st.time_input("وقت الحصة",value=_tm)
+                _opts=["حاضر","متأخر","غائب","بعذر"]; _ast=st.selectbox("الحالة",_opts,index=(_opts.index(str(_arow.get("الحالة","حاضر"))) if str(_arow.get("الحالة","حاضر")) in _opts else 0))
+                _ats=sorted([str(x).strip() for x in at_a["اسم المدرس"].dropna().unique() if str(x).strip()])
+                _oldt=str(_arow.get("اسم المدرس","")); _ti=_ats.index(_oldt) if _oldt in _ats else 0
+                _atc=st.selectbox("المدرس",_ats,index=_ti) if _ats else st.text_input("المدرس",value=_oldt)
+                _apr=st.number_input("سعر الحصة",min_value=0.0,step=10.0,value=float(pd.to_numeric(_arow.get("سعر الحصة",0),errors="coerce") or 0))
+                _ash=st.number_input("نصيب المدرس",min_value=0.0,max_value=max(float(_apr),0.0),step=1.0,value=min(float(pd.to_numeric(_arow.get("نصيب المدرس",0),errors="coerce") or 0),float(_apr)))
+                if is_academy_president: st.metric("نصيب الأكاديمية",f"{max(float(_apr)-float(_ash),0.0):,.2f} جنيه")
+                else: st.caption("نصيب الأكاديمية محفوظ ولا يظهر للمشرف.")
+                _ano=st.text_input("ملاحظات",value=str(_arow.get("ملاحظات","")))
+                _ua=st.form_submit_button("💾 حفظ تعديل التحضير",use_container_width=True); _da=st.form_submit_button("🗑️ حذف التحضير",use_container_width=True)
+            if _ua:
+                aat.loc[_ai,["اسم الطالب","اسم المدرس","التاريخ","الوقت","الحالة","سعر الحصة","نصيب المدرس","نصيب الأكاديمية","ملاحظات"]]=[str(_as),str(_atc),str(_ad2),_tm2.strftime("%H:%M"),_ast,float(_apr),float(_ash),max(float(_apr)-float(_ash),0.0),_ano.strip()]
+                st.session_state.academy_attendance_df=aat[COL_ACADEMY_ATTENDANCE]; _save_academy_system(); st.success("تم تعديل التحضير والتاريخ والوقت."); st.rerun()
+            if _da:
+                aat=aat.drop(_ai); st.session_state.academy_attendance_df=aat[COL_ACADEMY_ATTENDANCE]; _save_academy_system(); st.success("تم حذف التحضير."); st.rerun()
+
 
     elif st.session_state.academy_page == "subscriptions":
         st.markdown("### 💳 اشتراكات طلاب الأكاديمية")
