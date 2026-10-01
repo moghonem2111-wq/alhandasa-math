@@ -599,11 +599,11 @@ COL_PAYMENT_RECORDS = ["التاريخ", "الشهر", "اسم الطالب", "�
 COL_ADS = ["معرف_الإعلان", "تاريخ_النشر", "العنوان", "نوع_الإعلان", "النص", "الوسائط_base64", "نوع_الوسائط", "الرابط", "نص_الزر", "الحالة"]
 COL_ACADEMY_ACCOUNTS = ["اسم الأكاديمية", "رقم الهاتف", "كلمة المرور", "نسبة الأكاديمية", "الحالة"]
 COL_ACADEMY_TEACHERS = ["اسم الأكاديمية", "اسم المدرس", "نسبة المدرس", "الحالة"]
-COL_ACADEMY_ASSIGNMENTS = ["اسم الأكاديمية", "اسم الطالب", "اسم المدرس", "سعر الحصة", "نسبة المدرس", "نسبة الأكاديمية", "الحالة"]
+COL_ACADEMY_ASSIGNMENTS = ["اسم الأكاديمية", "اسم الطالب", "اسم المدرس", "سعر الحصة", "نصيب المدرس", "نصيب الأكاديمية", "الحالة"]
 COL_ACADEMY_ACCESS = ["اسم الأكاديمية", "رقم الهاتف", "كلمة المرور", "نوع الحساب", "الحالة"]
 COL_ACADEMY_SUBSCRIPTIONS = ["اسم الأكاديمية", "اسم الطالب", "قيمة الاشتراك", "تاريخ البداية", "تاريخ النهاية", "الحالة", "ملاحظات"]
 COL_ACADEMY_STUDENTS = ["معرف الطالب", "اسم الأكاديمية", "اسم الطالب", "رقم الهاتف", "المرحلة", "المادة", "الحالة", "ملاحظات"]
-COL_ACADEMY_ATTENDANCE = ["معرف السجل", "اسم الأكاديمية", "اسم الطالب", "اسم المدرس", "التاريخ", "الوقت", "الحالة", "سعر الحصة", "نسبة المدرس", "نسبة الأكاديمية", "ملاحظات"]
+COL_ACADEMY_ATTENDANCE = ["معرف السجل", "اسم الأكاديمية", "اسم الطالب", "اسم المدرس", "التاريخ", "الوقت", "الحالة", "سعر الحصة", "نصيب المدرس", "نصيب الأكاديمية", "ملاحظات"]
 COL_ACADEMY_SCHEDULE = ["اسم الأكاديمية", "اسم الطالب", "اسم المدرس", "اليوم", "الموعد", "سعر الحصة", "الحالة"]
 
 def load_teacher_profile():
@@ -3696,12 +3696,25 @@ if is_academy_mode:
     ast = st.session_state.get("academy_students_df", pd.DataFrame(columns=COL_ACADEMY_STUDENTS)).copy()
     aat = st.session_state.get("academy_attendance_df", pd.DataFrame(columns=COL_ACADEMY_ATTENDANCE)).copy()
     asch = st.session_state.get("academy_schedule_df", pd.DataFrame(columns=COL_ACADEMY_SCHEDULE)).copy()
-    for _col, _default in [("سعر الحصة", 0.0), ("نسبة المدرس", 0.0), ("نسبة الأكاديمية", 0.0)]:
+    for _col, _default in [("سعر الحصة", 0.0), ("نصيب المدرس", 0.0), ("نصيب الأكاديمية", 0.0)]:
         if _col not in ax.columns:
             ax[_col] = _default
-    for _col, _default in [("نسبة المدرس", 0.0), ("نسبة الأكاديمية", 0.0)]:
+    for _col, _default in [("نصيب المدرس", 0.0), ("نصيب الأكاديمية", 0.0)]:
         if _col not in aat.columns:
             aat[_col] = _default
+    # توافق مع السجلات القديمة التي كانت تستخدم النِسب.
+    if "نسبة المدرس" in ax.columns:
+        _m = pd.to_numeric(ax["نصيب المدرس"], errors="coerce").fillna(0).eq(0) & pd.to_numeric(ax["نسبة المدرس"], errors="coerce").notna()
+        ax.loc[_m, "نصيب المدرس"] = pd.to_numeric(ax.loc[_m, "سعر الحصة"], errors="coerce").fillna(0) * pd.to_numeric(ax.loc[_m, "نسبة المدرس"], errors="coerce").fillna(0) / 100
+    if "نسبة الأكاديمية" in ax.columns:
+        _m = pd.to_numeric(ax["نصيب الأكاديمية"], errors="coerce").fillna(0).eq(0) & pd.to_numeric(ax["نسبة الأكاديمية"], errors="coerce").notna()
+        ax.loc[_m, "نصيب الأكاديمية"] = pd.to_numeric(ax.loc[_m, "سعر الحصة"], errors="coerce").fillna(0) * pd.to_numeric(ax.loc[_m, "نسبة الأكاديمية"], errors="coerce").fillna(0) / 100
+    if "نسبة المدرس" in aat.columns:
+        _m = pd.to_numeric(aat["نصيب المدرس"], errors="coerce").fillna(0).eq(0) & pd.to_numeric(aat["نسبة المدرس"], errors="coerce").notna()
+        aat.loc[_m, "نصيب المدرس"] = pd.to_numeric(aat.loc[_m, "سعر الحصة"], errors="coerce").fillna(0) * pd.to_numeric(aat.loc[_m, "نسبة المدرس"], errors="coerce").fillna(0) / 100
+    if "نسبة الأكاديمية" in aat.columns:
+        _m = pd.to_numeric(aat["نصيب الأكاديمية"], errors="coerce").fillna(0).eq(0) & pd.to_numeric(aat["نسبة الأكاديمية"], errors="coerce").notna()
+        aat.loc[_m, "نصيب الأكاديمية"] = pd.to_numeric(aat.loc[_m, "سعر الحصة"], errors="coerce").fillna(0) * pd.to_numeric(aat.loc[_m, "نسبة الأكاديمية"], errors="coerce").fillna(0) / 100
 
     def _save_academy_system():
         return save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df,
@@ -3747,8 +3760,11 @@ if is_academy_mode:
             for _, row in attended.iterrows():
                 teacher = str(row.get("اسم المدرس","")).strip()
                 tr = at_a[at_a["اسم المدرس"].astype(str).str.strip() == teacher]
-                teacher_pct = float(pd.to_numeric(tr.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) if not tr.empty else 0.0
-                platform_total += max(float(row["_price"]) * (100.0 - academy_pct - teacher_pct) / 100.0, 0.0)
+                _ts = pd.to_numeric(row.get("نصيب المدرس", float("nan")), errors="coerce")
+                _as = pd.to_numeric(row.get("نصيب الأكاديمية", float("nan")), errors="coerce")
+                if pd.isna(_ts): _ts = float(row["_price"]) * float(pd.to_numeric(tr.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) / 100.0 if not tr.empty else 0.0
+                if pd.isna(_as): _as = max(float(row["_price"])-float(_ts),0.0)
+                platform_total += max(float(row["_price"]) - float(_ts) - float(_as), 0.0)
             d4.metric("🌐 مستحق المنصة", f"{platform_total:,.2f} جنيه")
         else:
             d4.metric("🏫 مستحق الأكاديمية", f"{total*academy_pct/100:,.2f} جنيه")
@@ -3801,29 +3817,27 @@ if is_academy_mode:
                 _student_assignment = ax_a[ax_a["اسم الطالب"].astype(str).str.strip() == str(att_student).strip()].copy()
                 _default_teacher = str(_student_assignment.iloc[0].get("اسم المدرس","")).strip() if not _student_assignment.empty else ""
                 _default_price = float(pd.to_numeric(_student_assignment.iloc[0].get("سعر الحصة",0), errors="coerce") or 0) if not _student_assignment.empty else 0.0
-                _default_teacher_pct = float(pd.to_numeric(_student_assignment.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) if not _student_assignment.empty else 0.0
-                _default_academy_pct = float(pd.to_numeric(_student_assignment.iloc[0].get("نسبة الأكاديمية",0), errors="coerce") or 0) if not _student_assignment.empty else float(pd.to_numeric(academy.get("نسبة الأكاديمية",0), errors="coerce") or 0)
+                _default_teacher_share = float(pd.to_numeric(_student_assignment.iloc[0].get("نصيب المدرس",0), errors="coerce") or 0) if not _student_assignment.empty else 0.0
+                _default_academy_share = float(pd.to_numeric(_student_assignment.iloc[0].get("نصيب الأكاديمية",0), errors="coerce") or 0) if not _student_assignment.empty else max(_default_price - _default_teacher_share, 0.0)
                 with c2:
                     _teacher_idx = teacher_options.index(_default_teacher) if _default_teacher in teacher_options else 0
                     att_teacher = st.selectbox("المدرس:", teacher_options, index=_teacher_idx) if teacher_options else st.text_input("المدرس:", value=_default_teacher)
                     att_price = st.number_input("سعر الحصة للطالب (جنيه):", min_value=0.0, step=10.0, value=_default_price)
-                    att_teacher_pct = st.number_input("نسبة المدرس لهذا الطالب (%):", min_value=0.0, max_value=100.0, step=1.0, value=_default_teacher_pct)
-                    att_academy_pct = st.number_input("نسبة الأكاديمية لهذا الطالب (%):", min_value=0.0, max_value=100.0, step=1.0, value=_default_academy_pct)
+                    att_teacher_share = st.number_input("نصيب المدرس (جنيه):", min_value=0.0, max_value=max(float(att_price),0.0), step=1.0, value=min(_default_teacher_share,float(att_price)))
+                    att_academy_share = max(float(att_price) - float(att_teacher_share), 0.0)
+                    st.number_input("نصيب الأكاديمية (جنيه):", min_value=0.0, value=att_academy_share, step=1.0, disabled=True)
                     att_notes = st.text_input("ملاحظات:")
                 save_att = st.form_submit_button("✅ حفظ التحضير", use_container_width=True, type="primary")
                 if save_att:
-                    if float(att_teacher_pct) + float(att_academy_pct) > 100.0:
-                        st.error("مجموع نسبة المدرس والأكاديمية لا يمكن أن يتجاوز 100%.")
-                        st.stop()
-                    rec = {"معرف السجل":str(uuid.uuid4()),"اسم الأكاديمية":academy_name,"اسم الطالب":att_student,"اسم المدرس":str(att_teacher).strip(),"التاريخ":str(att_date),"الوقت":att_time.strftime("%H:%M"),"الحالة":att_status,"سعر الحصة":float(att_price),"نسبة المدرس":float(att_teacher_pct),"نسبة الأكاديمية":float(att_academy_pct),"ملاحظات":att_notes.strip()}
+                    rec = {"معرف السجل":str(uuid.uuid4()),"اسم الأكاديمية":academy_name,"اسم الطالب":att_student,"اسم المدرس":str(att_teacher).strip(),"التاريخ":str(att_date),"الوقت":att_time.strftime("%H:%M"),"الحالة":att_status,"سعر الحصة":float(att_price),"نصيب المدرس":float(att_teacher_share),"نصيب الأكاديمية":float(att_academy_share),"ملاحظات":att_notes.strip()}
                     aat = pd.concat([aat,pd.DataFrame([rec])], ignore_index=True)
                     st.session_state.academy_attendance_df = aat[COL_ACADEMY_ATTENDANCE]
                     if not _student_assignment.empty:
                         _amask = (ax["اسم الأكاديمية"].astype(str).str.strip() == academy_name) & (ax["اسم الطالب"].astype(str).str.strip() == str(att_student).strip())
                         ax.loc[_amask, "اسم المدرس"] = str(att_teacher).strip()
                         ax.loc[_amask, "سعر الحصة"] = float(att_price)
-                        ax.loc[_amask, "نسبة المدرس"] = float(att_teacher_pct)
-                        ax.loc[_amask, "نسبة الأكاديمية"] = float(att_academy_pct)
+                        ax.loc[_amask, "نصيب المدرس"] = float(att_teacher_share)
+                        ax.loc[_amask, "نصيب الأكاديمية"] = float(att_academy_share)
                     st.session_state.academy_assignments_df = ax[COL_ACADEMY_ASSIGNMENTS]
                     _save_academy_system()
                     if att_status in ["حاضر","متأخر"]:
@@ -3905,17 +3919,14 @@ if is_academy_mode:
                 _rate_teacher_idx = _rate_teachers.index(_rate_teacher_old) if _rate_teacher_old in _rate_teachers else 0
                 _rate_teacher = st.selectbox("المدرس المسؤول:", _rate_teachers, index=_rate_teacher_idx)
                 _rate_price = float(pd.to_numeric(_rate_existing.iloc[0].get("سعر الحصة",0), errors="coerce") or 0) if not _rate_existing.empty else 0.0
-                _rate_tp = float(pd.to_numeric(_rate_existing.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) if not _rate_existing.empty else float(pd.to_numeric(at_a[at_a["اسم المدرس"].astype(str).str.strip()==_rate_teacher].iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) if not at_a[at_a["اسم المدرس"].astype(str).str.strip()==_rate_teacher].empty else 0.0
-                _rate_ap = float(pd.to_numeric(_rate_existing.iloc[0].get("نسبة الأكاديمية",0), errors="coerce") or 0) if not _rate_existing.empty else float(pd.to_numeric(academy.get("نسبة الأكاديمية",0), errors="coerce") or 0)
+                _rate_teacher_share = float(pd.to_numeric(_rate_existing.iloc[0].get("نصيب المدرس",0), errors="coerce") or 0) if not _rate_existing.empty else 0.0
                 _rate_price = st.number_input("سعر الحصة لهذا الطالب (جنيه):", min_value=0.0, step=10.0, value=_rate_price)
-                _rate_tp = st.number_input("نسبة المدرس لهذا الطالب (%):", min_value=0.0, max_value=100.0, step=1.0, value=_rate_tp)
-                _rate_ap = st.number_input("نسبة الأكاديمية لهذا الطالب (%):", min_value=0.0, max_value=100.0, step=1.0, value=_rate_ap)
-                if st.form_submit_button("💾 حفظ سعر ونِسب الطالب", use_container_width=True, type="primary"):
-                    if _rate_tp + _rate_ap > 100:
-                        st.error("مجموع نسبة المدرس والأكاديمية لا يمكن أن يتجاوز 100%.")
-                    else:
+                _rate_teacher_share = st.number_input("نصيب المدرس (جنيه):", min_value=0.0, max_value=max(float(_rate_price),0.0), step=1.0, value=min(_rate_teacher_share,float(_rate_price)))
+                _rate_academy_share = max(float(_rate_price)-float(_rate_teacher_share),0.0)
+                st.number_input("نصيب الأكاديمية (جنيه):", min_value=0.0, value=_rate_academy_share, step=1.0, disabled=True)
+                if st.form_submit_button("💾 حفظ سعر ونصيب الطالب", use_container_width=True, type="primary"):
                         _mask = (ax["اسم الأكاديمية"].astype(str).str.strip()==academy_name) & (ax["اسم الطالب"].astype(str).str.strip()==_rate_student)
-                        _rec = {"اسم الأكاديمية":academy_name,"اسم الطالب":_rate_student,"اسم المدرس":_rate_teacher,"سعر الحصة":float(_rate_price),"نسبة المدرس":float(_rate_tp),"نسبة الأكاديمية":float(_rate_ap),"الحالة":"نشط"}
+                        _rec = {"اسم الأكاديمية":academy_name,"اسم الطالب":_rate_student,"اسم المدرس":_rate_teacher,"سعر الحصة":float(_rate_price),"نصيب المدرس":float(_rate_teacher_share),"نصيب الأكاديمية":float(_rate_academy_share),"الحالة":"نشط"}
                         if _mask.any(): ax.loc[_mask,list(_rec.keys())]=list(_rec.values())
                         else: ax=pd.concat([ax,pd.DataFrame([_rec])],ignore_index=True)
                         st.session_state.academy_assignments_df=ax[COL_ACADEMY_ASSIGNMENTS]
@@ -3934,16 +3945,20 @@ if is_academy_mode:
         for _, row in attended.iterrows():
             teacher=str(row.get("اسم المدرس","")).strip()
             tr=at_a[at_a["اسم المدرس"].astype(str).str.strip()==teacher]
-            _stored_teacher_pct = pd.to_numeric(row.get("نسبة المدرس", float("nan")), errors="coerce")
-            _stored_academy_pct = pd.to_numeric(row.get("نسبة الأكاديمية", float("nan")), errors="coerce")
-            teacher_pct=float(_stored_teacher_pct) if pd.notna(_stored_teacher_pct) else (float(pd.to_numeric(tr.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) if not tr.empty else 0.0)
-            row_academy_pct=float(_stored_academy_pct) if pd.notna(_stored_academy_pct) else academy_pct
             price=float(row["_price"])
-            data={"التاريخ":row.get("التاريخ",""),"الطالب":row.get("اسم الطالب",""),"المدرس":teacher,"الحالة":row.get("الحالة",""),"سعر الحصة":price,"نسبة الأكاديمية %":row_academy_pct,"مستحق الأكاديمية":round(price*row_academy_pct/100,2),"نسبة المدرس %":teacher_pct,"مستحق المدرس":round(price*teacher_pct/100,2)}
+            teacher_share=pd.to_numeric(row.get("نصيب المدرس", float("nan")), errors="coerce")
+            academy_share=pd.to_numeric(row.get("نصيب الأكاديمية", float("nan")), errors="coerce")
+            if pd.isna(teacher_share):
+                old_pct=pd.to_numeric(row.get("نسبة المدرس", float("nan")), errors="coerce")
+                teacher_share=(price*float(old_pct)/100.0) if pd.notna(old_pct) else (price*float(pd.to_numeric(tr.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0)/100.0 if not tr.empty else 0.0)
+            if pd.isna(academy_share):
+                old_pct=pd.to_numeric(row.get("نسبة الأكاديمية", float("nan")), errors="coerce")
+                academy_share=(price*float(old_pct)/100.0) if pd.notna(old_pct) else max(price-teacher_share,0.0)
+            teacher_share=float(teacher_share); academy_share=float(academy_share)
+            data={"التاريخ":row.get("التاريخ",""),"الطالب":row.get("اسم الطالب",""),"المدرس":teacher,"الحالة":row.get("الحالة",""),"سعر الحصة":price,"نصيب الأكاديمية":round(academy_share,2),"نصيب المدرس":round(teacher_share,2)}
             if is_academy_president:
-                platform_pct=max(100-float(data["نسبة الأكاديمية %"])-teacher_pct,0)
-                data["نسبة المنصة %"]=platform_pct
-                data["مستحق المنصة"]=round(price*platform_pct/100,2)
+                platform_share=max(price-academy_share-teacher_share,0.0)
+                data["نصيب المنصة"]=round(platform_share,2)
             rows.append(data)
         report=pd.DataFrame(rows)
         if report.empty:
@@ -6723,14 +6738,14 @@ elif t_page == "academies":
         _admin_ac_due = 0.0; _admin_teacher_due = 0.0
         if not _admin_present.empty:
             for _, _rr in _admin_present.iterrows():
-                _tp = pd.to_numeric(_rr.get("نسبة المدرس", float("nan")), errors="coerce")
-                _ap = pd.to_numeric(_rr.get("نسبة الأكاديمية", float("nan")), errors="coerce")
+                _tp = pd.to_numeric(_rr.get("نصيب المدرس", float("nan")), errors="coerce")
+                _ap = pd.to_numeric(_rr.get("نصيب الأكاديمية", float("nan")), errors="coerce")
                 if pd.isna(_tp):
                     _trr = _admin_teachers[(_admin_teachers["اسم المدرس"].astype(str).str.strip()==str(_rr.get("اسم المدرس","")).strip())]
-                    _tp = pd.to_numeric(_trr.iloc[0].get("نسبة المدرس",0), errors="coerce") if not _trr.empty else 0
-                if pd.isna(_ap): _ap = _admin_ac_pct
-                _admin_teacher_due += float(_rr["_price"]) * float(_tp or 0) / 100.0
-                _admin_ac_due += float(_rr["_price"]) * float(_ap or 0) / 100.0
+                    _tp = float(_rr["_price"]) * float(pd.to_numeric(_trr.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0) / 100.0 if not _trr.empty else 0.0
+                if pd.isna(_ap): _ap = max(float(_rr["_price"])-float(_tp),0.0)
+                _admin_teacher_due += float(_tp or 0)
+                _admin_ac_due += float(_ap or 0)
         _admin_platform_due = max(_admin_total-_admin_teacher_due-_admin_ac_due,0.0)
         st.markdown("### 📊 لوحة متابعة الأكاديمية — للمعلم / الإدارة")
         m1,m2,m3,m4,m5=st.columns(5)
@@ -6744,8 +6759,8 @@ elif t_page == "academies":
         _teacher_report=[]
         for _tn in sorted(_admin_teachers[_admin_teachers["اسم الأكاديمية"].astype(str).str.strip()==selected]["اسم المدرس"].astype(str).str.strip().unique()):
             _tr=_admin_present[_admin_present["اسم المدرس"].astype(str).str.strip()==_tn]
-            _vals=pd.to_numeric(_tr.get("نسبة المدرس",pd.Series(dtype=float)),errors="coerce")
-            _salary=float((_tr["_price"]*_vals.fillna(0)/100).sum()) if not _tr.empty else 0.0
+            _vals=pd.to_numeric(_tr.get("نصيب المدرس",pd.Series(dtype=float)),errors="coerce")
+            _salary=float(_vals.fillna(0).sum()) if not _tr.empty else 0.0
             _teacher_row=_admin_teachers[(_admin_teachers["اسم الأكاديمية"].astype(str).str.strip()==selected)&(_admin_teachers["اسم المدرس"].astype(str).str.strip()==_tn)]
             _default_pct=float(pd.to_numeric(_teacher_row.iloc[0].get("نسبة المدرس",0),errors="coerce") or 0) if not _teacher_row.empty else 0.0
             _teacher_report.append({"اسم المدرس":_tn,"نسبة المدرس الافتراضية":_default_pct,"عدد حصص الحضور":len(_tr),"إجمالي قيمة الحصص":round(float(_tr["_price"].sum()),2) if not _tr.empty else 0.0,"الراتب المستحق":round(_salary,2)})
@@ -6760,7 +6775,7 @@ elif t_page == "academies":
             _admin_att.drop(columns=["معرف السجل"],errors="ignore").to_excel(_writer,sheet_name="الحضور",index=False)
         _pdf_rows="".join(f"<tr><td>{html.escape(str(x.get('اسم الطالب','')))}</td><td>{x.get('عدد حصص الحضور',0)}</td><td>{x.get('إجمالي قيمة الحصص',0):,.2f}</td><td>{html.escape(str(x.get('المدرس','')))}</td></tr>" for _,x in _student_report_df.iterrows())
         _pdf_teacher_rows="".join(f"<tr><td>{html.escape(str(x.get('اسم المدرس','')))}</td><td>{x.get('نسبة المدرس الافتراضية',0):,.1f}%</td><td>{x.get('عدد حصص الحضور',0)}</td><td>{x.get('الراتب المستحق',0):,.2f}</td></tr>" for _,x in _teacher_report_df.iterrows())
-        _academy_report_html=f"""<!DOCTYPE html><html dir='rtl' lang='ar'><head><meta charset='utf-8'><title>تقرير أكاديمية {html.escape(selected)}</title><style>@page{{size:A4 landscape;margin:10mm}}body{{font-family:Arial;color:#102a52;font-weight:700}}h1,h2{{color:#0b5fe7}}table{{width:100%;border-collapse:collapse;margin:10px 0}}th,td{{border:1px solid #cbd5e1;padding:7px;text-align:center}}th{{background:#eaf4ff}}.box{{padding:10px;background:#f3f8ff;border-radius:10px}}</style></head><body><h1>🏫 تقرير إدارة أكاديمية {html.escape(selected)}</h1><div class='box'>الطلاب: {len(_admin_students)} | الحصص الحاضرة: {len(_admin_present)} | إجمالي الحصص: {_admin_total:,.2f} جنيه | رواتب المدرسين: {_admin_teacher_due:,.2f} جنيه | مستحق الأكاديمية: {_admin_ac_due:,.2f} جنيه | مستحق المنصة: {_admin_platform_due:,.2f} جنيه</div><h2>كشف الطلاب</h2><table><tr><th>الطالب</th><th>حصص الحضور</th><th>إجمالي قيمة الحصص</th><th>المدرس</th></tr>{_pdf_rows}</table><h2>رواتب المدرسين</h2><table><tr><th>المدرس</th><th>النسبة</th><th>الحصص</th><th>الراتب المستحق</th></tr>{_pdf_teacher_rows}</table></body></html>"""
+        _academy_report_html=f"""<!DOCTYPE html><html dir='rtl' lang='ar'><head><meta charset='utf-8'><title>تقرير أكاديمية {html.escape(selected)}</title><style>@page{{size:A4 landscape;margin:10mm}}body{{font-family:Arial;color:#102a52;font-weight:700}}h1,h2{{color:#0b5fe7}}table{{width:100%;border-collapse:collapse;margin:10px 0}}th,td{{border:1px solid #cbd5e1;padding:7px;text-align:center}}th{{background:#eaf4ff}}.box{{padding:10px;background:#f3f8ff;border-radius:10px}}</style></head><body><h1>🏫 تقرير إدارة أكاديمية {html.escape(selected)}</h1><div class='box'>الطلاب: {len(_admin_students)} | الحصص الحاضرة: {len(_admin_present)} | إجمالي الحصص: {_admin_total:,.2f} جنيه | رواتب المدرسين: {_admin_teacher_due:,.2f} جنيه | مستحق الأكاديمية: {_admin_ac_due:,.2f} جنيه | مستحق المنصة: {_admin_platform_due:,.2f} جنيه</div><h2>كشف الطلاب</h2><table><tr><th>الطالب</th><th>حصص الحضور</th><th>إجمالي قيمة الحصص</th><th>المدرس</th></tr>{_pdf_rows}</table><h2>رواتب المدرسين</h2><table><tr><th>المدرس</th><th>النسبة المرجعية</th><th>الحصص</th><th>الراتب المستحق</th></tr>{_pdf_teacher_rows}</table></body></html>"""
         _academy_report_pdf=html_to_pdf_bytes(_academy_report_html)
         ec1,ec2=st.columns(2)
         with ec1: st.download_button("📥 تصدير تقرير الأكاديمية Excel",_export_buf.getvalue(),file_name=f"تقرير_أكاديمية_{selected}.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True)
@@ -6849,20 +6864,18 @@ elif t_page == "academies":
                 if _existing_teacher:
                     _tr0=at[(at["اسم الأكاديمية"].astype(str).str.strip()==selected)&(at["اسم المدرس"].astype(str).str.strip()==_existing_teacher)]
                     if not _tr0.empty: _teacher_default_pct=float(pd.to_numeric(_tr0.iloc[0].get("نسبة المدرس",0), errors="coerce") or 0)
-                _existing_tr_pct = float(pd.to_numeric(_existing_assignment.iloc[0].get("نسبة المدرس",_teacher_default_pct), errors="coerce") or 0) if not _existing_assignment.empty else _teacher_default_pct
+                _existing_teacher_share = float(pd.to_numeric(_existing_assignment.iloc[0].get("نصيب المدرس",0), errors="coerce") or 0) if not _existing_assignment.empty else 0.0
                 _teacher_idx = teacher_list.index(_existing_teacher) if _existing_teacher in teacher_list else 0
                 teacher_for_student=st.selectbox("المدرس:",teacher_list,index=_teacher_idx)
                 assignment_price=st.number_input("سعر الحصة لهذا الطالب (جنيه):",min_value=0.0,step=10.0,value=_existing_price)
-                assignment_teacher_pct=st.number_input("نسبة المدرس لهذا الطالب (%):",min_value=0.0,max_value=100.0,step=1.0,value=_existing_tr_pct)
-                assignment_academy_pct=st.number_input("نسبة الأكاديمية لهذا الطالب (%):",min_value=0.0,max_value=100.0,step=1.0,value=_existing_ac_pct)
+                assignment_teacher_share=st.number_input("نصيب المدرس (جنيه):",min_value=0.0,max_value=max(float(assignment_price),0.0),step=1.0,value=min(_existing_teacher_share,float(assignment_price)))
+                assignment_academy_share=max(float(assignment_price)-float(assignment_teacher_share),0.0)
+                st.number_input("نصيب الأكاديمية (جنيه):",min_value=0.0,value=assignment_academy_share,step=1.0,disabled=True)
                 assignment_status=st.selectbox("الحالة:",["نشط","موقوف"])
                 assignment_save=st.form_submit_button("💾 حفظ المدرس والسعر والنِسب لهذا الطالب",use_container_width=True)
                 if assignment_save:
                     mask=(ax["اسم الأكاديمية"].astype(str).str.strip()==selected)&(ax["اسم الطالب"].astype(str).str.strip()==student_name)
-                    if float(assignment_teacher_pct) + float(assignment_academy_pct) > 100.0:
-                        st.error("مجموع نسبة المدرس والأكاديمية لا يمكن أن يتجاوز 100%.")
-                        st.stop()
-                    rec={"اسم الأكاديمية":selected,"اسم الطالب":student_name,"اسم المدرس":teacher_for_student,"سعر الحصة":float(assignment_price),"نسبة المدرس":float(assignment_teacher_pct),"نسبة الأكاديمية":float(assignment_academy_pct),"الحالة":assignment_status}
+                    rec={"اسم الأكاديمية":selected,"اسم الطالب":student_name,"اسم المدرس":teacher_for_student,"سعر الحصة":float(assignment_price),"نصيب المدرس":float(assignment_teacher_share),"نصيب الأكاديمية":float(assignment_academy_share),"الحالة":assignment_status}
                     if mask.any(): ax.loc[mask,list(rec.keys())]=list(rec.values())
                     else: ax=pd.concat([ax,pd.DataFrame([rec])],ignore_index=True)
                     st.session_state.academy_assignments_df=ax
