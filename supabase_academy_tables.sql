@@ -107,6 +107,15 @@ alter table public.academy_students enable row level security;
 alter table public.academy_attendance enable row level security;
 alter table public.academy_schedule enable row level security;
 
+drop policy if exists "academy_accounts_app_access" on public.academy_accounts;
+drop policy if exists "academy_teachers_app_access" on public.academy_teachers;
+drop policy if exists "academy_assignments_app_access" on public.academy_assignments;
+drop policy if exists "academy_access_app_access" on public.academy_access;
+drop policy if exists "academy_subscriptions_app_access" on public.academy_subscriptions;
+drop policy if exists "academy_students_app_access" on public.academy_students;
+drop policy if exists "academy_attendance_app_access" on public.academy_attendance;
+drop policy if exists "academy_schedule_app_access" on public.academy_schedule;
+
 create policy "academy_accounts_app_access" on public.academy_accounts for all using (true) with check (true);
 create policy "academy_teachers_app_access" on public.academy_teachers for all using (true) with check (true);
 create policy "academy_assignments_app_access" on public.academy_assignments for all using (true) with check (true);
