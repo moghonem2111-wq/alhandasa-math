@@ -2961,13 +2961,24 @@ if is_student_mode:
                         st.rerun()
                 if ac_submit:
                     aa = st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS))
-                    match = aa[(aa["رقم الهاتف"].astype(str).str.strip() == ac_phone.strip()) & (aa["كلمة المرور"].astype(str).str.strip() == ac_pass.strip()) & (aa["الحالة"].astype(str).str.strip() != "موقوف")]
                     access = st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS))
-                    access_match = access[(access["رقم الهاتف"].astype(str).str.strip() == ac_phone.strip()) & (access["نوع الحساب"].astype(str).str.strip() == ac_role) & (access["الحالة"].astype(str).str.strip() != "موقوف")] if not access.empty else pd.DataFrame()
-                    if match.empty or access_match.empty:
-                        st.error("❌ بيانات الدخول غير صحيحة أو حساب الأكاديمية موقوف.")
+                    if ac_role == "رئيس الأكاديمية":
+                        match = aa[(aa["رقم الهاتف"].astype(str).str.strip() == ac_phone.strip()) & (aa["كلمة المرور"].astype(str).str.strip() == ac_pass.strip()) & (aa["الحالة"].astype(str).str.strip() != "موقوف")]
                     else:
-                        st.session_state.logged_academy = match.iloc[0].to_dict()
+                        match = access[(access["رقم الهاتف"].astype(str).str.strip() == ac_phone.strip()) & (access["كلمة المرور"].astype(str).str.strip() == ac_pass.strip()) & (access["نوع الحساب"].astype(str).str.strip() == "مشرف أكاديمي") & (access["الحالة"].astype(str).str.strip() != "موقوف")]
+                    if match.empty:
+                        st.error("❌ بيانات الدخول غير صحيحة أو الحساب موقوف.")
+                    else:
+                        if ac_role == "رئيس الأكاديمية":
+                            st.session_state.logged_academy = match.iloc[0].to_dict()
+                        else:
+                            row = match.iloc[0].to_dict()
+                            row["اسم الأكاديمية"] = str(row.get("اسم الأكاديمية","")).strip()
+                            academy_rows = aa[aa["اسم الأكاديمية"].astype(str).str.strip() == row["اسم الأكاديمية"]]
+                            if academy_rows.empty:
+                                st.error("❌ الأكاديمية المرتبطة بحساب المشرف غير موجودة.")
+                                st.stop()
+                            st.session_state.logged_academy = academy_rows.iloc[0].to_dict()
                         st.session_state.academy_login_role = ac_role
                         st.session_state.academy_page = "dashboard"
                         st.query_params["role"] = "academy"
@@ -3628,51 +3639,35 @@ if is_student_mode:
 
 
 eldef _academy_subscription_rows(academy_name, student_name=""):
-    """حساب استهلاك الاشتراك من سجلات الحضور: حاضر/متأخر فقط يخصمان."""
+    """حساب استهلاك اشتراك أكاديمي مستقل؛ لا يعتمد على طلاب المنصة أو جلساتها."""
     subs = st.session_state.get("academy_subscriptions_df", pd.DataFrame(columns=COL_ACADEMY_SUBSCRIPTIONS)).copy()
-    sessions = st.session_state.get("sessions_df", pd.DataFrame()).copy()
+    attendance = st.session_state.get("academy_attendance_df", pd.DataFrame(columns=COL_ACADEMY_ATTENDANCE)).copy()
     academy_clean = str(academy_name or "").strip()
     student_clean = str(student_name or "").strip()
     if subs.empty:
         return pd.DataFrame(columns=["اسم الأكاديمية","اسم الطالب","قيمة الاشتراك","المخصوم","المتبقي","الحصص المستخدمة","الحالة","تاريخ البداية","تاريخ النهاية","ملاحظات"])
     subs["_academy"] = subs["اسم الأكاديمية"].astype(str).str.strip()
     subs["_student"] = subs["اسم الطالب"].astype(str).str.strip()
-    if academy_clean:
-        subs = subs[subs["_academy"] == academy_clean].copy()
-    if student_clean:
-        subs = subs[subs["_student"] == student_clean].copy()
+    if academy_clean: subs = subs[subs["_academy"] == academy_clean].copy()
+    if student_clean: subs = subs[subs["_student"] == student_clean].copy()
     out = []
-    if not sessions.empty:
-        sessions["_student"] = sessions["اسم الطالب"].astype(str).str.strip()
-        sessions["_status"] = sessions["الحالة"].astype(str).str.strip()
-        sessions["_price"] = pd.to_numeric(sessions["سعر الحصة"], errors="coerce").fillna(0)
-        sessions["_date"] = sessions["التاريخ"].astype(str).str[:10]
+    if not attendance.empty:
+        attendance["_academy"] = attendance["اسم الأكاديمية"].astype(str).str.strip()
+        attendance["_student"] = attendance["اسم الطالب"].astype(str).str.strip()
+        attendance["_status"] = attendance["الحالة"].astype(str).str.strip()
+        attendance["_price"] = pd.to_numeric(attendance["سعر الحصة"], errors="coerce").fillna(0)
+        attendance["_date"] = attendance["التاريخ"].astype(str).str[:10]
     for _, sub in subs.iterrows():
         name = str(sub.get("اسم الطالب","")).strip()
         initial = float(pd.to_numeric(sub.get("قيمة الاشتراك",0), errors="coerce") or 0)
         start = str(sub.get("تاريخ البداية","")).strip()
         end = str(sub.get("تاريخ النهاية","")).strip()
-        ss = sessions[sessions["_student"] == name].copy() if not sessions.empty else pd.DataFrame()
-        if start and start.lower() != "nan":
-            ss = ss[ss["_date"] >= start]
-        if end and end.lower() != "nan":
-            ss = ss[ss["_date"] <= end]
-        if not ss.empty:
-            ss = ss[ss["_status"].isin(["حاضر","متأخر"])]
+        ss = attendance[(attendance["_academy"] == academy_clean) & (attendance["_student"] == name)].copy() if not attendance.empty else pd.DataFrame()
+        if start and start.lower() != "nan": ss = ss[ss["_date"] >= start]
+        if end and end.lower() != "nan": ss = ss[ss["_date"] <= end]
+        if not ss.empty: ss = ss[ss["_status"].isin(["حاضر","متأخر"])]
         consumed = float(ss["_price"].sum()) if not ss.empty else 0.0
-        remaining = max(initial - consumed, 0.0)
-        out.append({
-            "اسم الأكاديمية": academy_clean or str(sub.get("اسم الأكاديمية","")).strip(),
-            "اسم الطالب": name,
-            "قيمة الاشتراك": initial,
-            "المخصوم": consumed,
-            "المتبقي": remaining,
-            "الحصص المستخدمة": int(len(ss)),
-            "الحالة": str(sub.get("الحالة","نشط")).strip() or "نشط",
-            "تاريخ البداية": start,
-            "تاريخ النهاية": end,
-            "ملاحظات": str(sub.get("ملاحظات","")).strip(),
-        })
+        out.append({"اسم الأكاديمية":academy_clean,"اسم الطالب":name,"قيمة الاشتراك":initial,"المخصوم":consumed,"المتبقي":max(initial-consumed,0.0),"الحصص المستخدمة":int(len(ss)),"الحالة":str(sub.get("الحالة","نشط")).strip() or "نشط","تاريخ البداية":start,"تاريخ النهاية":end,"ملاحظات":str(sub.get("ملاحظات","")).strip()})
     return pd.DataFrame(out)
 
 if is_academy_mode:
