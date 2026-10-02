@@ -4966,8 +4966,7 @@ elif t_page == "darssly_schedule":
         with _tc2:
             _new_teacher_subject = st.text_input("المادة:", placeholder="رياضيات")
         with _tc3:
-            _new_teacher_color = st.selectbox("لون المدرس:", _darssly_palette, format_func=lambda x: "● "+x)
-        _new_teacher_status = st.selectbox("الحالة:", ["نشط","موقوف"])
+            _new_teacher_status = st.selectbox("الحالة:", ["نشط","موقوف"])
         if st.form_submit_button("➕ إضافة المدرس", use_container_width=True):
             _name = _new_teacher_name.strip()
             if not _name:
@@ -4981,9 +4980,12 @@ elif t_page == "darssly_schedule":
                 else:
                     _tid = "DT_"+uuid.uuid4().hex[:12]
                     _used = set(_dt["اللون"].astype(str).str.strip().tolist())
-                    _color = _new_teacher_color
-                    if _color in _used:
-                        _color = next((c for c in _darssly_palette if c not in _used), _color)
+                    # اختيار اللون تلقائياً بالتتابع، مع ضمان اختلافه عن ألوان المدرسين الحاليين قدر الإمكان.
+                    _available_colors = [c for c in _darssly_palette if c not in _used]
+                    if _available_colors:
+                        _color = _available_colors[0]
+                    else:
+                        _color = _darssly_palette[len(_dt) % len(_darssly_palette)]
                     _row = {"معرف المدرس":_tid,"اسم المدرس":_name,"المادة":_new_teacher_subject.strip(),"اللون":_color,"الحالة":_new_teacher_status}
                     _dt = pd.concat([_dt, pd.DataFrame([_row])], ignore_index=True)
                     st.session_state.darssly_teachers_df = _dt[COL_DARSSLY_TEACHERS]
@@ -5002,7 +5004,8 @@ elif t_page == "darssly_schedule":
             with st.form("darssly_teacher_edit_form"):
                 _en = st.text_input("اسم المدرس", value=str(_mr.get("اسم المدرس","")))
                 _esub = st.text_input("المادة", value=str(_mr.get("المادة","")))
-                _ecolor = st.selectbox("اللون", _darssly_palette, index=(_darssly_palette.index(str(_mr.get("اللون"))) if str(_mr.get("اللون")) in _darssly_palette else 0))
+                _ecolor = str(_mr.get("اللون","")).strip() or _darssly_palette[0]
+                st.markdown(f"<div style='padding:9px 12px;border-radius:10px;background:{_ecolor};color:#fff;font-weight:800;text-align:center'>🎨 اللون التلقائي للمدرس: {_ecolor}</div>", unsafe_allow_html=True)
                 _estatus = st.selectbox("الحالة", ["نشط","موقوف"], index=0 if str(_mr.get("الحالة","نشط"))!="موقوف" else 1)
                 _eu = st.form_submit_button("💾 حفظ تعديل المدرس", use_container_width=True)
                 _ed = st.form_submit_button("🗑️ حذف المدرس", use_container_width=True)
