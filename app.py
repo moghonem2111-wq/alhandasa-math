@@ -1739,6 +1739,8 @@ def _backup_tables_map():
         "Ads": st.session_state.get("ads_df", pd.DataFrame(columns=COL_ADS)),
         "StudentInterface": st.session_state.get("student_interface_df", load_student_interface()),
         "TeacherProfile": st.session_state.get("teacher_profile_df", load_teacher_profile()),
+        "DarsslyTeachers": st.session_state.get("darssly_teachers_df", pd.DataFrame(columns=COL_DARSSLY_TEACHERS)),
+        "DarsslySchedule": st.session_state.get("darssly_schedule_df", pd.DataFrame(columns=COL_DARSSLY_SCHEDULE)),
     }
 
 def _build_excel_backup_bytes():
