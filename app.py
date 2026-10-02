@@ -1885,12 +1885,25 @@ def _restore_complete_backup(excel_bytes):
     names=["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df","academy_accounts_df","academy_teachers_df","academy_assignments_df","academy_access_df","academy_subscriptions_df","academy_students_df","academy_attendance_df","academy_schedule_df"]
     for n,df in zip(names,rec): st.session_state[n]=df
     st.session_state.ads_df=ads; st.session_state.student_interface_df=interface; st.session_state.teacher_profile_df=profile
+    # استرجاع درسلي من ملف النسخة المرفوعة نفسه، وليس من نسخة الموقع الحالية.
     try:
-        _t_loaded, _s_loaded = _load_darssly_data()
-        st.session_state.darssly_teachers_df = _t_loaded
-        st.session_state.darssly_schedule_df = _s_loaded
+        if "DarsslyTeachers" in xls.sheet_names:
+            _dt = pd.read_excel(xls, "DarsslyTeachers")
+            for _c in COL_DARSSLY_TEACHERS:
+                if _c not in _dt.columns: _dt[_c] = "نشط" if _c == "الحالة" else ""
+            st.session_state.darssly_teachers_df = _dt[COL_DARSSLY_TEACHERS].copy()
+        else:
+            st.session_state.darssly_teachers_df = pd.DataFrame(columns=COL_DARSSLY_TEACHERS)
+        if "DarsslySchedule" in xls.sheet_names:
+            _ds = pd.read_excel(xls, "DarsslySchedule")
+            for _c in COL_DARSSLY_SCHEDULE:
+                if _c not in _ds.columns: _ds[_c] = "نشط" if _c == "الحالة" else ""
+            st.session_state.darssly_schedule_df = _ds[COL_DARSSLY_SCHEDULE].copy()
+        else:
+            st.session_state.darssly_schedule_df = pd.DataFrame(columns=COL_DARSSLY_SCHEDULE)
     except Exception:
-        pass
+        st.session_state.darssly_teachers_df = pd.DataFrame(columns=COL_DARSSLY_TEACHERS)
+        st.session_state.darssly_schedule_df = pd.DataFrame(columns=COL_DARSSLY_SCHEDULE)
     ok=save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df,st.session_state.ads_df)
     if _cloud_storage_enabled() and not ok: raise RuntimeError("فشل تأكيد حفظ النسخة المسترجعة في التخزين السحابي.")
     _cloud_save_student_interface(st.session_state.student_interface_df)
