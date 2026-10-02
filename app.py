@@ -5046,10 +5046,7 @@ elif t_page == "darssly_schedule":
                     _lines=[]
                     for _cr in _conf:
                         _lines.append(f"• {_cr.get('اسم المدرس','مدرس')} ({_cr.get('المادة','')}) — {_cr.get('وقت البداية','')} إلى {_cr.get('وقت النهاية','')}")
-                    st.error("⚠️ يوجد تعارض في موعد منصة درسلي:
-
-" + "
-".join(_lines))
+                    st.error("⚠️ يوجد تعارض في موعد منصة درسلي:\n\n" + "\n".join(_lines))
                 else:
                     _sid = "DS_"+uuid.uuid4().hex[:12]
                     _sr = {"معرف الموعد":_sid,"معرف المدرس":_sel_tid,"اسم المدرس":_sel_name,"المادة":_sel_subject,"اليوم":_sel_day,"وقت البداية":_start_s,"وقت النهاية":_end_s,"ملاحظات":_note.strip(),"الحالة":"نشط","تاريخ الإضافة":datetime.now().strftime("%Y-%m-%d %H:%M")}
