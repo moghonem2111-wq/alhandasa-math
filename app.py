@@ -914,7 +914,7 @@ th:last-child,td:last-child{{border-left:0}}
 <div class='doc-title'>{title}</div>
 <p class='subtitle'>{subtitle}</p>
 <table><thead><tr>{headers_html}</tr></thead><tbody>{rows_html}</tbody></table>
-<div class='footer'>إعداد ومتابعة: {teacher_name} &nbsp; | &nbsp; 📞 {teacher_phone} &nbsp; | &nbsp; جميع البيانات خاصة بالالبشمهندس x الرياضهية</div>
+<div class='footer'>إعداد ومتابعة: {teacher_name} &nbsp; | &nbsp; 📞 {teacher_phone} &nbsp; | &nbsp; البشمهندس في الرياضيات</div>
 </body>
 </html>"""
 
@@ -5184,9 +5184,13 @@ elif t_page == "darssly_schedule":
         _print_html=make_print_html("جدول منصة درسلي للمدرسين",_print_rows,"<th>المدرس</th><th>المادة</th><th>اليوم</th><th>الوقت</th><th>الحالة</th>","جدول مستقل لمواعيد المدرسين على منصة درسلي")
         _pdf=html_to_pdf_bytes(_print_html)
         if _pdf:
-            st.download_button("🖨️ طباعة جدول درسلي PDF",_pdf,file_name="جدول_منصة_درسلي_للمدرسين.pdf",mime="application/pdf",use_container_width=True,key="darssly_schedule_pdf")
+            _pc1,_pc2 = st.columns(2)
+            with _pc1:
+                st.download_button("🖨️ طباعة / تحميل جدول درسلي PDF",_pdf,file_name="جدول_منصة_درسلي_للمدرسين.pdf",mime="application/pdf",use_container_width=True,key="darssly_schedule_pdf")
+            with _pc2:
+                st.download_button("🌐 فتح نسخة الطباعة",_print_html.encode("utf-8"),file_name="جدول_منصة_درسلي_للطباعة.html",mime="text/html",use_container_width=True,key="darssly_schedule_html")
         else:
-            st.download_button("🖨️ طباعة جدول درسلي",_print_html.encode("utf-8"),file_name="جدول_منصة_درسلي_للمدرسين.html",mime="text/html",use_container_width=True,key="darssly_schedule_html")
+            st.download_button("🖨️ طباعة جدول درسلي",_print_html.encode("utf-8"),file_name="جدول_منصة_درسلي_للطباعة.html",mime="text/html",use_container_width=True,key="darssly_schedule_html")
 
 elif t_page == "dashboard":
     dashboard_students = sorted(list(set([str(x).strip() for x in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(x).strip()] + [str(x).strip() for x in st.session_state.weekly_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()] + [str(x).strip() for x in st.session_state.online_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()])))
