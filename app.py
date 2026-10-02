@@ -4922,6 +4922,17 @@ elif t_page == "darssly_schedule":
         except Exception:
             return None
 
+    def _darssly_format_time(value):
+        """عرض الوقت للمستخدم بصيغة 12 ساعة مع صباحًا/مساءً، مع بقاء التخزين بصيغة 24 ساعة للتعارضات."""
+        try:
+            raw = str(value).strip()
+            t = datetime.strptime(raw[:5], "%H:%M")
+            suffix = "صباحًا" if t.hour < 12 else "مساءً"
+            hour = t.hour % 12 or 12
+            return f"{hour}:{t.minute:02d} {suffix}"
+        except Exception:
+            return str(value)
+
     def _darssly_conflicts(day_name, start_value, end_value, ignore_id=""):
         start_m = _darssly_time_to_minutes(start_value)
         end_m = _darssly_time_to_minutes(end_value)
@@ -5045,14 +5056,14 @@ elif t_page == "darssly_schedule":
                 elif _conf:
                     _lines=[]
                     for _cr in _conf:
-                        _lines.append(f"• {_cr.get('اسم المدرس','مدرس')} ({_cr.get('المادة','')}) — {_cr.get('وقت البداية','')} إلى {_cr.get('وقت النهاية','')}")
+                        _lines.append(f"• {_cr.get('اسم المدرس','مدرس')} ({_cr.get('المادة','')}) — {_darssly_format_time(_cr.get('وقت البداية',''))} إلى {_darssly_format_time(_cr.get('وقت النهاية',''))}")
                     st.error("⚠️ يوجد تعارض في موعد منصة درسلي:\n\n" + "\n".join(_lines))
                 else:
                     _sid = "DS_"+uuid.uuid4().hex[:12]
                     _sr = {"معرف الموعد":_sid,"معرف المدرس":_sel_tid,"اسم المدرس":_sel_name,"المادة":_sel_subject,"اليوم":_sel_day,"وقت البداية":_start_s,"وقت النهاية":_end_s,"ملاحظات":_note.strip(),"الحالة":"نشط","تاريخ الإضافة":datetime.now().strftime("%Y-%m-%d %H:%M")}
                     st.session_state.darssly_schedule_df = pd.concat([_ds,pd.DataFrame([_sr])], ignore_index=True)[COL_DARSSLY_SCHEDULE]
                     save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df)
-                    st.success(f"✓ تم حجز موعد { _sel_name } يوم {_sel_day} من {_start.strftime('%I:%M %p').lstrip('0')} إلى {_end.strftime('%I:%M %p').lstrip('0')}.")
+                    st.success(f"✓ تم حجز موعد { _sel_name } يوم {_sel_day} من {_darssly_format_time(_start_s)} إلى {_darssly_format_time(_end_s)}.")
                     st.rerun()
 
     # ===== الجدول الأسبوعي الملون =====
@@ -5075,9 +5086,9 @@ elif t_page == "darssly_schedule":
                 _html = []
                 for _,_r in _matches.iterrows():
                     _col = _color_by_teacher.get(str(_r.get("معرف المدرس")), "#2563eb")
-                    _html.append(f"<div style='background:{_col};color:#fff;border-radius:12px;padding:8px;margin:3px 0;text-align:right;box-shadow:0 4px 10px rgba(15,23,42,.12)'><b>👨‍🏫 {html.escape(str(_r.get('اسم المدرس','')))}</b><br><small>{html.escape(str(_r.get('المادة','')))}<br>{html.escape(str(_r.get('وقت البداية','')))} → {html.escape(str(_r.get('وقت النهاية','')))}</small></div>")
+                    _html.append(f"<div style='background:{_col};color:#fff;border-radius:12px;padding:8px;margin:3px 0;text-align:right;box-shadow:0 4px 10px rgba(15,23,42,.12)'><b>👨‍🏫 {html.escape(str(_r.get('اسم المدرس','')))}</b><br><small>{html.escape(str(_r.get('المادة','')))}<br>{html.escape(_darssly_format_time(_r.get('وقت البداية','')))} → {html.escape(_darssly_format_time(_r.get('وقت النهاية','')))}</small></div>")
                 _cells.append("".join(_html) if _html else "—")
-            _rows.append((_tm,_cells))
+            _rows.append((_darssly_format_time(_tm),_cells))
         _table="<table style='width:100%;border-collapse:collapse;direction:rtl;text-align:center;background:#fff'><tr style='background:#062b63;color:#fff'><th style='padding:11px;border:1px solid #dbe7f5'>الساعة</th>"+''.join(f"<th style='padding:11px;border:1px solid #dbe7f5'>{d}</th>" for d in _days)+"</tr>"
         for _tm,_cells in _rows:
             _table += f"<tr><td style='padding:10px;border:1px solid #dbe7f5;font-weight:900'>{_tm}</td>"+''.join(f"<td style='padding:6px;border:1px solid #dbe7f5;vertical-align:top'>{c}</td>" for c in _cells)+"</tr>"
@@ -5091,7 +5102,7 @@ elif t_page == "darssly_schedule":
                 st.markdown(f"<div style='border:1px solid #dbe7f5;border-radius:12px;padding:9px;background:#fff'><span style='display:inline-block;width:16px;height:16px;border-radius:50%;background:{_tr.get('اللون','#2563eb')};vertical-align:middle'></span> <b>{html.escape(str(_tr.get('اسم المدرس','')))}</b><br><small>{html.escape(str(_tr.get('المادة','')))}</small></div>", unsafe_allow_html=True)
 
         st.markdown("### ✏️ إدارة المواعيد")
-        _sched_labels = {str(r.get("معرف الموعد")): f"{r.get('اسم المدرس','')} — {r.get('اليوم','')} — {r.get('وقت البداية','')} → {r.get('وقت النهاية','')}" for _,r in _ds.iterrows()}
+        _sched_labels = {str(r.get("معرف الموعد")): f"{r.get('اسم المدرس','')} — {r.get('اليوم','')} — {_darssly_format_time(r.get('وقت البداية',''))} → {_darssly_format_time(r.get('وقت النهاية',''))}" for _,r in _ds.iterrows()}
         _edit_sid = st.selectbox("اختر موعداً:", list(_sched_labels.keys()), format_func=lambda x:_sched_labels[x], key="darssly_edit_schedule")
         _erows = _ds[_ds["معرف الموعد"].astype(str)==str(_edit_sid)]
         if not _erows.empty:
@@ -5119,7 +5130,7 @@ elif t_page == "darssly_schedule":
                 if _conf==["invalid"]:
                     st.error("⚠️ وقت النهاية يجب أن يكون بعد وقت البداية.")
                 elif _conf:
-                    st.error("⚠️ يوجد تعارض مع موعد آخر في نفس اليوم: " + " | ".join([f"{x.get('اسم المدرس','')} {_darssly_time_to_minutes(x.get('وقت البداية',''))//60:02d}:{_darssly_time_to_minutes(x.get('وقت البداية',''))%60:02d}-{_darssly_time_to_minutes(x.get('وقت النهاية',''))//60:02d}:{_darssly_time_to_minutes(x.get('وقت النهاية',''))%60:02d}" for x in _conf]))
+                    st.error("⚠️ يوجد تعارض مع موعد آخر في نفس اليوم: " + " | ".join([f"{x.get('اسم المدرس','')} {_darssly_format_time(x.get('وقت البداية',''))} إلى {_darssly_format_time(x.get('وقت النهاية',''))}" for x in _conf]))
                 else:
                     _nsrow=_er.to_dict()
                     _teacher=_dt[_dt["معرف المدرس"].astype(str)==str(_etid)].iloc[0]
@@ -5135,8 +5146,11 @@ elif t_page == "darssly_schedule":
                 st.rerun()
 
         st.markdown("### 📊 كشف مواعيد درسلي")
-        st.dataframe(_ds[["اسم المدرس","المادة","اليوم","وقت البداية","وقت النهاية","الحالة","ملاحظات"]], use_container_width=True, hide_index=True)
-        _print_rows="".join(f"<tr><td>{html.escape(str(r.get('اسم المدرس','')))}</td><td>{html.escape(str(r.get('المادة','')))}</td><td>{html.escape(str(r.get('اليوم','')))}</td><td>{html.escape(str(r.get('وقت البداية','')))} - {html.escape(str(r.get('وقت النهاية','')))}</td><td>{html.escape(str(r.get('الحالة','')))}</td></tr>" for _,r in _ds.iterrows())
+        _display_ds = _ds[["اسم المدرس","المادة","اليوم","وقت البداية","وقت النهاية","الحالة","ملاحظات"]].copy()
+        _display_ds["وقت البداية"] = _display_ds["وقت البداية"].apply(_darssly_format_time)
+        _display_ds["وقت النهاية"] = _display_ds["وقت النهاية"].apply(_darssly_format_time)
+        st.dataframe(_display_ds, use_container_width=True, hide_index=True)
+        _print_rows="".join(f"<tr><td>{html.escape(str(r.get('اسم المدرس','')))}</td><td>{html.escape(str(r.get('المادة','')))}</td><td>{html.escape(str(r.get('اليوم','')))}</td><td>{html.escape(_darssly_format_time(r.get('وقت البداية','')))} - {html.escape(_darssly_format_time(r.get('وقت النهاية','')))}</td><td>{html.escape(str(r.get('الحالة','')))}</td></tr>" for _,r in _ds.iterrows())
         _print_html=make_print_html("جدول منصة درسلي للمدرسين",_print_rows,"<th>المدرس</th><th>المادة</th><th>اليوم</th><th>الوقت</th><th>الحالة</th>","جدول مستقل لمواعيد المدرسين على منصة درسلي")
         _pdf=html_to_pdf_bytes(_print_html)
         if _pdf:
