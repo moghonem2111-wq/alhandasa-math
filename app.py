@@ -620,6 +620,9 @@ COL_TEACHER_PROFILE = ["اسم المعلم", "الصورة_base64"]
 COL_STUDENT_INTERFACE = ["عنوان_الواجهة", "الشارة", "عنوان_البطل", "وصف_البطل", "ميزة_1", "ميزة_2", "ميزة_3", "ميزة_4", "الوصف", "صورة_الواجهة_base64", "عنوان_الاشتراكات", "وصف_الاشتراكات", "عنوان_الحجز", "نص_الحجز", "نص_الفوتر", "صورة_الاشتراكات_base64", "صورة_البانر_base64"]
 COL_PAYMENT_RECORDS = ["التاريخ", "الشهر", "اسم الطالب", "المبلغ", "طريقة الدفع", "حالة الدفع", "ملاحظات"]
 COL_ADS = ["معرف_الإعلان", "تاريخ_النشر", "العنوان", "نوع_الإعلان", "النص", "الوسائط_base64", "نوع_الوسائط", "الرابط", "نص_الزر", "الحالة"]
+# نظام مستقل لتنظيم مواعيد مدرسين منصة درسلي.
+COL_DARSSLY_TEACHERS = ["معرف المدرس", "اسم المدرس", "المادة", "اللون", "الحالة"]
+COL_DARSSLY_SCHEDULE = ["معرف الموعد", "معرف المدرس", "اسم المدرس", "المادة", "اليوم", "وقت البداية", "وقت النهاية", "ملاحظات", "الحالة", "تاريخ الإضافة"]
 COL_ACADEMY_ACCOUNTS = ["اسم الأكاديمية", "رقم الهاتف", "كلمة المرور", "نسبة الأكاديمية", "الحالة"]
 COL_ACADEMY_TEACHERS = ["اسم الأكاديمية", "اسم المدرس", "المادة", "نسبة المدرس", "سجل القبض", "الحالة"]
 COL_ACADEMY_ASSIGNMENTS = ["اسم الأكاديمية", "اسم الطالب", "اسم المدرس", "سعر الحصة", "نصيب المدرس", "نصيب الأكاديمية", "الحالة"]
@@ -1836,6 +1839,8 @@ def _restore_complete_zip(zip_bytes):
         st.session_state.ads_df = tables.get("Ads", pd.DataFrame(columns=COL_ADS))
         st.session_state.student_interface_df = tables.get("StudentInterface", load_student_interface())
         st.session_state.teacher_profile_df = tables.get("TeacherProfile", load_teacher_profile())
+        st.session_state.darssly_teachers_df = tables.get("DarsslyTeachers", pd.DataFrame(columns=COL_DARSSLY_TEACHERS))
+        st.session_state.darssly_schedule_df = tables.get("DarsslySchedule", pd.DataFrame(columns=COL_DARSSLY_SCHEDULE))
         if sum(len(st.session_state[n]) for n in rec_names) == 0 and st.session_state.ads_df.empty:
             raise ValueError("النسخة الاحتياطية لا تحتوي على بيانات أساسية.")
         ok = save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df, st.session_state.weekly_schedule_df, st.session_state.payment_records_df, st.session_state.ads_df)
@@ -1880,10 +1885,48 @@ def _restore_complete_backup(excel_bytes):
     names=["users_df","sessions_df","assessments_df","messages_df","exams_df","essays_df","bookings_df","bank_requests_df","question_bank_df","videos_df","video_comments_df","abqary_df","online_schedule_df","weekly_schedule_df","payment_records_df","academy_accounts_df","academy_teachers_df","academy_assignments_df","academy_access_df","academy_subscriptions_df","academy_students_df","academy_attendance_df","academy_schedule_df"]
     for n,df in zip(names,rec): st.session_state[n]=df
     st.session_state.ads_df=ads; st.session_state.student_interface_df=interface; st.session_state.teacher_profile_df=profile
+    try:
+        _t_loaded, _s_loaded = _load_darssly_data()
+        st.session_state.darssly_teachers_df = _t_loaded
+        st.session_state.darssly_schedule_df = _s_loaded
+    except Exception:
+        pass
     ok=save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df,st.session_state.weekly_schedule_df,st.session_state.payment_records_df,st.session_state.ads_df)
     if _cloud_storage_enabled() and not ok: raise RuntimeError("فشل تأكيد حفظ النسخة المسترجعة في التخزين السحابي.")
     _cloud_save_student_interface(st.session_state.student_interface_df)
     return sum(len(x) for x in rec)+len(ads)
+
+def _load_darssly_data():
+    """تحميل نظام درسلي المستقل من نفس التخزين الدائم/Excel، دون الاعتماد على بيانات الطلاب."""
+    teachers = pd.DataFrame(columns=COL_DARSSLY_TEACHERS)
+    schedule = pd.DataFrame(columns=COL_DARSSLY_SCHEDULE)
+    source = _get_excel_source()
+    if source is not None:
+        try:
+            with pd.ExcelFile(source, engine="openpyxl") as xls:
+                if "DarsslyTeachers" in xls.sheet_names:
+                    teachers = pd.read_excel(xls, "DarsslyTeachers")
+                if "DarsslySchedule" in xls.sheet_names:
+                    schedule = pd.read_excel(xls, "DarsslySchedule")
+        except Exception:
+            pass
+    for c in COL_DARSSLY_TEACHERS:
+        if c not in teachers.columns:
+            teachers[c] = "نشط" if c == "الحالة" else ""
+    for c in COL_DARSSLY_SCHEDULE:
+        if c not in schedule.columns:
+            schedule[c] = "نشط" if c == "الحالة" else ""
+    teachers = teachers[COL_DARSSLY_TEACHERS].copy()
+    schedule = schedule[COL_DARSSLY_SCHEDULE].copy()
+    if not teachers.empty:
+        teachers["اسم المدرس"] = teachers["اسم المدرس"].astype(str).str.strip()
+        teachers["المادة"] = teachers["المادة"].astype(str).str.strip()
+        teachers["اللون"] = teachers["اللون"].astype(str).str.strip()
+    if not schedule.empty:
+        schedule["اسم المدرس"] = schedule["اسم المدرس"].astype(str).str.strip()
+        schedule["المادة"] = schedule["المادة"].astype(str).str.strip()
+    return teachers, schedule
+
 
 def save_all_data(users_df, sessions_df, assessments_df, messages_df, exams_df, essays_df, bookings_df, bank_requests_df, question_bank_df, videos_df, video_comments_df, abqary_df, online_schedule_df, weekly_schedule_df=None, payment_records_df=None, ads_df=None):
     if weekly_schedule_df is None:
@@ -1934,6 +1977,8 @@ def save_all_data(users_df, sessions_df, assessments_df, messages_df, exams_df, 
         pd.DataFrame(media_rows, columns=["معرف_الإعلان", "جزء", "البيانات"]).to_excel(writer, sheet_name="AdsMedia", index=False)
         st.session_state.get("student_interface_df", load_student_interface()).to_excel(writer, sheet_name="StudentInterface", index=False)
         st.session_state.get("teacher_profile_df", pd.DataFrame([{"اسم المعلم":"م/ محمد غنيم","الصورة_base64":img_b64}])).to_excel(writer, sheet_name="TeacherProfile", index=False)
+        st.session_state.get("darssly_teachers_df", pd.DataFrame(columns=COL_DARSSLY_TEACHERS)).to_excel(writer, sheet_name="DarsslyTeachers", index=False)
+        st.session_state.get("darssly_schedule_df", pd.DataFrame(columns=COL_DARSSLY_SCHEDULE)).to_excel(writer, sheet_name="DarsslySchedule", index=False)
     excel_bytes = excel_buffer.getvalue()
     # احفظ محلياً أيضاً عندما يكون ذلك ممكناً، ثم ارفع نفس الملف للتخزين الدائم.
     try:
@@ -2042,6 +2087,15 @@ if "ads_df" not in st.session_state:
 
 if "teacher_profile_df" not in st.session_state:
     st.session_state.teacher_profile_df = load_teacher_profile()
+
+if "darssly_teachers_df" not in st.session_state or "darssly_schedule_df" not in st.session_state:
+    try:
+        _darssly_teachers_loaded, _darssly_schedule_loaded = _load_darssly_data()
+        st.session_state.darssly_teachers_df = _darssly_teachers_loaded
+        st.session_state.darssly_schedule_df = _darssly_schedule_loaded
+    except Exception:
+        st.session_state.darssly_teachers_df = pd.DataFrame(columns=COL_DARSSLY_TEACHERS)
+        st.session_state.darssly_schedule_df = pd.DataFrame(columns=COL_DARSSLY_SCHEDULE)
 
 # مزامنة صورة المعلم من الملف السحابي مع المتغير المستخدم في الصفحة الرئيسية وبطاقات درسلي
 try:
@@ -4437,7 +4491,7 @@ with _brand_col:
     st.markdown("<div class='top-navigation-title'>البشمهندس x الرياضه</div><div class='top-navigation-subtitle'>لوحة تحكم المعلم • م/ محمد غنيم</div>", unsafe_allow_html=True)
 with _pills_col:
     if _nav_open:
-        _teacher_nav = [("◉ الرئيسية","dashboard"), ("◫ Zoom","online_schedule"), ("▦ المواعيد","weekly_schedule"), ("▣ الامتحانات","exam_maker"), ("🤖 استوديو AI","ai_studio"), ("▤ بنك الأسئلة","question_bank"), ("▶ الفيديوهات","videos"), ("✦ عبقري","abqary"), ("▥ الدرجات","grades"), ("✎ المقالي","essays"), ("◌ الرسائل","chat"), ("♙ الطلاب","students"), ("＋ حصة","add_session"), ("＋ واجب","add_hw"), ("✎ تعديل السجلات","edit_records"), ("▥ السجلات","all_records"), ("📢 الإعلانات","ads"), ("▤ ولي الأمر","parent_report"), ("▰ المدفوعات","payments"), ("🏫 الأكاديميات","academies"), ("💾 النسخ الاحتياطية","online_backup"), ("◈ واجهة الطالب","student_interface")]
+        _teacher_nav = [("◉ الرئيسية","dashboard"), ("◫ Zoom","online_schedule"), ("▦ المواعيد","weekly_schedule"), ("▣ الامتحانات","exam_maker"), ("🤖 استوديو AI","ai_studio"), ("▤ بنك الأسئلة","question_bank"), ("▶ الفيديوهات","videos"), ("✦ عبقري","abqary"), ("▥ الدرجات","grades"), ("✎ المقالي","essays"), ("◌ الرسائل","chat"), ("♙ الطلاب","students"), ("＋ حصة","add_session"), ("＋ واجب","add_hw"), ("✎ تعديل السجلات","edit_records"), ("▥ السجلات","all_records"), ("📢 الإعلانات","ads"), ("▤ ولي الأمر","parent_report"), ("▰ المدفوعات","payments"), ("🏫 الأكاديميات","academies"), ("🎓 تنظيم درسلي","darssly_schedule"), ("💾 النسخ الاحتياطية","online_backup"), ("◈ واجهة الطالب","student_interface")]
         _teacher_cols = st.columns(5, gap="small")
         for _ti, (_label, _target) in enumerate(_teacher_nav):
             with _teacher_cols[_ti % 5]:
@@ -4828,6 +4882,255 @@ if t_page == "student_interface":
         else:
             st.success("✓ تم حفظ واجهة الطالب والصور في التخزين الدائم بنجاح")
         st.rerun()
+
+elif t_page == "darssly_schedule":
+    st.markdown("<div class='vertical-section-header'>🎓 تنظيم منصة درسلي — جدول المدرسين</div>", unsafe_allow_html=True)
+    st.caption("نظام مستقل عن الطلاب والأكاديميات: أضف المدرسين والمواد، ثم أنشئ مواعيدهم. يتم منع تعارض المواعيد تلقائياً وحفظ البيانات مع النسخة السحابية.")
+
+    _dt = st.session_state.get("darssly_teachers_df", pd.DataFrame(columns=COL_DARSSLY_TEACHERS)).copy()
+    _ds = st.session_state.get("darssly_schedule_df", pd.DataFrame(columns=COL_DARSSLY_SCHEDULE))
+    for _c in COL_DARSSLY_TEACHERS:
+        if _c not in _dt.columns: _dt[_c] = "نشط" if _c == "الحالة" else ""
+    for _c in COL_DARSSLY_SCHEDULE:
+        if _c not in _ds.columns: _ds[_c] = "نشط" if _c == "الحالة" else ""
+
+    _darssly_palette = [
+        "#2563eb","#16a34a","#dc2626","#9333ea","#ea580c","#0891b2",
+        "#db2777","#65a30d","#7c3aed","#0f766e","#b91c1c","#0369a1",
+        "#15803d","#c2410c","#be185d","#4338ca","#047857","#a16207"
+    ]
+
+    def _darssly_time_to_minutes(value):
+        try:
+            t = datetime.strptime(str(value).strip()[:5], "%H:%M").time()
+            return t.hour * 60 + t.minute
+        except Exception:
+            return None
+
+    def _darssly_conflicts(day_name, start_value, end_value, ignore_id=""):
+        start_m = _darssly_time_to_minutes(start_value)
+        end_m = _darssly_time_to_minutes(end_value)
+        if start_m is None or end_m is None or end_m <= start_m:
+            return ["invalid"]
+        conflicts = []
+        work = _ds.copy()
+        if work.empty:
+            return conflicts
+        work = work[
+            (work["اليوم"].astype(str).str.strip() == str(day_name).strip()) &
+            (work["الحالة"].astype(str).str.strip() != "متوقف")
+        ]
+        for _, _r in work.iterrows():
+            if str(_r.get("معرف الموعد","")).strip() == str(ignore_id).strip():
+                continue
+            a = _darssly_time_to_minutes(_r.get("وقت البداية",""))
+            b = _darssly_time_to_minutes(_r.get("وقت النهاية",""))
+            if a is None or b is None:
+                continue
+            if start_m < b and end_m > a:
+                conflicts.append(_r.to_dict())
+        return conflicts
+
+    # ===== إدارة المدرسين =====
+    st.markdown("### 👨‍🏫 المدرسون والمواد")
+    with st.form("darssly_teacher_add_form", clear_on_submit=True):
+        _tc1, _tc2, _tc3 = st.columns([2.4,2.0,1.0])
+        with _tc1:
+            _new_teacher_name = st.text_input("اسم المدرس:")
+        with _tc2:
+            _new_teacher_subject = st.text_input("المادة:", placeholder="رياضيات")
+        with _tc3:
+            _new_teacher_color = st.selectbox("لون المدرس:", _darssly_palette, format_func=lambda x: "● "+x)
+        _new_teacher_status = st.selectbox("الحالة:", ["نشط","موقوف"])
+        if st.form_submit_button("➕ إضافة المدرس", use_container_width=True):
+            _name = _new_teacher_name.strip()
+            if not _name:
+                st.error("اكتب اسم المدرس.")
+            elif not _new_teacher_subject.strip():
+                st.error("اكتب المادة.")
+            else:
+                _same = _dt["اسم المدرس"].astype(str).str.strip().str.casefold() == _name.casefold()
+                if _same.any():
+                    st.warning("هذا المدرس موجود بالفعل. يمكنك تعديل بياناته من أسفل.")
+                else:
+                    _tid = "DT_"+uuid.uuid4().hex[:12]
+                    _used = set(_dt["اللون"].astype(str).str.strip().tolist())
+                    _color = _new_teacher_color
+                    if _color in _used:
+                        _color = next((c for c in _darssly_palette if c not in _used), _color)
+                    _row = {"معرف المدرس":_tid,"اسم المدرس":_name,"المادة":_new_teacher_subject.strip(),"اللون":_color,"الحالة":_new_teacher_status}
+                    _dt = pd.concat([_dt, pd.DataFrame([_row])], ignore_index=True)
+                    st.session_state.darssly_teachers_df = _dt[COL_DARSSLY_TEACHERS]
+                    save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df)
+                    st.success("✓ تم إضافة المدرس والمادة وحفظهما.")
+                    st.rerun()
+
+    if _dt.empty:
+        st.info("لا يوجد مدرسون في نظام درسلي حتى الآن.")
+    else:
+        _teacher_labels = {str(r.get("معرف المدرس")): f"{r.get('اسم المدرس','')} — {r.get('المادة','')}" for _,r in _dt.iterrows()}
+        _manage_tid = st.selectbox("اختر مدرساً للتعديل أو الحذف:", list(_teacher_labels.keys()), format_func=lambda x:_teacher_labels[x], key="darssly_manage_teacher")
+        _manage_row = _dt[_dt["معرف المدرس"].astype(str) == str(_manage_tid)]
+        if not _manage_row.empty:
+            _mr = _manage_row.iloc[0]
+            with st.form("darssly_teacher_edit_form"):
+                _en = st.text_input("اسم المدرس", value=str(_mr.get("اسم المدرس","")))
+                _esub = st.text_input("المادة", value=str(_mr.get("المادة","")))
+                _ecolor = st.selectbox("اللون", _darssly_palette, index=(_darssly_palette.index(str(_mr.get("اللون"))) if str(_mr.get("اللون")) in _darssly_palette else 0))
+                _estatus = st.selectbox("الحالة", ["نشط","موقوف"], index=0 if str(_mr.get("الحالة","نشط"))!="موقوف" else 1)
+                _eu = st.form_submit_button("💾 حفظ تعديل المدرس", use_container_width=True)
+                _ed = st.form_submit_button("🗑️ حذف المدرس", use_container_width=True)
+            if _eu:
+                _dt.loc[_manage_row.index, ["اسم المدرس","المادة","اللون","الحالة"]] = [_en.strip(),_esub.strip(),_ecolor,_estatus]
+                st.session_state.darssly_teachers_df = _dt[COL_DARSSLY_TEACHERS]
+                # تحديث المادة/الاسم داخل المواعيد مع بقاء معرف المدرس ثابتاً.
+                _ds.loc[_ds["معرف المدرس"].astype(str)==str(_manage_tid), "اسم المدرس"] = _en.strip()
+                _ds.loc[_ds["معرف المدرس"].astype(str)==str(_manage_tid), "المادة"] = _esub.strip()
+                st.session_state.darssly_schedule_df = _ds[COL_DARSSLY_SCHEDULE]
+                save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df)
+                st.success("✓ تم تعديل بيانات المدرس.")
+                st.rerun()
+            if _ed:
+                _dt = _dt[_dt["معرف المدرس"].astype(str) != str(_manage_tid)].reset_index(drop=True)
+                _ds = _ds[_ds["معرف المدرس"].astype(str) != str(_manage_tid)].reset_index(drop=True)
+                st.session_state.darssly_teachers_df = _dt[COL_DARSSLY_TEACHERS]
+                st.session_state.darssly_schedule_df = _ds[COL_DARSSLY_SCHEDULE]
+                save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df)
+                st.success("تم حذف المدرس ومواعيده من نظام درسلي فقط.")
+                st.rerun()
+
+    st.markdown("---")
+    st.markdown("### ➕ إضافة موعد مدرس")
+    _active_teachers = _dt[_dt["الحالة"].astype(str).str.strip() != "موقوف"].copy()
+    if _active_teachers.empty:
+        st.warning("أضف مدرساً نشطاً أولاً.")
+    else:
+        _tid_options = [str(x) for x in _active_teachers["معرف المدرس"].tolist()]
+        _tid_default = _tid_options[0]
+        with st.form("darssly_schedule_add_form", clear_on_submit=True):
+            _sc1,_sc2,_sc3 = st.columns(3)
+            with _sc1:
+                _sel_tid = st.selectbox("المدرس:", _tid_options, index=0, format_func=lambda x: f"{_active_teachers[_active_teachers['معرف المدرس'].astype(str)==str(x)].iloc[0]['اسم المدرس']} — {_active_teachers[_active_teachers['معرف المدرس'].astype(str)==str(x)].iloc[0]['المادة']}")
+                _selected_teacher = _active_teachers[_active_teachers["معرف المدرس"].astype(str)==str(_sel_tid)].iloc[0]
+                _sel_name = str(_selected_teacher["اسم المدرس"])
+                _sel_subject = str(_selected_teacher["المادة"])
+            with _sc2:
+                _days = ["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة"]
+                _sel_day = st.selectbox("اليوم:", _days)
+                _start = st.time_input("من الساعة:", value=time(17,0), key="darssly_start")
+            with _sc3:
+                _end = st.time_input("إلى الساعة:", value=time(18,0), key="darssly_end")
+                _note = st.text_input("ملاحظات (اختياري):")
+            if st.form_submit_button("💾 إضافة الموعد", use_container_width=True, type="primary"):
+                _start_s = _start.strftime("%H:%M")
+                _end_s = _end.strftime("%H:%M")
+                _conf = _darssly_conflicts(_sel_day, _start_s, _end_s)
+                if _conf == ["invalid"]:
+                    st.error("⚠️ وقت النهاية يجب أن يكون بعد وقت البداية.")
+                elif _conf:
+                    _lines=[]
+                    for _cr in _conf:
+                        _lines.append(f"• {_cr.get('اسم المدرس','مدرس')} ({_cr.get('المادة','')}) — {_cr.get('وقت البداية','')} إلى {_cr.get('وقت النهاية','')}")
+                    st.error("⚠️ يوجد تعارض في موعد منصة درسلي:
+
+" + "
+".join(_lines))
+                else:
+                    _sid = "DS_"+uuid.uuid4().hex[:12]
+                    _sr = {"معرف الموعد":_sid,"معرف المدرس":_sel_tid,"اسم المدرس":_sel_name,"المادة":_sel_subject,"اليوم":_sel_day,"وقت البداية":_start_s,"وقت النهاية":_end_s,"ملاحظات":_note.strip(),"الحالة":"نشط","تاريخ الإضافة":datetime.now().strftime("%Y-%m-%d %H:%M")}
+                    st.session_state.darssly_schedule_df = pd.concat([_ds,pd.DataFrame([_sr])], ignore_index=True)[COL_DARSSLY_SCHEDULE]
+                    save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df)
+                    st.success(f"✓ تم حجز موعد { _sel_name } يوم {_sel_day} من {_start.strftime('%I:%M %p').lstrip('0')} إلى {_end.strftime('%I:%M %p').lstrip('0')}.")
+                    st.rerun()
+
+    # ===== الجدول الأسبوعي الملون =====
+    st.markdown("---")
+    st.markdown("### 📅 جدول منصة درسلي الأسبوعي")
+    _ds = st.session_state.get("darssly_schedule_df", pd.DataFrame(columns=COL_DARSSLY_SCHEDULE))
+    _dt = st.session_state.get("darssly_teachers_df", pd.DataFrame(columns=COL_DARSSLY_TEACHERS))
+    _color_by_teacher = {str(r["معرف المدرس"]): str(r["اللون"]) for _,r in _dt.iterrows()}
+    _days = ["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة"]
+
+    if _ds.empty:
+        st.info("لا توجد مواعيد لعرضها حالياً.")
+    else:
+        _times = sorted(set(list(_ds["وقت البداية"].astype(str)) + list(_ds["وقت النهاية"].astype(str))))
+        _rows = []
+        for _tm in _times:
+            _cells = []
+            for _day in _days:
+                _matches = _ds[(_ds["اليوم"].astype(str)==_day) & (_ds["وقت البداية"].astype(str)==_tm) & (_ds["الحالة"].astype(str)!="متوقف")]
+                _html = []
+                for _,_r in _matches.iterrows():
+                    _col = _color_by_teacher.get(str(_r.get("معرف المدرس")), "#2563eb")
+                    _html.append(f"<div style='background:{_col};color:#fff;border-radius:12px;padding:8px;margin:3px 0;text-align:right;box-shadow:0 4px 10px rgba(15,23,42,.12)'><b>👨‍🏫 {html.escape(str(_r.get('اسم المدرس','')))}</b><br><small>{html.escape(str(_r.get('المادة','')))}<br>{html.escape(str(_r.get('وقت البداية','')))} → {html.escape(str(_r.get('وقت النهاية','')))}</small></div>")
+                _cells.append("".join(_html) if _html else "—")
+            _rows.append((_tm,_cells))
+        _table="<table style='width:100%;border-collapse:collapse;direction:rtl;text-align:center;background:#fff'><tr style='background:#062b63;color:#fff'><th style='padding:11px;border:1px solid #dbe7f5'>الساعة</th>"+''.join(f"<th style='padding:11px;border:1px solid #dbe7f5'>{d}</th>" for d in _days)+"</tr>"
+        for _tm,_cells in _rows:
+            _table += f"<tr><td style='padding:10px;border:1px solid #dbe7f5;font-weight:900'>{_tm}</td>"+''.join(f"<td style='padding:6px;border:1px solid #dbe7f5;vertical-align:top'>{c}</td>" for c in _cells)+"</tr>"
+        _table += "</table>"
+        st.markdown(_table, unsafe_allow_html=True)
+
+        st.markdown("### 🎨 دليل ألوان المدرسين")
+        _legend = st.columns(min(4,max(1,len(_dt))))
+        for _i,(_, _tr) in enumerate(_dt.iterrows()):
+            with _legend[_i % len(_legend)]:
+                st.markdown(f"<div style='border:1px solid #dbe7f5;border-radius:12px;padding:9px;background:#fff'><span style='display:inline-block;width:16px;height:16px;border-radius:50%;background:{_tr.get('اللون','#2563eb')};vertical-align:middle'></span> <b>{html.escape(str(_tr.get('اسم المدرس','')))}</b><br><small>{html.escape(str(_tr.get('المادة','')))}</small></div>", unsafe_allow_html=True)
+
+        st.markdown("### ✏️ إدارة المواعيد")
+        _sched_labels = {str(r.get("معرف الموعد")): f"{r.get('اسم المدرس','')} — {r.get('اليوم','')} — {r.get('وقت البداية','')} → {r.get('وقت النهاية','')}" for _,r in _ds.iterrows()}
+        _edit_sid = st.selectbox("اختر موعداً:", list(_sched_labels.keys()), format_func=lambda x:_sched_labels[x], key="darssly_edit_schedule")
+        _erows = _ds[_ds["معرف الموعد"].astype(str)==str(_edit_sid)]
+        if not _erows.empty:
+            _er = _erows.iloc[0]
+            _e_teacher_ids = [str(x) for x in _dt[_dt["الحالة"].astype(str)!="موقوف"]["معرف المدرس"].tolist()]
+            _e_teacher_index = _e_teacher_ids.index(str(_er.get("معرف المدرس"))) if str(_er.get("معرف المدرس")) in _e_teacher_ids else 0
+            with st.form("darssly_schedule_edit_form"):
+                _etid = st.selectbox("المدرس", _e_teacher_ids, index=_e_teacher_index, format_func=lambda x: f"{_dt[_dt['معرف المدرس'].astype(str)==str(x)].iloc[0]['اسم المدرس']} — {_dt[_dt['معرف المدرس'].astype(str)==str(x)].iloc[0]['المادة']}")
+                _edays=["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة"]
+                _eday=st.selectbox("اليوم",_edays,index=_edays.index(str(_er.get("اليوم"))) if str(_er.get("اليوم")) in _edays else 0)
+                try: _estart=datetime.strptime(str(_er.get("وقت البداية","17:00"))[:5],"%H:%M").time()
+                except Exception: _estart=time(17,0)
+                try: _eend=datetime.strptime(str(_er.get("وقت النهاية","18:00"))[:5],"%H:%M").time()
+                except Exception: _eend=time(18,0)
+                _es1,_es2=st.columns(2)
+                with _es1: _enew_start=st.time_input("من",value=_estart)
+                with _es2: _enew_end=st.time_input("إلى",value=_eend)
+                _enote=st.text_input("ملاحظات",value=str(_er.get("ملاحظات","")))
+                _estatus=st.selectbox("الحالة",["نشط","متوقف"],index=0 if str(_er.get("الحالة","نشط"))!="متوقف" else 1)
+                _eu=st.form_submit_button("💾 حفظ تعديل الموعد",use_container_width=True)
+                _ed=st.form_submit_button("🗑️ حذف الموعد",use_container_width=True)
+            if _eu:
+                _ns=_enew_start.strftime("%H:%M"); _ne=_enew_end.strftime("%H:%M")
+                _conf=_darssly_conflicts(_eday,_ns,_ne,ignore_id=_edit_sid)
+                if _conf==["invalid"]:
+                    st.error("⚠️ وقت النهاية يجب أن يكون بعد وقت البداية.")
+                elif _conf:
+                    st.error("⚠️ يوجد تعارض مع موعد آخر في نفس اليوم: " + " | ".join([f"{x.get('اسم المدرس','')} {_darssly_time_to_minutes(x.get('وقت البداية',''))//60:02d}:{_darssly_time_to_minutes(x.get('وقت البداية',''))%60:02d}-{_darssly_time_to_minutes(x.get('وقت النهاية',''))//60:02d}:{_darssly_time_to_minutes(x.get('وقت النهاية',''))%60:02d}" for x in _conf]))
+                else:
+                    _nsrow=_er.to_dict()
+                    _teacher=_dt[_dt["معرف المدرس"].astype(str)==str(_etid)].iloc[0]
+                    _nsrow.update({"معرف المدرس":_etid,"اسم المدرس":str(_teacher["اسم المدرس"]),"المادة":str(_teacher["المادة"]),"اليوم":_eday,"وقت البداية":_ns,"وقت النهاية":_ne,"ملاحظات":_enote.strip(),"الحالة":_estatus})
+                    st.session_state.darssly_schedule_df.loc[_erows.index[0], list(_nsrow.keys())] = list(_nsrow.values())
+                    save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df)
+                    st.success("✓ تم تعديل الموعد بدون تعارض.")
+                    st.rerun()
+            if _ed:
+                st.session_state.darssly_schedule_df = _ds[_ds["معرف الموعد"].astype(str)!=str(_edit_sid)].reset_index(drop=True)
+                save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df)
+                st.success("تم حذف الموعد من نظام درسلي.")
+                st.rerun()
+
+        st.markdown("### 📊 كشف مواعيد درسلي")
+        st.dataframe(_ds[["اسم المدرس","المادة","اليوم","وقت البداية","وقت النهاية","الحالة","ملاحظات"]], use_container_width=True, hide_index=True)
+        _print_rows="".join(f"<tr><td>{html.escape(str(r.get('اسم المدرس','')))}</td><td>{html.escape(str(r.get('المادة','')))}</td><td>{html.escape(str(r.get('اليوم','')))}</td><td>{html.escape(str(r.get('وقت البداية','')))} - {html.escape(str(r.get('وقت النهاية','')))}</td><td>{html.escape(str(r.get('الحالة','')))}</td></tr>" for _,r in _ds.iterrows())
+        _print_html=make_print_html("جدول منصة درسلي للمدرسين",_print_rows,"<th>المدرس</th><th>المادة</th><th>اليوم</th><th>الوقت</th><th>الحالة</th>","جدول مستقل لمواعيد المدرسين على منصة درسلي")
+        _pdf=html_to_pdf_bytes(_print_html)
+        if _pdf:
+            st.download_button("🖨️ طباعة جدول درسلي PDF",_pdf,file_name="جدول_منصة_درسلي_للمدرسين.pdf",mime="application/pdf",use_container_width=True,key="darssly_schedule_pdf")
+        else:
+            st.download_button("🖨️ طباعة جدول درسلي",_print_html.encode("utf-8"),file_name="جدول_منصة_درسلي_للمدرسين.html",mime="text/html",use_container_width=True,key="darssly_schedule_html")
 
 elif t_page == "dashboard":
     dashboard_students = sorted(list(set([str(x).strip() for x in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(x).strip()] + [str(x).strip() for x in st.session_state.weekly_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()] + [str(x).strip() for x in st.session_state.online_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()])))
