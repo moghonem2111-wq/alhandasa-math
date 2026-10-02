@@ -5119,6 +5119,93 @@ elif t_page == "darssly_schedule":
         _table += "</table>"
         st.markdown(_table, unsafe_allow_html=True)
 
+        # نسخة طباعة أسبوعية مطابقة للجدول الظاهر: الأيام + الساعات + لون كل مدرس.
+        _weekly_header = "".join(f"<th>{html.escape(str(_d))}</th>" for _d in _days)
+        _weekly_body = ""
+        for _tm in _times:
+            _weekly_body += f"<tr><td class='time-col'>{html.escape(_darssly_format_time(_tm))}</td>"
+            for _day in _days:
+                _matches = _ds[
+                    (_ds["اليوم"].astype(str) == _day) &
+                    (_ds["وقت البداية"].astype(str) == _tm) &
+                    (_ds["الحالة"].astype(str) != "متوقف")
+                ]
+                _cell = ""
+                for _, _r in _matches.iterrows():
+                    _col = _color_by_teacher.get(str(_r.get("معرف المدرس")), "#2563eb")
+                    _cell += (
+                        f"<div class='teacher-card' style='background:{_col}'>"
+                        f"<b>{html.escape(str(_r.get('اسم المدرس','')))}</b>"
+                        f"<span>{html.escape(str(_r.get('المادة','')))}</span>"
+                        f"<span>{html.escape(_darssly_format_time(_r.get('وقت البداية','')))} → "
+                        f"{html.escape(_darssly_format_time(_r.get('وقت النهاية','')))}</span>"
+                        f"</div>"
+                    )
+                _weekly_body += f"<td>{_cell or '—'}</td>"
+            _weekly_body += "</tr>"
+
+        _weekly_print_html = f"""<!doctype html>
+<html dir='rtl' lang='ar'>
+<head>
+<meta charset='utf-8'>
+<title>جدول منصة درسلي الأسبوعي</title>
+<style>
+@page {{ size: A4 landscape; margin: 10mm; }}
+body {{ font-family: Arial, Tahoma, sans-serif; direction: rtl; color:#102a43; }}
+h1 {{ text-align:center; margin:0 0 5px; font-size:24px; }}
+h2 {{ text-align:center; margin:0 0 14px; font-size:15px; font-weight:normal; }}
+table {{ width:100%; border-collapse:collapse; table-layout:fixed; }}
+th {{ background:#062b63; color:white; border:1px solid #dbe7f5; padding:9px 4px; font-size:13px; }}
+td {{ border:1px solid #cbd8e8; padding:5px; height:55px; vertical-align:top; text-align:center; font-size:11px; }}
+td.time-col {{ width:85px; font-weight:bold; vertical-align:middle; background:#f3f7fb; }}
+.teacher-card {{ color:#fff; border-radius:8px; padding:6px 4px; margin:2px 0; line-height:1.45; }}
+.teacher-card b,.teacher-card span {{ display:block; }}
+.teacher-card span {{ font-size:10px; }}
+.footer {{ text-align:center; margin-top:12px; font-size:11px; color:#555; }}
+</style>
+</head>
+<body>
+<h1>🎓 جدول منصة درسلي الأسبوعي للمدرسين</h1>
+<h2>جدول أسبوعي لمواعيد المدرسين والمواد</h2>
+<table>
+<tr><th>الساعة</th>{_weekly_header}</tr>
+{_weekly_body}
+</table>
+<div class='footer'>البشمهندس في الرياضيات</div>
+</body>
+</html>"""
+
+        _weekly_pdf = html_to_pdf_bytes(_weekly_print_html)
+        _wp1,_wp2 = st.columns(2)
+        with _wp1:
+            if _weekly_pdf:
+                st.download_button(
+                    "🖨️ طباعة جدول درسلي الأسبوعي PDF",
+                    _weekly_pdf,
+                    file_name="جدول_درسلي_الأسبوعي.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="darssly_weekly_pdf"
+                )
+            else:
+                st.download_button(
+                    "🖨️ طباعة جدول درسلي الأسبوعي",
+                    _weekly_print_html.encode("utf-8"),
+                    file_name="جدول_درسلي_الأسبوعي.html",
+                    mime="text/html",
+                    use_container_width=True,
+                    key="darssly_weekly_html_fallback"
+                )
+        with _wp2:
+            st.download_button(
+                "🌐 فتح نسخة طباعة الجدول الأسبوعي",
+                _weekly_print_html.encode("utf-8"),
+                file_name="جدول_درسلي_الأسبوعي_للطباعة.html",
+                mime="text/html",
+                use_container_width=True,
+                key="darssly_weekly_html"
+            )
+
         st.markdown("### 🎨 دليل ألوان المدرسين")
         _legend = st.columns(min(4,max(1,len(_dt))))
         for _i,(_, _tr) in enumerate(_dt.iterrows()):
