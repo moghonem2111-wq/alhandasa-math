@@ -4933,6 +4933,19 @@ elif t_page == "darssly_schedule":
         except Exception:
             return str(value)
 
+    def _darssly_parts_to_24(hour12, minute, ampm):
+        h = int(hour12) % 12
+        if str(ampm).upper() == "PM":
+            h += 12
+        return f"{h:02d}:{int(minute):02d}"
+
+    def _darssly_24_to_parts(value):
+        try:
+            t = datetime.strptime(str(value).strip()[:5], "%H:%M")
+            return (t.hour % 12 or 12), t.minute, ("AM" if t.hour < 12 else "PM")
+        except Exception:
+            return 5, 0, "PM"
+
     def _darssly_conflicts(day_name, start_value, end_value, ignore_id=""):
         start_m = _darssly_time_to_minutes(start_value)
         end_m = _darssly_time_to_minutes(end_value)
@@ -5046,13 +5059,21 @@ elif t_page == "darssly_schedule":
             with _sc2:
                 _days = ["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة"]
                 _sel_day = st.selectbox("اليوم:", _days)
-                _start = st.time_input("من الساعة:", value=time(17,0), key="darssly_start")
+                st.markdown("**من:**")
+                _sa1,_sa2,_sa3 = st.columns([1,1,1])
+                with _sa1: _start_hour = st.selectbox("الساعة", list(range(1,13)), index=4, key="darssly_start_hour")
+                with _sa2: _start_minute = st.selectbox("الدقائق", [0,15,30,45], format_func=lambda x:f"{x:02d}", key="darssly_start_minute")
+                with _sa3: _start_ampm = st.selectbox("الفترة", ["AM","PM"], index=1, key="darssly_start_ampm")
             with _sc3:
-                _end = st.time_input("إلى الساعة:", value=time(18,0), key="darssly_end")
+                st.markdown("**إلى:**")
+                _ea1,_ea2,_ea3 = st.columns([1,1,1])
+                with _ea1: _end_hour = st.selectbox("الساعة", list(range(1,13)), index=5, key="darssly_end_hour")
+                with _ea2: _end_minute = st.selectbox("الدقائق", [0,15,30,45], format_func=lambda x:f"{x:02d}", key="darssly_end_minute")
+                with _ea3: _end_ampm = st.selectbox("الفترة", ["AM","PM"], index=1, key="darssly_end_ampm")
                 _note = st.text_input("ملاحظات (اختياري):")
             if st.form_submit_button("💾 إضافة الموعد", use_container_width=True, type="primary"):
-                _start_s = _start.strftime("%H:%M")
-                _end_s = _end.strftime("%H:%M")
+                _start_s = _darssly_parts_to_24(_start_hour, _start_minute, _start_ampm)
+                _end_s = _darssly_parts_to_24(_end_hour, _end_minute, _end_ampm)
                 _conf = _darssly_conflicts(_sel_day, _start_s, _end_s)
                 if _conf == ["invalid"]:
                     st.error("⚠️ وقت النهاية يجب أن يكون بعد وقت البداية.")
@@ -5116,19 +5137,25 @@ elif t_page == "darssly_schedule":
                 _etid = st.selectbox("المدرس", _e_teacher_ids, index=_e_teacher_index, format_func=lambda x: f"{_dt[_dt['معرف المدرس'].astype(str)==str(x)].iloc[0]['اسم المدرس']} — {_dt[_dt['معرف المدرس'].astype(str)==str(x)].iloc[0]['المادة']}")
                 _edays=["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة"]
                 _eday=st.selectbox("اليوم",_edays,index=_edays.index(str(_er.get("اليوم"))) if str(_er.get("اليوم")) in _edays else 0)
-                try: _estart=datetime.strptime(str(_er.get("وقت البداية","17:00"))[:5],"%H:%M").time()
-                except Exception: _estart=time(17,0)
-                try: _eend=datetime.strptime(str(_er.get("وقت النهاية","18:00"))[:5],"%H:%M").time()
-                except Exception: _eend=time(18,0)
-                _es1,_es2=st.columns(2)
-                with _es1: _enew_start=st.time_input("من",value=_estart)
-                with _es2: _enew_end=st.time_input("إلى",value=_eend)
+                _old_sh,_old_sm,_old_sa = _darssly_24_to_parts(_er.get("وقت البداية","17:00"))
+                _old_eh,_old_em,_old_ea = _darssly_24_to_parts(_er.get("وقت النهاية","18:00"))
+                st.markdown("**من:**")
+                _es1,_es2,_es3=st.columns(3)
+                with _es1: _enew_start_hour=st.selectbox("الساعة",list(range(1,13)),index=_old_sh-1,key="darssly_edit_start_hour")
+                with _es2: _enew_start_minute=st.selectbox("الدقائق",[0,15,30,45],format_func=lambda x:f"{x:02d}",index=[0,15,30,45].index(_old_sm) if _old_sm in [0,15,30,45] else 0,key="darssly_edit_start_minute")
+                with _es3: _enew_start_ampm=st.selectbox("الفترة",["AM","PM"],index=0 if _old_sa=="AM" else 1,key="darssly_edit_start_ampm")
+                st.markdown("**إلى:**")
+                _ee1,_ee2,_ee3=st.columns(3)
+                with _ee1: _enew_end_hour=st.selectbox("الساعة",list(range(1,13)),index=_old_eh-1,key="darssly_edit_end_hour")
+                with _ee2: _enew_end_minute=st.selectbox("الدقائق",[0,15,30,45],format_func=lambda x:f"{x:02d}",index=[0,15,30,45].index(_old_em) if _old_em in [0,15,30,45] else 0,key="darssly_edit_end_minute")
+                with _ee3: _enew_end_ampm=st.selectbox("الفترة",["AM","PM"],index=0 if _old_ea=="AM" else 1,key="darssly_edit_end_ampm")
                 _enote=st.text_input("ملاحظات",value=str(_er.get("ملاحظات","")))
                 _estatus=st.selectbox("الحالة",["نشط","متوقف"],index=0 if str(_er.get("الحالة","نشط"))!="متوقف" else 1)
                 _eu=st.form_submit_button("💾 حفظ تعديل الموعد",use_container_width=True)
                 _ed=st.form_submit_button("🗑️ حذف الموعد",use_container_width=True)
             if _eu:
-                _ns=_enew_start.strftime("%H:%M"); _ne=_enew_end.strftime("%H:%M")
+                _ns=_darssly_parts_to_24(_enew_start_hour,_enew_start_minute,_enew_start_ampm)
+                _ne=_darssly_parts_to_24(_enew_end_hour,_enew_end_minute,_enew_end_ampm)
                 _conf=_darssly_conflicts(_eday,_ns,_ne,ignore_id=_edit_sid)
                 if _conf==["invalid"]:
                     st.error("⚠️ وقت النهاية يجب أن يكون بعد وقت البداية.")
