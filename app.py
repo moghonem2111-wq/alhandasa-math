@@ -5855,7 +5855,7 @@ elif t_page == "weekly_schedule":
                         if str(r.get("الموعد", ""))[:5] != tm:
                             continue
                     col = str(r.get("اللون", "#2563eb"))
-                    parts.append(f"<div style='background:{col};color:#fff;padding:7px;border-radius:8px;margin:2px 0;font-weight:900;'>👤 {r['اسم الطالب']}<br><small>{format_schedule_time_ampm(r.get('الموعد',''))} → {format_schedule_time_ampm(r.get('نهاية الموعد',r.get('الموعد','')))}<br>{r['المجموعة/الصف']} | {r['اسم الأكاديمية']}</small></div>")
+                    parts.append(f"<div style='background:{col};color:#fff;padding:7px;border-radius:8px;margin:2px 0;font-weight:900;'>👤 {r['اسم الطالب']}<br><small>{r['المجموعة/الصف']} | {r['اسم الأكاديمية']}</small></div>")
                 row[d] = "".join(parts) if parts else "—"
             rows.append(row)
         schedule_html = "<table style='width:100%;border-collapse:collapse;text-align:center;direction:rtl'><tr style='background:#f1f5f9'><th style='padding:10px;border:1px solid #cbd5e1'>الساعة</th>" + "".join([f"<th style='padding:10px;border:1px solid #cbd5e1'>{d}</th>" for d in days]) + "</tr>"
