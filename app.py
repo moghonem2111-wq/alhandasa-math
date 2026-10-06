@@ -150,6 +150,60 @@ def _cloud_load_excel_bytes():
         pass
     return None
 
+def _cloud_load_payment_records_fallback():
+    """استرجاع سجل المدفوعات إذا كانت نسخة Excel الرئيسية فقدت ورقة PaymentRecords."""
+    if not _cloud_storage_enabled():
+        return pd.DataFrame(columns=COL_PAYMENT_RECORDS)
+
+    def _normalize(_df):
+        if _df is None or _df.empty:
+            return pd.DataFrame(columns=COL_PAYMENT_RECORDS)
+        _df = _df.copy()
+        for _col in COL_PAYMENT_RECORDS:
+            if _col not in _df.columns:
+                _df[_col] = 0.0 if _col == "المبلغ" else ("مؤكد" if _col == "حالة الدفع" else "")
+        return _df[COL_PAYMENT_RECORDS]
+
+    # أولوية للجدول المنظم في Supabase.
+    try:
+        _url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/payment_records?select=*"
+        _req = urllib.request.Request(_url, headers=_supabase_headers(), method="GET")
+        with urllib.request.urlopen(_req, timeout=20) as _resp:
+            _data = json.loads(_resp.read().decode("utf-8"))
+        _df = _normalize(pd.DataFrame(_data if isinstance(_data, list) else []))
+        if not _df.empty:
+            return _df
+    except Exception:
+        pass
+
+    # ثم النسخ الاحتياطية المستقلة التي ينشئها النظام قبل كل حفظ.
+    _queries = [
+        f"{SUPABASE_VERSIONS_TABLE}?storage_id=eq.{SUPABASE_RECORD_ID}&select=payload&order=created_at.desc&limit=50",
+        f"{SUPABASE_VERSIONS_TABLE}?storage_id=eq.{SUPABASE_RECORD_ID}&select=payload&limit=50",
+    ]
+    for _query in _queries:
+        try:
+            _url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{_query}"
+            _req = urllib.request.Request(_url, headers=_supabase_headers(), method="GET")
+            with urllib.request.urlopen(_req, timeout=30) as _resp:
+                _data = json.loads(_resp.read().decode("utf-8"))
+            for _row in (_data if isinstance(_data, list) else []):
+                try:
+                    _raw = base64.b64decode(str(_row.get("payload", "")))
+                    with pd.ExcelFile(io.BytesIO(_raw), engine="openpyxl") as _xls:
+                        if "PaymentRecords" not in _xls.sheet_names:
+                            continue
+                        _df = _normalize(pd.read_excel(_xls, "PaymentRecords"))
+                        if not _df.empty:
+                            return _df
+                except Exception:
+                    continue
+            break
+        except Exception:
+            continue
+    return pd.DataFrame(columns=COL_PAYMENT_RECORDS)
+
+
 def _cloud_save_version_snapshot(excel_bytes, reason="autosave"):
     """ينشئ نسخة احتياطية مستقلة قبل تحديث السجل الرئيسي. لا يحذف أي نسخة قديمة."""
     if not _cloud_storage_enabled():
@@ -1629,6 +1683,12 @@ def load_all_data():
                 if "AcademySchedule" in xls.sheet_names: academy_schedule_df = pd.read_excel(xls, "AcademySchedule")
         except Exception:
             pass
+
+    # حماية المدفوعات: إذا وصلت النسخة الرئيسية بدون سجلات دفع، استرجعها قبل أي حفظ جديد.
+    if payment_records_df.empty:
+        _recovered_payments = _cloud_load_payment_records_fallback()
+        if not _recovered_payments.empty:
+            payment_records_df = _recovered_payments
 
     for col in COL_USERS:
         if col not in users_df.columns:
