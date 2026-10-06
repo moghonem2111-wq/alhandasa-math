@@ -2331,6 +2331,53 @@ def _money_sum(series):
         return 0.0
 
 
+def _session_due_amount(rows):
+    """حساب المستحق من الحصص المنفذة مع دعم تسجيل أكثر من حصة في السجل الواحد."""
+    if rows is None or rows.empty or "سعر الحصة" not in rows.columns:
+        return 0.0
+    work = rows.copy()
+    if "الحالة" in work.columns:
+        work = work[work["الحالة"].astype(str).str.strip().isin(["حاضر", "متأخر"])].copy()
+    if work.empty:
+        return 0.0
+
+    work["_price_num"] = pd.to_numeric(work["سعر الحصة"], errors="coerce").fillna(0.0)
+
+    # إذا كان «عدد الحصص الكلي» مستخدمًا كعداد تراكمي:
+    # 1 ثم 2 ثم 3 = تُحسب الزيادة فقط، أما أول سجل بقيمة 2 فيحسب حصتين.
+    if "عدد الحصص الكلي" in work.columns:
+        counts = pd.to_numeric(work["عدد الحصص الكلي"], errors="coerce")
+        if counts.notna().any():
+            work["_count_num"] = counts
+            work["_order"] = range(len(work))
+            if "التاريخ" in work.columns:
+                work["_date_sort"] = pd.to_datetime(work["التاريخ"], errors="coerce")
+                work = work.sort_values(["_date_sort", "_order"], na_position="last")
+
+            total = 0.0
+            previous = 0.0
+            cumulative_seen = False
+            for _, row in work.iterrows():
+                price = float(row["_price_num"])
+                count = row["_count_num"]
+                if pd.isna(count) or float(count) < 1:
+                    total += price
+                    continue
+                count = float(count)
+                if count > previous:
+                    total += price * (count - previous)
+                    previous = count
+                    cumulative_seen = True
+                elif count == previous and cumulative_seen and count == 1:
+                    total += price
+                elif count < previous:
+                    total += price
+                    previous = count
+            return round(total, 2)
+
+    return round(_money_sum(work["_price_num"]), 2)
+
+
 def get_student_financials(student_name):
     """حساب إجمالي الحصص والمدفوعات والرصيد المتبقي للطالب."""
     target = str(student_name).strip()
@@ -2355,7 +2402,7 @@ def get_student_financials(student_name):
 def get_all_financial_totals():
     p_df = st.session_state.get("payment_records_df", pd.DataFrame())
     s_df = st.session_state.get("sessions_df", pd.DataFrame())
-    total_due = _money_sum(s_df["سعر الحصة"]) if not s_df.empty and "سعر الحصة" in s_df.columns else 0.0
+    total_due = _session_due_amount(s_df)
     if not p_df.empty and "المبلغ" in p_df.columns:
         if "حالة الدفع" in p_df.columns:
             paid_rows = p_df[p_df["حالة الدفع"].astype(str).str.strip().isin(["مؤكد", "مدفوع"]) ]
@@ -2381,7 +2428,7 @@ def get_student_monthly_financials(student_name, month_key):
         rows = s_df[s_df["اسم الطالب"].astype(str).str.strip() == target].copy()
         if "التاريخ" in rows.columns:
             rows = rows[rows["التاريخ"].apply(_month_from_value) == month_key]
-        due = _money_sum(rows["سعر الحصة"]) if "سعر الحصة" in rows.columns else 0.0
+        due = _session_due_amount(rows)
     else:
         due = 0.0
     if not p_df.empty and "اسم الطالب" in p_df.columns:
