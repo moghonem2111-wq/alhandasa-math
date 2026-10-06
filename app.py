@@ -5610,6 +5610,61 @@ elif t_page == "weekly_schedule":
         wp=html_to_pdf_bytes(wh)
         if wp: st.download_button("📄 طباعة الطلاب PDF",wp,file_name="كشف_طلاب_لوحة_المواعيد.pdf",mime="application/pdf",key="weekly_students_pdf")
         else: st.download_button("🖨️ طباعة الطلاب",wh.encode("utf-8"),file_name="كشف_طلاب_لوحة_المواعيد.html",mime="text/html",key="weekly_students_html")
+    # تعديل بيانات الطالب من جدول المواعيد
+    if st.session_state.get("weekly_edit_student_open", False):
+        _old_name = str(st.session_state.get("weekly_edit_student_name", "")).strip()
+        _um = st.session_state.users_df[st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == _old_name]
+        _src = _um.iloc[0].to_dict() if not _um.empty else {}
+        st.markdown("### ✏️ تعديل بيانات الطالب")
+        with st.form("weekly_edit_student_form"):
+            _c1, _c2 = st.columns(2)
+            with _c1:
+                _new_name = st.text_input("اسم الطالب", value=str(_src.get("اسم الطالب", _old_name)))
+                _new_phone = st.text_input("رقم الطالب", value=str(_src.get("رقم الهاتف", "")))
+                _new_parent = st.text_input("اسم ولي الأمر", value=str(_src.get("اسم ولي الأمر", "")))
+                _new_parent_phone = st.text_input("رقم ولي الأمر", value=str(_src.get("رقم ولي الأمر", "")))
+            with _c2:
+                _currs = list(CURRICULUM_DATA.keys())
+                _old_curr = str(_src.get("المنهج/الدولة", ""))
+                _new_curr = st.selectbox("المنهج / الدولة", _currs, index=_currs.index(_old_curr) if _old_curr in _currs else 0)
+                _grades = CURRICULUM_DATA[_new_curr]
+                _old_grade = str(_src.get("المجموعة/الصف", ""))
+                _new_grade = st.selectbox("المرحلة / الصف", _grades, index=_grades.index(_old_grade) if _old_grade in _grades else 0)
+            if st.form_submit_button("💾 حفظ تعديلات الطالب", use_container_width=True, type="primary"):
+                _new_name = _new_name.strip()
+                if not _new_name:
+                    st.error("اكتب اسم الطالب.")
+                elif _new_name != _old_name and not st.session_state.users_df[st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == _new_name].empty:
+                    st.error("اسم الطالب الجديد مستخدم بالفعل.")
+                else:
+                    _mask = st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == _old_name
+                    if _mask.any():
+                        _ui = st.session_state.users_df.index[_mask][0]
+                        st.session_state.users_df.at[_ui, "اسم الطالب"] = _new_name
+                        st.session_state.users_df.at[_ui, "رقم الهاتف"] = _new_phone.strip()
+                        st.session_state.users_df.at[_ui, "اسم ولي الأمر"] = _new_parent.strip()
+                        st.session_state.users_df.at[_ui, "رقم ولي الأمر"] = _new_parent_phone.strip()
+                        st.session_state.users_df.at[_ui, "المنهج/الدولة"] = _new_curr
+                        st.session_state.users_df.at[_ui, "المجموعة/الصف"] = _new_grade
+                    _ws = st.session_state.weekly_schedule_df
+                    if not _ws.empty and "اسم الطالب" in _ws.columns:
+                        _wm = _ws["اسم الطالب"].astype(str).str.strip() == _old_name
+                        if _wm.any():
+                            _ws.loc[_wm, "اسم الطالب"] = _new_name
+                            if "رقم الطالب" in _ws.columns: _ws.loc[_wm, "رقم الطالب"] = _new_phone.strip()
+                            if "المنهج/الدولة" in _ws.columns: _ws.loc[_wm, "المنهج/الدولة"] = _new_curr
+                            if "المجموعة/الصف" in _ws.columns: _ws.loc[_wm, "المجموعة/الصف"] = _new_grade
+                            st.session_state.weekly_schedule_df = _ws
+                    st.session_state.weekly_edit_student_open = False
+                    st.session_state.weekly_edit_student_name = ""
+                    save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df, st.session_state.weekly_schedule_df)
+                    st.success("✓ تم تعديل بيانات الطالب وحفظها.")
+                    st.rerun()
+        if st.button("✖️ إلغاء", key="weekly_cancel_edit_student"):
+            st.session_state.weekly_edit_student_open = False
+            st.session_state.weekly_edit_student_name = ""
+            st.rerun()
+
     st.write("---")
     # بيانات الموعد السابق: عند اختيار "إضافة موعد آخر" لنفس الطالب، يتم الاحتفاظ بكل بياناته
     # ونحتاج فقط لتغيير اليوم والساعة (ويمكن تعديل أي بيان قبل الحفظ).
@@ -5897,6 +5952,10 @@ elif t_page == "weekly_schedule":
                 with b3:
                     if st.button("📚 رصد واجب الطالب", key=f"ws_hw_{ws_idx}"):
                         st.session_state.prefill_student = student_nm
+                        if st.button("✏️ تعديل الطالب", key=f"ws_edit_student_{ws_idx}"):
+                            st.session_state.weekly_edit_student_open = True
+                            st.session_state.weekly_edit_student_name = student_nm
+                            st.rerun()
                         st.session_state.teacher_page = "add_hw"
                         st.rerun()
                 with b4:
