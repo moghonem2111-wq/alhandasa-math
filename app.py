@@ -5752,7 +5752,27 @@ elif t_page == "weekly_schedule":
                     ws_ampm = st.selectbox("الفترة:", ["AM", "PM"], index=0 if base_ampm == "AM" else 1)
                 hour24 = ws_hour % 12 + (12 if ws_ampm == "PM" else 0)
                 ws_time = time(hour24, ws_minute)
-                st.caption(f"🕐 الموعد المختار: **{ws_hour}:{ws_minute:02d} {ws_ampm}**")
+                # تحديد نهاية الحصة؛ للمواعيد القديمة نستخدم ساعة افتراضية.
+                try:
+                    base_end_raw = str(base_record.get("نهاية الموعد", "")).strip()
+                    base_end = datetime.strptime(base_end_raw[:5], "%H:%M").time() if base_end_raw else (datetime.combine(date.today(), base_time) + timedelta(hours=1)).time()
+                except Exception:
+                    base_end = (datetime.combine(date.today(), base_time) + timedelta(hours=1)).time()
+                end_hour_12 = base_end.hour % 12 or 12
+                end_ampm = "AM" if base_end.hour < 12 else "PM"
+                end_minute = (base_end.minute // 15) * 15
+                if end_minute not in [0, 15, 30, 45]:
+                    end_minute = 0
+                eh1, eh2, eh3 = st.columns(3)
+                with eh1:
+                    ws_end_hour = st.selectbox("نهاية الحصة — الساعة:", list(range(1, 13)), index=list(range(1, 13)).index(end_hour_12))
+                with eh2:
+                    ws_end_minute = st.selectbox("نهاية الحصة — الدقائق:", [0, 15, 30, 45], index=[0, 15, 30, 45].index(end_minute), format_func=lambda x: f"{x:02d}")
+                with eh3:
+                    ws_end_ampm = st.selectbox("نهاية الحصة — الفترة:", ["AM", "PM"], index=0 if end_ampm == "AM" else 1)
+                end_hour24 = ws_end_hour % 12 + (12 if ws_end_ampm == "PM" else 0)
+                ws_end_time = time(end_hour24, ws_end_minute)
+                st.caption(f"🕐 فترة الحصة: **{ws_hour}:{ws_minute:02d} {ws_ampm} → {ws_end_hour}:{ws_end_minute:02d} {ws_end_ampm}**")
 
             st.caption("🔗 المنهج والمرحلة مرتبطان تلقائياً ببيانات الطالب المسجلة في حسابه، ولا يحتاجان لإعادة الاختيار هنا.")
             if prefill_student:
