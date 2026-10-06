@@ -5792,7 +5792,9 @@ elif t_page == "weekly_schedule":
                         "رقم مشرف الأكاديمية": ws_sup.strip(),
                         "سعر الحصة": ws_price,
                         "اليوم": ws_day,
-                        "الموعد": ws_time.strftime("%H:%M"),                        "اللون": color_map.get(student_clean, palette[len(color_map) % len(palette)]),
+                        "الموعد": ws_time.strftime("%H:%M"),
+                        "نهاية الموعد": ws_end_time.strftime("%H:%M"),
+                        "اللون": color_map.get(student_clean, palette[len(color_map) % len(palette)]),
                         "حالة الموعد": "نشط"
                     }
                     # ربط الموعد بسجل الطالب الرئيسي حتى يظهر تلقائياً في كشف المسجلين والبطاقات والسجلات والتقارير والواجبات
@@ -5808,7 +5810,7 @@ elif t_page == "weekly_schedule":
                     st.session_state.weekly_schedule_df = pd.concat([st.session_state.weekly_schedule_df, pd.DataFrame([new_ws])], ignore_index=True)
                     save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
                     _notify_schedule_change("إضافة", new_ws)
-                    st.success(f"✓ تم إضافة موعد {student_clean} يوم {ws_day} الساعة {ws_time.strftime('%I:%M %p').lstrip('0')}.")
+                    st.success(f"✓ تم إضافة موعد {student_clean} يوم {ws_day} من {ws_time.strftime('%I:%M %p').lstrip('0')} إلى {ws_end_time.strftime('%I:%M %p').lstrip('0')}.")
                     st.rerun()
 
     # جدول أسبوعي حقيقي: الأيام أعمدة والطلاب داخل الخلايا حسب الموعد
