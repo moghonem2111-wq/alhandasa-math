@@ -5820,15 +5820,42 @@ elif t_page == "weekly_schedule":
         st.info("لا توجد مواعيد مضافة حتى الآن.")
     else:
         rows = []
-        times = sorted([str(x) for x in ws_df["الموعد"].dropna().unique()])
+
+        # إنشاء خانات زمنية لكل ساعة تغطيها الحصة.
+        # مثال: حصة 4:00 → 6:00 تظهر في خانتي 4:00 و5:00.
+        _slot_values = set()
+        for _, _rr in ws_df.iterrows():
+            try:
+                _start = datetime.strptime(str(_rr.get("الموعد", ""))[:5], "%H:%M")
+                _end_raw = str(_rr.get("نهاية الموعد", "")).strip()
+                _end = datetime.strptime(_end_raw[:5], "%H:%M") if _end_raw else (_start + timedelta(hours=1))
+                while _start < _end:
+                    _slot_values.add(_start.strftime("%H:%M"))
+                    _start += timedelta(hours=1)
+            except Exception:
+                if str(_rr.get("الموعد", "")).strip():
+                    _slot_values.add(str(_rr.get("الموعد", ""))[:5])
+
+        times = sorted(_slot_values)
         for tm in times:
+            _slot_time = datetime.strptime(tm, "%H:%M")
             row = {"الساعة": format_schedule_time_ampm(tm)}
             for d in days:
-                matches = ws_df[(ws_df["الموعد"].astype(str) == tm) & (ws_df["اليوم"].astype(str) == d) & (ws_df["حالة الموعد"].astype(str) != "متوقف")]
                 parts = []
-                for _, r in matches.iterrows():
+                for _, r in ws_df.iterrows():
+                    if str(r.get("اليوم", "")).strip() != d or str(r.get("حالة الموعد", "")).strip() == "متوقف":
+                        continue
+                    try:
+                        _start = datetime.strptime(str(r.get("الموعد", ""))[:5], "%H:%M")
+                        _end_raw = str(r.get("نهاية الموعد", "")).strip()
+                        _end = datetime.strptime(_end_raw[:5], "%H:%M") if _end_raw else (_start + timedelta(hours=1))
+                        if not (_start <= _slot_time < _end):
+                            continue
+                    except Exception:
+                        if str(r.get("الموعد", ""))[:5] != tm:
+                            continue
                     col = str(r.get("اللون", "#2563eb"))
-                    parts.append(f"<div style='background:{col};color:#fff;padding:7px;border-radius:8px;margin:2px 0;font-weight:900;'>👤 {r['اسم الطالب']}<br><small>{r['المجموعة/الصف']} | {r['اسم الأكاديمية']}</small></div>")
+                    parts.append(f"<div style='background:{col};color:#fff;padding:7px;border-radius:8px;margin:2px 0;font-weight:900;'>👤 {r['اسم الطالب']}<br><small>{format_schedule_time_ampm(r.get('الموعد',''))} → {format_schedule_time_ampm(r.get('نهاية الموعد',r.get('الموعد','')))}<br>{r['المجموعة/الصف']} | {r['اسم الأكاديمية']}</small></div>")
                 row[d] = "".join(parts) if parts else "—"
             rows.append(row)
         schedule_html = "<table style='width:100%;border-collapse:collapse;text-align:center;direction:rtl'><tr style='background:#f1f5f9'><th style='padding:10px;border:1px solid #cbd5e1'>الساعة</th>" + "".join([f"<th style='padding:10px;border:1px solid #cbd5e1'>{d}</th>" for d in days]) + "</tr>"
