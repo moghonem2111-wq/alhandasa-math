@@ -2340,7 +2340,7 @@ def get_student_financials(student_name):
         due = 0.0
     else:
         rows = s_df[s_df["اسم الطالب"].astype(str).str.strip() == target]
-        due = _money_sum(rows["سعر الحصة"]) if "سعر الحصة" in rows.columns else 0.0
+        due = _session_due_amount(rows)
     if p_df.empty or "اسم الطالب" not in p_df.columns:
         paid = 0.0
     else:
@@ -2401,7 +2401,7 @@ def get_monthly_financial_totals(month_key):
     s_df = st.session_state.get("sessions_df", pd.DataFrame()).copy()
     p_df = st.session_state.get("payment_records_df", pd.DataFrame()).copy()
     sm = s_df[s_df["التاريخ"].apply(_month_from_value) == month_key] if not s_df.empty and "التاريخ" in s_df.columns else pd.DataFrame()
-    due = _money_sum(sm["سعر الحصة"]) if not sm.empty and "سعر الحصة" in sm.columns else 0.0
+    due = _session_due_amount(sm)
     if not p_df.empty:
         if "الشهر" in p_df.columns:
             pm = p_df[p_df["الشهر"].astype(str).str.strip() == month_key]
