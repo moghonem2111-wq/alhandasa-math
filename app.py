@@ -1641,6 +1641,10 @@ def load_all_data():
         if col not in weekly_schedule_df.columns:
             if col == "اللون": weekly_schedule_df[col] = "#2563eb"
             elif col == "حالة الموعد": weekly_schedule_df[col] = "نشط"
+            elif col == "نهاية الموعد":
+                _starts = pd.to_datetime(weekly_schedule_df.get("الموعد", ""), format="%H:%M", errors="coerce")
+                _ends = _starts + pd.to_timedelta(60, unit="m")
+                weekly_schedule_df[col] = _ends.dt.strftime("%H:%M").fillna("")
             else: weekly_schedule_df[col] = ""
 
     for col in COL_PAYMENT_RECORDS:
