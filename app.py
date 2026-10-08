@@ -3404,6 +3404,35 @@ input,textarea,div[data-baseweb="select"]>div{background:#fff!important;border:1
 @media(max-width:760px){.main .block-container{padding:.65rem .65rem 5rem!important}.aurora-footer{font-size:10px;padding:8px}}
 </style>""", unsafe_allow_html=True)
 
+# طبقة التصميم المرجعية — سماوي زجاجي + بطاقات بيضاء + حمصا برتقالي.
+st.markdown("""<style>
+:root{--ref-blue:#3f95ed;--ref-blue-dark:#1976d2;--ref-sky:#edf7ff;--ref-ink:#172033;--ref-muted:#657187;--ref-orange:#eb7415;--ref-orange-2:#f59a31;--ref-green:#10ae78;--ref-line:#dce9f5;--ref-shadow:0 8px 20px rgba(64,121,172,.12)}
+.stApp{background:linear-gradient(135deg,#eaf5ff 0%,#f8fbff 42%,#e8f4ff 100%)!important;color:var(--ref-ink)!important}
+.stApp:before{content:"";position:fixed;inset:0 0 auto 0;height:135px;background:linear-gradient(135deg,#3f95ed 0%,#83c4fb 70%,transparent 70%);z-index:-1;pointer-events:none}
+.main .block-container{max-width:1180px!important;padding:1.15rem 1.1rem 5.5rem!important}
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#2e83d4,#1764af)!important;border:0!important}
+[data-testid="stSidebar"] *{color:#fff!important}
+.top-navigation-shell,.sticky-app-header,.modern-topbar{background:rgba(236,248,255,.82)!important;border:1px solid rgba(255,255,255,.72)!important;border-radius:20px!important;box-shadow:0 8px 24px rgba(53,116,174,.14)!important;backdrop-filter:blur(16px)!important}
+.top-navigation-shell{top:.4rem!important;margin-bottom:1.15rem!important;padding:4px!important}.top-navigation-title{color:#162033!important;font-size:16px!important}.top-navigation-subtitle{color:#5f6e82!important}
+.stButton>button,.stFormSubmitButton>button,.stLinkButton>a{background:linear-gradient(135deg,var(--ref-blue),var(--ref-blue-dark))!important;color:#fff!important;border:0!important;border-radius:11px!important;min-height:42px!important;font-weight:900!important;box-shadow:0 6px 14px rgba(39,128,215,.2)!important}
+.stButton>button:hover,.stLinkButton>a:hover{background:linear-gradient(135deg,#58a7f5,#1167bc)!important;transform:translateY(-1px)!important}
+input,textarea,div[data-baseweb="select"]>div{background:#fff!important;border:1px solid #d8e5f1!important;border-radius:11px!important;color:var(--ref-ink)!important}label{color:#24324a!important}
+.vertical-section-header{background:linear-gradient(135deg,#2b83d6,#58a7f5)!important;border-radius:12px!important;box-shadow:0 7px 16px rgba(39,128,215,.18)!important;font-size:18px!important}
+.modern-stat,.modern-course-card,.student-service-card,.about-panel,.landing-wrap,.subscription-card,.live-zoom-pulse-card{background:#fff!important;border:1px solid var(--ref-line)!important;box-shadow:var(--ref-shadow)!important;border-radius:14px!important}
+.modern-stats{gap:14px!important}.modern-stat{min-height:112px!important;padding:17px!important}.modern-stat .num{color:#1e2430!important;font-size:25px!important}.modern-stat .label{color:#20283a!important;font-size:14px!important}.stat-green{border-top:3px solid #2bb486!important}.stat-blue{border-top:3px solid #4d9ce8!important}.stat-purple{border-top:3px solid #db6689!important}.stat-yellow{border-top:3px solid #ef9a3b!important}
+.modern-stat .icon,.student-service-card-icon{background:#eef7ff!important;border:0!important;border-radius:10px!important;box-shadow:none!important}
+.modern-hero{background:linear-gradient(115deg,#1876cf,#63b0f4)!important;border-radius:18px!important;box-shadow:0 10px 22px rgba(37,124,207,.2)!important}
+.hamza-hero-gradient{background:linear-gradient(115deg,#e46c0e,#f08b21 58%,#f39b35)!important;border-radius:16px!important;box-shadow:0 10px 22px rgba(222,104,11,.22)!important;min-height:150px!important}
+.hamza-hero-gradient h2,.hamza-hero-gradient p{color:#fff!important}.hamza-hero-gradient:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 16% 50%,rgba(255,255,255,.14),transparent 25%);pointer-events:none}
+.live-zoom-pulse-card{border-top:3px solid var(--ref-green)!important;padding:18px!important}.live-zoom-pulse-card h3{color:#172033!important}.live-zoom-pulse-card .countdown{color:#172033!important}
+.student-service-card{min-height:185px!important;padding:18px!important}.student-service-card:hover{border-color:#7abcf0!important;box-shadow:0 12px 25px rgba(64,145,213,.18)!important}.student-service-card-title{color:#172033!important}.student-service-card-desc{color:#697589!important}
+.independent-page-header{background:rgba(255,255,255,.88)!important;border:1px solid var(--ref-line)!important;border-radius:16px!important;box-shadow:var(--ref-shadow)!important}.independent-page-icon{background:linear-gradient(135deg,#4d9fea,#1976d2)!important}
+.landing-hero{background:linear-gradient(115deg,#1672c9,#63b1f3)!important}.landing-wrap{overflow:hidden!important}.landing-login{border-radius:16px!important;box-shadow:0 10px 25px rgba(49,105,157,.16)!important}
+.google-auth-btn{background:#fff!important;border:1px solid #d6e1ed!important;color:#202838!important}
+.aurora-footer{background:rgba(22,83,138,.96)!important;color:#eef7ff!important;border-top:1px solid rgba(255,255,255,.2)!important}.aurora-footer b{color:#9bd5ff!important}
+@media(max-width:760px){.main .block-container{padding:.65rem .6rem 5rem!important}.stApp:before{height:95px}.modern-stats{grid-template-columns:repeat(2,1fr)!important;gap:9px!important}.hamza-hero-gradient{min-height:180px!important}}
+</style>""", unsafe_allow_html=True)
+
 # ============================================================================== 
 # 1. واجهة الطالب الشاملة
 # ==============================================================================
