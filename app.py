@@ -2986,6 +2986,94 @@ st.markdown(f"""
     .call-btn {{ display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(135deg, #ff8a00, #ea580c); color: #ffffff !important; padding: 10px 22px; border-radius: 50px; font-size: 15px; font-weight: 900; text-decoration: none !important; border: 2px solid #ffffff; box-shadow: 0 4px 16px rgba(234, 88, 12, 0.25); }}
     .social-footer-box {{ margin-top: 16px; padding: 12px 0; border-top: 1px solid {card_border}; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }}
     .rights-text {{ font-size: 13px; font-weight: 900; margin-top: 8px; text-align: center; color: {"#cbd5e1" if st.session_state.dark_mode else "#78350f"}; }}
+
+    /* ===== Dersly / Alhandasa visual refresh: navy, blue, white ===== */
+    :root {{
+        --primary-orange: #1769e0;
+        --accent-orange: #0b3b78;
+        --orange-light: #edf5ff;
+        --orange-border: #cbdcf5;
+        --orange-badge: #e1edff;
+        --text-dark: #122b4d;
+        --card-light: #ffffff;
+        --brand-navy: #10264a;
+        --brand-blue: #1769e0;
+        --brand-sky: #edf5ff;
+    }}
+    [data-testid="stAppViewContainer"] {{
+        background: {"#111827" if st.session_state.dark_mode else "linear-gradient(180deg,#f4f8ff 0%,#ffffff 52%,#f4f8ff 100%)"} !important;
+    }}
+    [data-testid="stSidebar"] {{
+        background: linear-gradient(180deg,#10264a 0%,#123d78 52%,#10264a 100%) !important;
+        border-left: 1px solid rgba(255,255,255,.09) !important;
+    }}
+    [data-testid="stSidebar"] * {{ color: #eef5ff; }}
+    [data-testid="stSidebar"] button {{
+        border-radius: 12px !important;
+        transition: background .18s ease, transform .18s ease !important;
+    }}
+    [data-testid="stSidebar"] button:hover {{
+        background: rgba(48,126,238,.28) !important;
+        border-color: rgba(160,200,255,.4) !important;
+    }}
+    [data-testid="stAppViewContainer"] button[kind="primary"],
+    [data-testid="stFormSubmitButton"] button {{
+        background: linear-gradient(135deg,#1769e0,#3187f5) !important;
+        color: #fff !important;
+        border: 1px solid #1769e0 !important;
+        border-radius: 12px !important;
+        font-weight: 800 !important;
+        box-shadow: 0 5px 14px rgba(23,105,224,.15) !important;
+    }}
+    [data-testid="stAppViewContainer"] button[kind="primary"]:hover,
+    [data-testid="stFormSubmitButton"] button:hover {{
+        background: linear-gradient(135deg,#0b3b78,#1769e0) !important;
+        transform: translateY(-1px);
+    }}
+    [data-testid="stForm"], [data-testid="stExpander"], [data-testid="stDataFrame"],
+    [data-testid="stTable"], [data-testid="stTabs"] {{
+        border-radius: 16px;
+    }}
+    [data-testid="stForm"] {{
+        border: 1px solid #d9e5f5 !important;
+        box-shadow: 0 8px 24px rgba(16,38,74,.06) !important;
+    }}
+    [data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea,
+    [data-testid="stNumberInput"] input, [data-testid="stDateInput"] input,
+    [data-testid="stSelectbox"] [data-baseweb="select"] > div {{
+        border-radius: 11px !important;
+        border-color: #cbdcf0 !important;
+    }}
+    [data-testid="stAppViewContainer"] a {{ color: #1769e0; }}
+    [data-testid="stAppViewContainer"] hr {{ border-color: rgba(100,140,190,.22); }}
+    /* Recolor legacy inline orange accents without changing the underlying features. */
+    [style*="#ff8a00"], [style*="#ea580c"] {{
+        border-color: #1769e0 !important;
+    }}
+    [style*="background:#ff8a00"], [style*="background: #ff8a00"],
+    [style*="background:#ea580c"], [style*="background: #ea580c"] {{
+        background: linear-gradient(135deg,#10264a,#1769e0) !important;
+    }}
+    [style*="color:#ea580c"], [style*="color: #ea580c"],
+    [style*="color:#c2410c"], [style*="color: #c2410c"] {{
+        color: #1769e0 !important;
+    }}
+    .call-btn {{
+        background: linear-gradient(135deg,#1769e0,#3187f5) !important;
+        box-shadow: 0 5px 16px rgba(23,105,224,.22) !important;
+    }}
+    .mobile-bottom-dock-container {{
+        box-shadow: 0 -8px 24px rgba(16,38,74,.12) !important;
+    }}
+    @media (max-width: 768px) {{
+        .block-container {{ padding-left: .75rem !important; padding-right: .75rem !important; }}
+        [data-testid="stForm"] {{ padding: 14px !important; }}
+        [data-testid="stHorizontalBlock"] {{ gap: .65rem !important; }}
+        h1 {{ font-size: 1.55rem !important; }}
+        h2 {{ font-size: 1.3rem !important; }}
+        h3 {{ font-size: 1.1rem !important; }}
+        [data-testid="stDataFrame"] {{ overflow-x: auto !important; }}
+    }}
     </style>
 """, unsafe_allow_html=True)
 
