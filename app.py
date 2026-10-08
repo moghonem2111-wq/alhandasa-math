@@ -5059,23 +5059,57 @@ if is_academy_mode:
         _m = pd.to_numeric(aat["نصيب الأكاديمية"], errors="coerce").fillna(0).eq(0) & pd.to_numeric(aat["نسبة الأكاديمية"], errors="coerce").notna()
         aat.loc[_m, "نصيب الأكاديمية"] = pd.to_numeric(aat.loc[_m, "سعر الحصة"], errors="coerce").fillna(0) * pd.to_numeric(aat.loc[_m, "نسبة الأكاديمية"], errors="coerce").fillna(0) / 100
 
-    st.markdown(f"<div class='vertical-section-header'>🏫 نظام إدارة {html.escape(academy_name)}</div>", unsafe_allow_html=True)
-    st.caption(f"حساب مستقل للأكاديمية — {academy_role}. هذا النظام منفصل عن طلاب المنصة ومواعيدها وحضورها.")
+    # هيدر الأكاديمية الثابت الحديث (Persistent Sticky App Header)
+    col_ah1, col_ah2 = st.columns([5, 2], vertical_alignment="center")
+    with col_ah1:
+        st.markdown(f"""
+        <div class="sticky-app-header" style="margin-bottom:0;">
+            <div style="display:flex; align-items:center; gap:12px; direction:rtl;">
+                <div style="width:48px; height:48px; border-radius:50%; background:linear-gradient(135deg, #0284c7, #0369a1); color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:900; box-shadow:0 4px 14px rgba(2,132,199,0.35); border:2px solid #ffffff; flex-shrink:0;">
+                    🏫
+                </div>
+                <div>
+                    <div style="font-size:18px; font-weight:950; color:{text_color}; line-height:1.2;">
+                        نظام إدارة {html.escape(academy_name)}
+                    </div>
+                    <div style="font-size:12px; color:{text_color}; opacity:0.85; font-weight:700; margin-top:3px; display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
+                        <span style="background:rgba(2,132,199,0.12); color:#0284c7; padding:2px 8px; border-radius:8px; font-weight:800;">{academy_role}</span>
+                        <span>•</span>
+                        <span>نظام أكاديمي مستقل</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_ah2:
+        c_ah_btn1, c_ah_btn2 = st.columns(2)
+        with c_ah_btn1:
+            _a_mode_icon = "☀️ فاتح" if st.session_state.dark_mode else "🌙 ليلي"
+            if st.button(_a_mode_icon, key="btn_ahdr_dark_mode", use_container_width=True):
+                st.session_state.dark_mode = not st.session_state.dark_mode
+                st.rerun()
+        with c_ah_btn2:
+            if st.button("🚪 خروج", key="btn_ahdr_logout", use_container_width=True):
+                st.session_state.logged_academy = None
+                st.session_state.academy_login_role = "رئيس الأكاديمية"
+                st.query_params.clear()
+                st.query_params["role"] = "student"
+                st.session_state.page_view = "home"
+                st.rerun()
 
-    nav = st.columns(7)
-    academy_pages = [("الرئيسية","dashboard"),("👥 الطلاب","students"),("📝 الحضور","attendance"),("💳 الاشتراكات","subscriptions"),("💰 الحسابات","finance"),("👨‍🏫 المدرسون","teachers"),("↪ خروج","logout")]
+    # شريط تنقل أقسام الأكاديمية
+    academy_pages = [("◉ الرئيسية","dashboard"),("👥 الطلاب","students"),("📝 الحضور","attendance"),("💳 الاشتراكات","subscriptions"),("💰 الحسابات","finance"),("👨‍🏫 المدرسون","teachers")]
+    nav = st.columns(len(academy_pages))
     for i, (label, target) in enumerate(academy_pages):
         with nav[i]:
             if st.button(label, key=f"academy_nav_{i}", use_container_width=True, type="primary" if st.session_state.academy_page == target else "secondary"):
-                if target == "logout":
-                    st.session_state.logged_academy = None
-                    st.session_state.academy_login_role = "رئيس الأكاديمية"
-                    st.query_params.clear()
-                    st.query_params["role"] = "student"
-                    st.session_state.page_view = "home"
-                else:
-                    st.session_state.academy_page = target
+                st.session_state.academy_page = target
                 st.rerun()
+
+    if st.session_state.academy_page != "dashboard":
+        if st.button("⬅️ العودة للوحة تحكم الأكاديمية", key="academy_back_to_dash", type="primary"):
+            st.session_state.academy_page = "dashboard"
+            st.rerun()
 
     ast_a = ast[ast["اسم الأكاديمية"].astype(str).str.strip() == academy_name].copy()
     aat_a = aat[aat["اسم الأكاديمية"].astype(str).str.strip() == academy_name].copy()
@@ -5686,42 +5720,107 @@ if is_academy_mode:
 total_exams_count = len(st.session_state.exams_df)
 total_students_count = len(st.session_state.users_df)
 
-# ===== شريط المعلم العلوي =====
-_nav_open = st.session_state.teacher_sidebar_open
-_toggle_col, _brand_col, _pills_col = st.columns([1.0, 2.3, 8.7], vertical_alignment="center")
-with _toggle_col:
-    if st.button(("✕" if _nav_open else "☰"), key="teacher_sidebar_toggle", use_container_width=True, help="إظهار أو إخفاء شريط التنقل"):
-        st.session_state.teacher_sidebar_open = not st.session_state.teacher_sidebar_open
-        st.rerun()
-with _brand_col:
-    st.markdown("<div class='top-navigation-title'>البشمهندس x الرياضه</div><div class='top-navigation-subtitle'>لوحة تحكم المعلم • م/ محمد غنيم</div>", unsafe_allow_html=True)
-with _pills_col:
-    if _nav_open:
-        _teacher_nav = [("◉ الرئيسية","dashboard"), ("◫ Zoom","online_schedule"), ("▦ المواعيد","weekly_schedule"), ("▣ الامتحانات","exam_maker"), ("🤖 استوديو AI","ai_studio"), ("▤ بنك الأسئلة","question_bank"), ("▶ الفيديوهات","videos"), ("✦ عبقري","abqary"), ("▥ الدرجات","grades"), ("✎ المقالي","essays"), ("◌ الرسائل","chat"), ("♙ الطلاب","students"), ("＋ حصة","add_session"), ("＋ واجب","add_hw"), ("✎ تعديل السجلات","edit_records"), ("▥ السجلات","all_records"), ("📢 الإعلانات","ads"), ("▤ ولي الأمر","parent_report"), ("▰ المدفوعات","payments"), ("🏫 الأكاديميات","academies"), ("🎓 تنظيم درسلي","darssly_schedule"), ("💾 النسخ الاحتياطية","online_backup"), ("◈ واجهة الطالب","student_interface")]
-        _teacher_cols = st.columns(5, gap="small")
-        for _ti, (_label, _target) in enumerate(_teacher_nav):
-            with _teacher_cols[_ti % 5]:
-                if st.button(_label, key=f"teacher_top_nav_btn_{_ti}", use_container_width=True, type="primary" if _target == st.session_state.teacher_page else "secondary"):
-                    st.session_state.teacher_page = _target
-                    st.rerun()
-    else:
-        st.markdown('<div class="top-navigation-collapsed"><span class="top-navigation-subtitle">شريط التنقل مخفي — اضغط ☰ لإظهاره</span></div>', unsafe_allow_html=True)
+# ===== شريط المعلم العلوي المتطور والثابت (Modern Sticky App Header) =====
+_teacher_nav = [
+    ("◉ الرئيسية", "dashboard"),
+    ("♙ إدارة الطلاب", "students"),
+    ("◫ جداول Zoom", "online_schedule"),
+    ("▦ المواعيد الأسبوعية", "weekly_schedule"),
+    ("▣ الامتحانات", "exam_maker"),
+    ("🤖 استوديو AI", "ai_studio"),
+    ("▤ بنك الأسئلة", "question_bank"),
+    ("▶ الفيديوهات", "videos"),
+    ("✦ عبقري", "abqary"),
+    ("▥ الدرجات", "grades"),
+    ("✎ المقالي", "essays"),
+    ("◌ الرسائل", "chat"),
+    ("＋ حصة جديدة", "add_session"),
+    ("＋ إضافة واجب", "add_hw"),
+    ("✎ تعديل السجلات", "edit_records"),
+    ("▥ السجلات", "all_records"),
+    ("📢 الإعلانات", "ads"),
+    ("▤ ولي الأمر", "parent_report"),
+    ("▰ المدفوعات", "payments"),
+    ("🏫 الأكاديميات", "academies"),
+    ("🎓 تنظيم درسلي", "darssly_schedule"),
+    ("💾 النسخ الاحتياطية", "online_backup"),
+    ("◈ واجهة الطالب", "student_interface")
+]
 
-# رابط دخول الطالب — ظاهر للمعلم دائمًا، وكتلة code تحتوي زر نسخ مدمج من Streamlit.
-_student_public_url = "https://engmohamedghonaim.streamlit.app/?role=student"
-st.markdown("### 🔗 رابط دخول الطلاب")
-st.caption("انسخ الرابط وأرسله للطلاب؛ الضغط على أيقونة النسخ داخل الخانة ينسخه مباشرة.")
-st.code(_student_public_url, language="text")
+_teacher_notifs = _app_notifications("teacher")
+_teacher_notif_count = len(_teacher_notifs)
+
+col_thdr1, col_thdr2 = st.columns([5, 2], vertical_alignment="center")
+with col_thdr1:
+    st.markdown(f"""
+    <div class="sticky-app-header" style="margin-bottom:0;">
+        <div style="display:flex; align-items:center; gap:14px; direction:rtl;">
+            <img src="{STUDENT_FIXED_IMAGE_URI}" style="width:48px; height:48px; border-radius:50%; object-fit:cover; border:2.5px solid #2563eb; box-shadow:0 4px 14px rgba(37,99,235,0.35); flex-shrink:0;">
+            <div>
+                <div style="font-size:18px; font-weight:950; color:{text_color}; line-height:1.2;">
+                    مرحباً بك، م/ محمد غنيم 👋
+                </div>
+                <div style="font-size:12px; color:{text_color}; opacity:0.85; font-weight:700; margin-top:3px; display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
+                    <span style="background:rgba(37,99,235,0.12); color:#2563eb; padding:2px 8px; border-radius:8px; font-weight:800;">لوحة تحكم المعلم</span>
+                    <span>•</span>
+                    <span>البشمهندس x الرياضه</span>
+                    <span>•</span>
+                    <span>🎓 {total_students_count} طالب</span>
+                    <span>•</span>
+                    <span>📝 {total_exams_count} امتحان</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_thdr2:
+    c_th1, c_th2, c_th3 = st.columns([1, 1, 1.3])
+    with c_th1:
+        _t_mode_icon = "☀️ فاتح" if st.session_state.dark_mode else "🌙 ليلي"
+        if st.button(_t_mode_icon, key="btn_thdr_dark_mode", use_container_width=True, help="تبديل المظهر"):
+            st.session_state.dark_mode = not st.session_state.dark_mode
+            st.rerun()
+    with c_th2:
+        if st.button(f"🔔 {_teacher_notif_count}", key="btn_thdr_notifs", use_container_width=True, help="الإشعارات"):
+            st.session_state.teacher_notifications_open = not st.session_state.teacher_notifications_open
+            st.rerun()
+    with c_th3:
+        if st.button("🎓 واجهة الطالب", key="btn_thdr_jump_student", use_container_width=True, help="معاينة واجهة الطالب"):
+            st.query_params["role"] = "student"
+            st.rerun()
+
+if st.session_state.teacher_notifications_open:
+    _render_notification_box("teacher")
 
 t_page = st.session_state.teacher_page
 
-# زر رجوع موحد يظهر في أعلى أي قائمة/صفحة داخل لوحة المعلم
+# شريط تنقل أنيق للأقسام الفرعية عند الدخول في أي صفحة غير الرئيسية
 if t_page != "dashboard":
-    _back_col, _ = st.columns([1, 5])
-    with _back_col:
-        if st.button("⬅️ رجوع", key="global_teacher_back", use_container_width=True):
+    _page_titles_dict = dict([(tgt, lbl) for lbl, tgt in _teacher_nav])
+    _cur_page_title = _page_titles_dict.get(t_page, t_page)
+    b_col1, b_col2, b_col3 = st.columns([2.4, 5.2, 3.4], vertical_alignment="center")
+    with b_col1:
+        if st.button("⬅️ العودة للوحة التحكم", key="global_teacher_back", use_container_width=True, type="primary"):
             st.session_state.teacher_page = "dashboard"
             st.rerun()
+    with b_col2:
+        st.markdown(f"""
+        <div style="background:{card_bg}; border:1.5px solid {card_border}; border-right:5px solid #2563eb; border-radius:12px; padding:8px 16px; direction:rtl; display:flex; align-items:center; gap:8px;">
+            <span style="font-size:16px; font-weight:900; color:{text_color};">{_cur_page_title}</span>
+            <span style="font-size:12px; color:#64748b; font-weight:700;">(قسم فرعي)</span>
+        </div>
+        """, unsafe_allow_html=True)
+    with b_col3:
+        _nav_labels = [lbl for lbl, _ in _teacher_nav]
+        _nav_targets = [tgt for _, tgt in _teacher_nav]
+        _curr_idx = _nav_targets.index(t_page) if t_page in _nav_targets else 0
+        _quick_sel = st.selectbox("الانتقال السريع لقسم آخر:", _nav_labels, index=_curr_idx, key="teacher_subpage_switcher", label_visibility="collapsed")
+        _selected_target = _nav_targets[_nav_labels.index(_quick_sel)]
+        if _selected_target != t_page:
+            st.session_state.teacher_page = _selected_target
+            st.rerun()
+    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
 
 def _teacher_zoom_link_for_student(student_name, today_date=None):
     """الحصول على رابط Zoom المرتبط بالطالب من جدول الأونلاين، مع رابط احتياطي ثابت."""
@@ -6472,49 +6571,120 @@ td.time-col {{ width:85px; font-weight:bold; vertical-align:middle; background:#
 
 elif t_page == "dashboard":
     dashboard_students = sorted(list(set([str(x).strip() for x in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(x).strip()] + [str(x).strip() for x in st.session_state.weekly_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()] + [str(x).strip() for x in st.session_state.online_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()])))
-    # الصورة الثابتة المدمجة هي الضمان الأساسي لظهور صورة المعلم دائماً أعلى لوحة التحكم.
     profile_uri = STUDENT_FIXED_IMAGE_URI
-    total_due_all,total_paid_all,total_balance_all=get_all_financial_totals()
+    total_due_all, total_paid_all, total_balance_all = get_all_financial_totals()
     _teacher_notifs = _app_notifications("teacher")
     _teacher_notif_count = len(_teacher_notifs)
-    _dash_head_a, _dash_head_b = st.columns([10, 1])
-    with _dash_head_a:
-        st.markdown(f"""
-        <div class="dashboard-banner">
-          <div><div style="font-size:12px;background:#1677ff;padding:5px 11px;border-radius:999px;display:inline-block">لوحة تحكم المعلم</div>
-          <h2>مرحباً بك يا م/ محمد غنيم 👋</h2><p>إدارة الطلاب والحصص والواجبات والاختبارات والمواعيد والحسابات من مكان واحد.</p></div>
-          <img src="{profile_uri}" alt="م/ محمد غنيم">
+
+    # 1. بانر ترحيبي بطل (Hero Banner)
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg, #062b63 0%, #1e40af 55%, #2563eb 100%); border-radius:24px; padding:26px 28px; color:#ffffff; direction:rtl; box-shadow:0 12px 35px rgba(6,43,99,0.22); margin-bottom:18px; border:1px solid rgba(255,255,255,0.25);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div style="display:flex; align-items:center; gap:18px;">
+                <img src="{profile_uri}" style="width:72px; height:72px; border-radius:50%; object-fit:cover; border:3.5px solid #60a5fa; box-shadow:0 6px 18px rgba(0,0,0,0.3); flex-shrink:0;">
+                <div>
+                    <div style="display:inline-block; background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.35); color:#ffffff; padding:3px 12px; border-radius:20px; font-size:12px; font-weight:900; margin-bottom:6px;">
+                        ⚡ لوحة الإدارة والتحكم الشاملة
+                    </div>
+                    <h2 style="margin:0 0 4px; font-size:24px; font-weight:950; color:#ffffff !important;">مرحباً بك يا م/ محمد غنيم 👋</h2>
+                    <p style="margin:0; font-size:14px; opacity:0.92; color:#ffffff !important; font-weight:600;">إدارة كاملة للطلاب، الحصص، الامتحانات، زوم، الذكاء الاصطناعي، والتقارير المالية بدقة وسرعة فائقة.</p>
+                </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.15); border-radius:14px; padding:8px 16px; border:1px solid rgba(255,255,255,0.25); text-align:center;">
+                <div style="font-size:12px; font-weight:700; opacity:0.9; color:#ffffff;">تاريخ اليوم</div>
+                <div style="font-size:15px; font-weight:950; color:#ffffff;">📅 {date.today().strftime('%Y-%m-%d')}</div>
+            </div>
         </div>
-        """,unsafe_allow_html=True)
-    with _dash_head_b:
-        if st.button(f"🔔 {_teacher_notif_count}", key="teacher_notifications_btn", use_container_width=True, help="عرض الإشعارات"):
-            st.session_state.teacher_notifications_open = not st.session_state.teacher_notifications_open
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 2. مؤشرات الأداء السريعة (Academic & Financial KPI Strip - 7 Metrics)
+    st.markdown(f"""
+    <div class="modern-stats" style="margin-bottom:12px;">
+        <div class="modern-stat stat-purple"><div class="icon">♙</div><div class="num">{len(dashboard_students)}</div><div class="label">إجمالي الطلاب</div></div>
+        <div class="modern-stat stat-green"><div class="icon">▦</div><div class="num">{len(st.session_state.weekly_schedule_df)}</div><div class="label">المواعيد الأسبوعية</div></div>
+        <div class="modern-stat stat-blue"><div class="icon">💻</div><div class="num">{len(st.session_state.online_schedule_df)}</div><div class="label">مواعيد Zoom</div></div>
+        <div class="modern-stat stat-yellow"><div class="icon">📝</div><div class="num">{len(st.session_state.sessions_df)}</div><div class="label">الحصص المرصودة</div></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    fc1, fc2, fc3 = st.columns(3)
+    with fc1:
+        st.markdown(f"""<div class="modern-stat stat-blue" style="text-align:center;"><div class="icon">💳</div><div class="num">{total_due_all:,.0f} <span style="font-size:14px;">جنيه</span></div><div class="label">إجمالي المستحق</div></div>""", unsafe_allow_html=True)
+    with fc2:
+        st.markdown(f"""<div class="modern-stat stat-green" style="text-align:center;"><div class="icon">✅</div><div class="num">{total_paid_all:,.0f} <span style="font-size:14px;">جنيه</span></div><div class="label">إجمالي المدفوع</div></div>""", unsafe_allow_html=True)
+    with fc3:
+        st.markdown(f"""<div class="modern-stat stat-yellow" style="text-align:center;"><div class="icon">💰</div><div class="num">{max(total_balance_all,0):,.0f} <span style="font-size:14px;">جنيه</span></div><div class="label">الرصيد المتبقي</div></div>""", unsafe_allow_html=True)
+
+    # 3. حصص اليوم وغداً مع عداد تنازلي حي
+    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown("### 🔔 حصص اليوم وغداً المباشرة")
+        st.caption("يتم رصد الحصص تلقائياً من جدول مواعيد الطلاب؛ العداد يتحدث لحظياً وعند حلول الموعد يظهر زر بدء حصة زوم.")
+        _render_teacher_today_lessons()
+
+    # 4. كارت رابط دخول الطلاب والمشاركة
+    _student_public_url = "https://engmohamedghonaim.streamlit.app/?role=student"
+    with st.container(border=True):
+        st.markdown("### 🔗 رابط دخول الطلاب والمشاركة")
+        st.caption("انسخ هذا الرابط وأرسله لطلابك؛ يمكنهم تسجيل الدخول أو التسجيل الجديد فوراً برقم الهاتف أو Google أو Facebook.")
+        st.code(_student_public_url, language="text")
+        if st.button("🚀 فتح واجهة الطالب الآن للمعاينة والتجربة", key="btn_dash_preview_student", use_container_width=True):
+            st.query_params["role"] = "student"
             st.rerun()
-    if st.session_state.teacher_notifications_open:
-        _render_notification_box("teacher")
 
-    st.markdown("### 🔔 حصص اليوم وغداً")
-    st.caption("يتم جلب الحصص تلقائياً من جدول مواعيد الطلاب، ويظهر دائماً اليوم واليوم التالي فقط. العداد يتحدث كل ثانية، وعند حلول الموعد تتحول البطاقة إلى الأحمر ويظهر زر بدء الحصة.")
-    _render_teacher_today_lessons()
+    # 5. شبكة أدوات التحكم والإدارة الشاملة (All 22 SaaS Management Cards)
+    st.markdown("<div class='vertical-section-header' style='margin-top:20px;'>⚡ مركز أدوات الإدارة والتحكم الشاملة</div>", unsafe_allow_html=True)
+    
+    all_teacher_tools = [
+        ('♙', 'إدارة الطلاب', 'بيانات وبطاقات الطلاب والحظر وتعديل الصفوف', 'students', '#8b5cf6'),
+        ('💻', 'جداول Zoom', 'إدارة الحصص المباشرة وروابط زوم المخصصة', 'online_schedule', '#0284c7'),
+        ('📅', 'المواعيد الأسبوعية', 'جدول المجموعات والأيام ومتابعة المشرفين', 'weekly_schedule', '#10b981'),
+        ('✍️', 'الامتحانات الإلكترونية', 'إنشاء وإدارة الاختبارات التفاعلية وحفظها', 'exam_maker', '#f59e0b'),
+        ('🤖', 'استوديو الذكاء الاصطناعي', 'توليد الأسئلة والشروحات الرياضية بـ AI', 'ai_studio', '#6366f1'),
+        ('▤', 'بنك الأسئلة الشامل', 'تدريبات وتمارين بنك الأسئلة لجميع المراحل', 'question_bank', '#ef4444'),
+        ('🎥', 'المقررات والفيديوهات', 'إدارة شروحات ومقررات الفيديو التعليمية', 'videos', '#059669'),
+        ('🧠', 'اختبارات عبقري', 'إدارة ومتابعة اختبارات موقع عبقري والنتائج', 'abqary', '#7c3aed'),
+        ('📊', 'رصد الدرجات', 'درجات الكويزات والامتحانات والواجبات المنزلية', 'grades', '#ec4899'),
+        ('✎', 'تصحيح المقالي', 'استلام حلول الطلاب المقالية وتصحيحها', 'essays', '#d97706'),
+        ('💬', 'الرسائل والدعم', 'محادثات الطلاب المباشرة والدعم الفوري', 'chat', '#06b6d4'),
+        ('＋', 'رصد حصة جديدة', 'تسجيل حضور وتقييم الطلاب في الحصص المنفذة', 'add_session', '#16a34a'),
+        ('＋', 'إضافة واجب', 'نشر واجبات وتكليفات جديدة للطلاب', 'add_hw', '#2563eb'),
+        ('✏️', 'تعديل السجلات', 'تعديل أو حذف حصص وتقييمات مسجلة مسبقاً', 'edit_records', '#f97316'),
+        ('▥', 'السجلات الشاملة', 'كشف تفصيلي بجميع الحصص والحضور والغياب', 'all_records', '#64748b'),
+        ('📢', 'إدارة الإعلانات', 'نشر بوستات وفيديوهات وإعلانات تظهر للطلاب', 'ads', '#dc2626'),
+        ('👨‍👩‍👧', 'تقرير ولي الأمر', 'تقارير متابعة شاملة للطباعة والإرسال', 'parent_report', '#0284c7'),
+        ('💳', 'المدفوعات والحسابات', 'متابعة المستحق والمدفوع والتحصيل الشهري', 'payments', '#10b981'),
+        ('🏫', 'إدارة الأكاديميات', 'حسابات ومدرسي واشتراكات الأكاديميات', 'academies', '#8b5cf6'),
+        ('💎', 'تنظيم باقات درسلي', 'جدول مواعيد وباقات منصة درسلي التعليمية', 'darssly_schedule', '#f59e0b'),
+        ('💾', 'النسخ الاحتياطية', 'المزامنة السحابية واسترجاع Excel Online', 'online_backup', '#059669'),
+        ('◈', 'تخصيص واجهة الطالب', 'تخصيص صور وبنرات واشتراكات واجهة الطالب', 'student_interface', '#3b82f6'),
+    ]
 
-    st.markdown("<div style='height:14px'></div>",unsafe_allow_html=True)
-    s1,s2,s3,s4=st.columns(4)
-    for c,icon,num,label,cls in [(s1,'♙',len(dashboard_students),'إجمالي الطلاب','stat-purple'),(s2,'▣',len(st.session_state.weekly_schedule_df),'المواعيد الأسبوعية','stat-green'),(s3,'◉',len(st.session_state.online_schedule_df),'مواعيد Zoom','stat-blue'),(s4,'✎',len(st.session_state.sessions_df),'الحصص المرصودة','stat-yellow')]:
-        with c: st.markdown(f"<div class='modern-stat {cls}'><div class='icon'>{icon}</div><div class='num'>{num}</div><div class='label'>{label}</div></div>",unsafe_allow_html=True)
-    st.markdown("### ⚡ أدوات سريعة")
-    quick=[('◉','إدارة الطلاب','بطاقات الطلاب والبيانات','students'),('◫','جداول Zoom','إدارة الحصص الأونلاين','online_schedule'),('▣','الامتحانات','إنشاء وإدارة الاختبارات','exam_maker'),('✦','عبقري','إدارة اختبارات عبقري','abqary'),('▤','الواجبات والحصص','رصد ومتابعة الطلاب','add_session'),('▰','المدفوعات','المستحق والمدفوع والرصيد','payments')]
-    for row in range(0,len(quick),3):
-        cols=st.columns(3)
-        for col,item in zip(cols,quick[row:row+3]):
-            icon,title,desc,page=item
-            with col:
-                st.markdown(f"<div class='quick-card'><div style='width:42px;height:42px;border-radius:12px;background:#eaf4ff;color:#1677ff;display:flex;align-items:center;justify-content:center;font-size:21px'>{icon}</div><h4>{title}</h4><p>{desc}</p></div>",unsafe_allow_html=True)
-                if st.button(f"فتح {title}",key=f"quick_{page}_{row}",use_container_width=True): st.session_state.teacher_page=page; st.rerun()
-    st.markdown("### 💳 الحالة المالية")
-    f1,f2,f3=st.columns(3)
-    f1.metric("إجمالي المستحق",f"{total_due_all:,.0f} جنيه")
-    f2.metric("إجمالي المدفوع",f"{total_paid_all:,.0f} جنيه")
-    f3.metric("الرصيد المتبقي",f"{max(total_balance_all,0):,.0f} جنيه")
+    for row_idx in range(0, len(all_teacher_tools), 4):
+        t_cols = st.columns(4)
+        for c_idx, item in enumerate(all_teacher_tools[row_idx:row_idx+4]):
+            icon, title, desc, target_pg, accent_col = item
+            with t_cols[c_idx]:
+                st.markdown(f"""
+                <div style="background:{card_bg}; border:1.5px solid {card_border}; border-top:4px solid {accent_col}; border-radius:16px; padding:16px 14px; min-height:165px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 6px 18px rgba(0,0,0,0.04); direction:rtl; margin-bottom:10px;">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                            <div style="width:38px; height:38px; border-radius:10px; background:{accent_col}18; color:{accent_col}; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:900;">
+                                {icon}
+                            </div>
+                            <h4 style="margin:0; font-size:15px; font-weight:900; color:{text_color}; line-height:1.2;">{title}</h4>
+                        </div>
+                        <p style="margin:0 0 10px; font-size:12px; color:{text_color}; opacity:0.8; font-weight:600; line-height:1.5;">{desc}</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"فتح {title}", key=f"btn_alltools_{target_pg}_{row_idx}_{c_idx}", use_container_width=True):
+                    st.session_state.teacher_page = target_pg
+                    st.rerun()
+
+    # 6. كارت تغيير صورة المعلم
+    st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
     with st.container(border=True):
         st.markdown("### 📷 صورة المعلم")
         st.markdown(f"<div style='text-align:center;margin:6px 0 14px;'><img src='{STUDENT_FIXED_IMAGE_URI}' style='width:130px;height:130px;border-radius:50%;object-fit:cover;border:4px solid #60a5fa;box-shadow:0 10px 25px rgba(0,0,0,.18);'></div>", unsafe_allow_html=True)
@@ -9389,3 +9559,82 @@ elif t_page == "ads":
                     st.caption("📎 يوجد حاليًا ملف صورة/فيديو مرتبط بهذا الإعلان.")
 
                 edit_file = None
+                if edit_type in ["صورة + بوست", "فيديو"]:
+                    edit_file = st.file_uploader("ارفع صورة أو فيديو بديل (اختياري)", type=["png","jpg","jpeg","webp","mp4","webm","mov"], key=f"edit_ad_media_{editing_ad_idx}")
+                edit_active = st.checkbox("الإعلان ظاهر للطلاب", value=(str(edit_row.get("الحالة", "نشط")).strip() != "متوقف"), key=f"edit_ad_active_{editing_ad_idx}")
+                col_u1, col_u2 = st.columns(2)
+                with col_u1:
+                    save_edit = st.form_submit_button("💾 حفظ التعديلات", use_container_width=True, type="primary")
+                with col_u2:
+                    cancel_edit = st.form_submit_button("إلغاء التعديل", use_container_width=True)
+                if save_edit:
+                    media_b64 = str(edit_row.get("الوسائط_base64", "") or "").strip()
+                    media_mime = str(edit_row.get("نوع_الوسائط", "") or "").strip()
+                    if edit_file is not None:
+                        raw = edit_file.getvalue()
+                        media_b64 = base64.b64encode(raw).decode("utf-8")
+                        media_mime = str(getattr(edit_file, "type", "") or "application/octet-stream")
+                    final_link = edit_link.strip()
+                    if edit_type == "واتساب" and final_link and not final_link.startswith("http"):
+                        final_link = "https://wa.me/" + final_link.replace("+", "").replace(" ", "")
+                    ads_df.loc[editing_ad_idx, "العنوان"] = edit_title.strip() or "إعلان"
+                    ads_df.loc[editing_ad_idx, "نوع_الإعلان"] = edit_type
+                    ads_df.loc[editing_ad_idx, "النص"] = edit_text.strip()
+                    ads_df.loc[editing_ad_idx, "الوسائط_base64"] = media_b64
+                    ads_df.loc[editing_ad_idx, "نوع_الوسائط"] = media_mime
+                    ads_df.loc[editing_ad_idx, "الرابط"] = final_link
+                    ads_df.loc[editing_ad_idx, "نص_الزر"] = edit_button.strip() or "افتح الإعلان"
+                    ads_df.loc[editing_ad_idx, "الحالة"] = "نشط" if edit_active else "متوقف"
+                    st.session_state.ads_df = ads_df
+                    save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df, st.session_state.get("weekly_schedule_df"), st.session_state.get("payment_records_df"), st.session_state.ads_df)
+                    st.session_state.editing_ad_idx = None
+                    st.success("✓ تم تحديث الإعلان بنجاح.")
+                    st.rerun()
+                if cancel_edit:
+                    st.session_state.editing_ad_idx = None
+                    st.rerun()
+
+# ===== شريط التنقل السفلي الثابت للموبايل في لوحة المعلم (Mobile Native Bottom Dock) =====
+st.markdown('<div class="mobile-bottom-dock-container">', unsafe_allow_html=True)
+col_td1, col_td2, col_td3, col_td4, col_td5 = st.columns(5)
+with col_td1:
+    if st.button("⌂\nالرئيسية", key="btn_teach_dock_dash", use_container_width=True):
+        st.session_state.teacher_page = "dashboard"
+        st.rerun()
+with col_td2:
+    if st.button("♙\nالطلاب", key="btn_teach_dock_stud", use_container_width=True):
+        st.session_state.teacher_page = "students"
+        st.rerun()
+with col_td3:
+    if st.button("💻\nزوم", key="btn_teach_dock_zoom", use_container_width=True):
+        st.session_state.teacher_page = "online_schedule"
+        st.rerun()
+with col_td4:
+    if st.button("✍️\nامتحانات", key="btn_teach_dock_exam", use_container_width=True):
+        st.session_state.teacher_page = "exam_maker"
+        st.rerun()
+with col_td5:
+    if st.button("💳\nالمالية", key="btn_teach_dock_pay", use_container_width=True):
+        st.session_state.teacher_page = "payments"
+        st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ===== الفوتر الموحد للمنصة =====
+st.markdown("""
+    <div class="call-btn-container">
+        <a href="tel:01016361440" class="call-btn">
+            <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:#ffffff;"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+            <span>للتواصل مع م / محمد غنيم: 01016361440</span>
+        </a>
+    </div>
+    <div class="social-footer-box">
+        <div class="social-footer-container">
+            <a href="https://www.facebook.com/share/19fD41rV3H/" target="_blank" title="Facebook" class="social-btn-top facebook-bg"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+            <a href="https://wa.me/201016361440" target="_blank" title="WhatsApp" class="social-btn-top whatsapp-bg"><svg viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.599 2.669-.699c.971.53 1.77.822 2.791.823h.002c3.18 0 5.767-2.586 5.768-5.766 0-3.18-2.587-5.766-5.77-5.766zm9.969 5.828c0 5.519-4.481 10-10 10-1.761 0-3.424-.46-4.881-1.267l-5.619 1.474 1.499-5.485c-.911-1.516-1.43-3.285-1.43-5.176 0-5.519 4.481-10 10-10 5.519 0 10 4.481 10 10z"/></svg></a>
+            <a href="https://t.me/mrmaths22" target="_blank" title="Telegram" class="social-btn-top telegram-bg"><svg viewBox="0 0 24 24"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.121l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.832.942z"/></svg></a>
+            <a href="https://www.tiktok.com/@eng_mohamedghonaim?_r=1&_t=ZS-99VdklZPBUS" target="_blank" title="TikTok" class="social-btn-top tiktok-bg"><svg viewBox="0 0 24 24"><path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.068-.102a2.895 2.895 0 0 1 2.373-4.513c.277 0 .546.039.803.111V9.417a6.338 6.338 0 0 0-.803-.051C6.017 9.366 3.2 12.183 3.2 15.647 3.2 19.11 6.017 22 9.479 22c3.462 0 6.279-2.817 6.279-6.353V9.07c1.378.983 3.054 1.564 4.869 1.584V7.209a4.845 4.845 0 0 1-1.038-.523z"/></svg></a>
+            <a href="https://youtube.com/@engineermaths?si=8C6T808VuAU5OMOt" target="_blank" title="YouTube" class="social-btn-top youtube-bg"><svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.016 3.016 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+        </div>
+        <div class="rights-text">جميع الحقوق محفوظة لدي م / محمد غنيم 2026</div>
+     </div>
+""", unsafe_allow_html=True)
