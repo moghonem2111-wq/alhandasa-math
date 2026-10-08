@@ -2566,622 +2566,605 @@ def get_monthly_financial_totals(month_key):
 
 
 if st.session_state.dark_mode:
-    bg_color = "#0f172a"
-    text_color = "#f8fafc"
-    card_bg = "#1e293b"
-    card_border = "#334155"
+    bg_color = "#161311"
+    text_color = "#fef3c7"
+    card_bg = "#211c18"
+    card_border = "#7c2d12"
+    primary_orange = "#ff8a00"
+    accent_orange = "#ea580c"
+    light_orange_surf = "#29211a"
 else:
-    bg_color = "#ffffff"
-    text_color = "#0f172a"
-    card_bg = "#f8fafc"
-    card_border = "#cbd5e1"
-
-st.markdown(f"""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&display=swap');
-    
-    html, body, [class*="css"], p, span, label, div, button, h1, h2, h3, h4, h5, h6 {{
-        font-family: 'Cairo', sans-serif !important;
-        font-weight: 900 !important;
-        letter-spacing: 0.3px !important;
-        color: {text_color} !important;
-    }}
-
-    .stApp {{
-        background-color: {bg_color} !important;
-    }}
-
-    input, textarea, select, div[data-baseweb="select"] > div {{
-        font-family: 'Cairo', sans-serif !important;
-        font-weight: 800 !important;
-        color: {text_color} !important;
-        background-color: {card_bg} !important;
-    }}
-
-    div[data-baseweb="popover"], div[role="dialog"], div[aria-label*="Choose a date"], div[aria-label*="Calendar"], div[data-baseweb="calendar"] {{
-        background-color: {card_bg} !important;
-        color: {text_color} !important;
-        border-radius: 12px !important;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
-    }}
-    div[data-baseweb="calendar"] *, div[data-baseweb="popover"] * {{
-        color: {text_color} !important;
-        background-color: transparent !important;
-    }}
-    div[data-baseweb="calendar"] button {{
-        color: {text_color} !important;
-        background-color: {card_bg} !important;
-        border-radius: 6px !important;
-        font-weight: 900 !important;
-    }}
-    div[data-baseweb="calendar"] button:hover {{
-        background-color: #059669 !important;
-        color: #ffffff !important;
-    }}
-
-    div[data-baseweb="popover"], div[role="listbox"] div {{
-        background-color: {card_bg} !important;
-        color: {text_color} !important;
-    }}
-    div[role="option"] span, div[role="option"] div {{
-        color: {text_color} !important;
-    }}
-
-    body, h1, h2, h3, h4, h5, h6, .stMarkdown, .stSelectbox, .stTextInput, .stTextArea {{
-        direction: rtl;
-        text-align: right;
-    }}
-    
-    img {{
-        max-width: 100% !important;
-        height: auto !important;
-        object-fit: contain !important;
-        border-radius: 8px;
-    }}
-
-    .darssly-navbar {{
-        background: {card_bg};
-        padding: 12px 25px;
-        border-radius: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 25px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-        border: 1px solid {card_border};
-    }}
-    .navbar-brand {{ display: flex; align-items: center; gap: 15px; }}
-    .navbar-title-group h3 {{ margin: 0 !important; color: #059669 !important; font-size: 18px !important; }}
-    .navbar-title-group p {{ margin: 2px 0 0 0 !important; color: {text_color} !important; font-size: 12px !important; opacity: 0.8; }}
-
-    .exam-builder-header {{
-        background-color: #f59e0b; color: #ffffff !important; padding: 16px 22px; border-radius: 10px 10px 0 0; font-size: 22px; font-weight: 900; margin-bottom: 15px; display: flex; align-items: center; gap: 12px;
-    }}
-    .vertical-section-header {{
-        background: linear-gradient(135deg, #0284c7, #0369a1); color: #ffffff !important; padding: 14px 20px; border-radius: 10px; margin-top: 25px; margin-bottom: 15px; font-size: 20px; font-weight: 900; display: flex; align-items: center; gap: 10px;
-    }}
-    
-    .stButton>button {{
-        background: #10b981 !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; border: none !important; border-radius: 10px; font-weight: 900 !important; font-size: 16px !important; padding: 12px 22px; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3); width: 100% !important;
-    }}
-    .stButton>button:hover {{ background: #059669 !important; }}
-
-    div.stFormSubmitButton > button, div.row-widget.stButton > button:nth-of-type(1) {{
-        background-color: #dc2626 !important;
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-    }}
-    div.stFormSubmitButton > button:hover {{
-        background-color: #b91c1c !important;
-    }}
-
-    .stLinkButton>a {{
-        background-color: #dc2626 !important;
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-        font-family: 'Cairo', sans-serif !important;
-        font-weight: 900 !important;
-        font-size: 16px !important;
-        border-radius: 10px !important;
-        text-align: center !important;
-        display: block !important;
-        padding: 10px 15px !important;
-        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
-        border: none !important;
-        text-decoration: none !important;
-    }}
-    .stLinkButton>a:hover {{
-        background-color: #b91c1c !important;
-        color: #ffffff !important;
-    }}
-
-    .darssly-box {{
-        background: linear-gradient(135deg, #059669, #10b981); border-radius: 16px; padding: 24px; margin-bottom: 25px; box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3); border: 2px solid rgba(255, 255, 255, 0.25); color: #ffffff !important;
-    }}
-    .darssly-box * {{ color: #ffffff !important; }}
-
-    .course-card {{
-        background: {card_bg}; border: 2px solid {card_border}; border-radius: 16px; padding: 20px; text-align: center; box-shadow: 0 6px 16px rgba(0,0,0,0.08); margin-bottom: 20px; display: flex; flex-direction: column; justify-content: space-between; height: 100%;
-    }}
-    .course-icon-box {{
-        font-size: 45px; background: #065f46; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; border-radius: 50%; margin: 0 auto 15px auto; border: 2px solid #10b981;
-    }}
-    .course-title {{ color: #059669 !important; font-size: 20px !important; font-weight: 900 !important; margin-bottom: 8px !important; }}
-    .course-desc {{ color: {text_color} !important; font-size: 14px !important; font-weight: 800 !important; opacity: 0.9; margin-bottom: 15px !important; }}
-
-    .social-top-container {{
-        display: flex; gap: 12px; align-items: center; margin-top: 10px; justify-content: center;
-    }}
-    .social-btn-top {{
-        display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; text-decoration: none !important; box-shadow: 0 3px 8px rgba(0,0,0,0.25); transition: transform 0.2s ease;
-    }}
-    .social-btn-top:hover {{ transform: scale(1.12); }}
-    .social-btn-top svg {{ width: 20px; height: 20px; fill: #ffffff; }}
-
-    .facebook-bg {{ background-color: #1877F2; }}
-    .whatsapp-bg {{ background-color: #25D366; }}
-    .telegram-bg {{ background-color: #229ED9; }}
-    .tiktok-bg   {{ background-color: #000000; border: 1px solid #444; }}
-    .youtube-bg  {{ background-color: #FF0000; }}
-
-    .subscription-card {{
-        background: {card_bg}; border: 2px solid #dbe4ef; border-radius: 22px; padding: 18px 18px 12px; text-align: center; box-shadow: 0 10px 28px rgba(15,23,42,.10); margin-bottom: 18px; overflow: hidden; position: relative;
-    }}
-    .subscription-card:hover {{ border-color: #10b981; box-shadow: 0 14px 34px rgba(5,150,105,.16); }}
-    .subscription-photo {{ width: 118px; height: 118px; border-radius: 50%; object-fit: cover; border: 5px solid #10b981; box-shadow: 0 7px 18px rgba(5,150,105,.22); margin: 2px auto 10px; display:block; }}
-    .subscription-icon {{ width: 118px; height: 118px; border-radius: 50%; background: #ecfdf5; display:flex; align-items:center; justify-content:center; font-size:50px; margin: 2px auto 10px; border:5px solid #10b981; }}
-    .subscription-title {{ color:#0f172a; font-size:20px; font-weight:900; margin:7px 0 4px; }}
-    .subscription-price {{ color:#ea580c; font-size:25px; font-weight:1000; margin:4px 0 10px; }}
-    .subscription-features {{ color:{text_color}; font-size:13px; font-weight:800; line-height:1.9; margin-bottom:8px; }}
-    .subscription-badge {{ display:inline-block; background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; border-radius:999px; padding:4px 12px; font-size:12px; font-weight:900; margin-bottom:5px; }}
-
-    .social-top-container {{
-        display: flex; gap: 12px; align-items: center; margin-top: 10px; justify-content: center;
-    }}
-    .social-btn-top {{
-        display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; text-decoration: none !important; box-shadow: 0 3px 8px rgba(0,0,0,0.25); transition: transform 0.2s ease;    }}
-    .social-btn-top:hover {{ transform: scale(1.12); }}
-    .social-btn-top svg {{ width: 20px; height: 20px; fill: #ffffff; }}
-
-    .facebook-bg {{ background-color: #1877F2; }}
-    .whatsapp-bg {{ background-color: #25D366; }}
-    .telegram-bg {{ background-color: #229ED9; }}
-    .tiktok-bg   {{ background-color: #000000; border: 1px solid #444; }}
-    .youtube-bg  {{ background-color: #FF0000; }}
-
-
-    .call-btn-container {{ display: flex; justify-content: center; margin-top: 25px; margin-bottom: 15px; width: 100%; }}
-    .call-btn {{
-        display: inline-flex; align-items: center; justify-content: center; gap: 12px; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff !important; padding: 14px 28px; border-radius: 50px; font-size: 18px; font-weight: 900; text-decoration: none !important; border: 2px solid #ffffff;
-    }}
-    .social-footer-box {{
-        margin-top: 25px; padding: 20px 0; border-top: 1px solid rgba(150, 150, 150, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;
-    }}
-    .rights-text {{ font-size: 16px; font-weight: 900; margin-top: 12px; text-align: center; color: {text_color}; }}
-
-    /* ===== الهوية الحديثة الموحدة للطالب والمعلم ===== */
-    [data-testid="stSidebar"] {{ background:linear-gradient(180deg,#0b1736 0%,#101f46 55%,#0b1736 100%) !important; }}
-    [data-testid="stSidebar"] * {{ color:#f8fafc !important; }}
-    [data-testid="stSidebar"] .stButton > button {{ background:transparent !important; border:1px solid transparent !important; box-shadow:none !important; color:#e5eefc !important; -webkit-text-fill-color:#e5eefc !important; border-radius:12px !important; text-align:right !important; justify-content:flex-start !important; min-height:44px !important; padding:9px 13px !important; margin:3px 0 !important; font-size:14px !important; }}
-    [data-testid="stSidebar"] .stButton > button:hover {{ background:rgba(37,99,235,.25) !important; border-color:rgba(96,165,250,.25) !important; color:#fff !important; -webkit-text-fill-color:#fff !important; }}
-    [data-testid="stSidebar"] hr {{ border-color:rgba(255,255,255,.12) !important; }}
-    .modern-topbar {{ background:#fff; border:1px solid #e5eaf2; border-radius:18px; padding:12px 18px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 6px 22px rgba(15,23,42,.06); direction:rtl; }}
-    .modern-brand {{ display:flex; align-items:center; gap:12px; }}
-    .modern-avatar {{ width:48px !important; height:48px !important; border-radius:50% !important; object-fit:cover !important; border:3px solid #2563eb !important; box-shadow:0 5px 14px rgba(37,99,235,.18); }}
-    .modern-hero {{ background:linear-gradient(135deg,#eaf4ff 0%,#f5f9ff 62%,#eef7ff 100%); border:1px solid #dbeafe; border-radius:24px; padding:28px 30px; min-height:170px; display:flex; align-items:center; justify-content:space-between; direction:rtl; box-shadow:0 10px 28px rgba(30,64,175,.07); margin-bottom:20px; }}
-    .modern-hero h1 {{ color:#0f2a5a !important; font-size:30px !important; margin:0 0 8px !important; font-weight:900 !important; }}
-    .modern-hero p {{ color:#51627d !important; font-size:15px !important; margin:0 !important; font-weight:700 !important; }}
-    .hero-art {{ width:180px; height:140px; display:flex; align-items:center; justify-content:center; font-size:82px; filter:drop-shadow(0 10px 10px rgba(15,23,42,.10)); }}
-    .modern-stats {{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:0 0 24px; direction:rtl; }}
-    .modern-stat {{ border-radius:18px; padding:17px 16px; min-height:105px; border:1px solid rgba(15,23,42,.05); box-shadow:0 6px 18px rgba(15,23,42,.05); }}
-    .modern-stat .icon {{ font-size:26px; margin-bottom:7px; }}
-    .modern-stat .num {{ font-size:27px; font-weight:900; line-height:1; color:#14213d !important; }}
-    .modern-stat .label {{ font-size:12px; font-weight:800; color:#55657d !important; margin-top:7px; }}
-    .stat-green {{ background:#ecfdf5; }} .stat-blue {{ background:#eff6ff; }} .stat-purple {{ background:#f5f3ff; }} .stat-yellow {{ background:#fffbeb; }}
-    .modern-section-title {{ display:flex; justify-content:space-between; align-items:center; direction:rtl; margin:8px 0 14px; }}
-    .modern-section-title h3 {{ margin:0 !important; color:#17233d !important; font-size:20px !important; }}
-    .modern-course-card {{ background:#fff; border:1px solid #e6ebf3; border-radius:18px; padding:18px; min-height:145px; box-shadow:0 7px 20px rgba(15,23,42,.05); direction:rtl; }}
-    .modern-course-card .course-icon {{ font-size:36px; }}
-    .modern-course-card h4 {{ margin:7px 0 4px; color:#1d3557 !important; font-size:17px; }}
-    .modern-course-card p {{ margin:0; color:#64748b !important; font-size:12px; font-weight:700; }}
-    @media (max-width:900px) {{ .modern-stats {{ grid-template-columns:repeat(2,1fr); }} .hero-art {{ width:120px; font-size:62px; }} .modern-hero h1 {{font-size:24px !important;}} }}
-    @media (max-width:600px) {{ .modern-stats {{ grid-template-columns:1fr 1fr; gap:9px; }} .modern-hero {{padding:20px;}} .hero-art {{display:none;}} }}
-    </style>
-""", unsafe_allow_html=True)
+    bg_color = "#fffbf5"
+    text_color = "#1c1917"
+    card_bg = "#ffffff"
+    card_border = "#fed7aa"
+    primary_orange = "#ff8a00"
+    accent_orange = "#ea580c"
+    light_orange_surf = "#fff7ed"
 
 # =============================================================================
 # الهوية البصرية الجديدة الفاخرة — البشمهندس x الرياضه 2026
-# قالب وتصميم SaaS عصري متقدم: Cyber Obsidian + Electric Indigo + Emerald Neon + Sunburst Amber
-# شاشة كاملة متجاوبة للكمبيوتر والموبايل بنظام كونسول مدمج بدون سكرول
+# قالب SaaS ساطع: اللون السائد أورنج فاتح (Light Orange) + شاشة كاملة بدون سكرول + هيدر مجمد + قائمة جانبية
 # =============================================================================
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900;1000&display=swap');
+st.markdown(f"""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900;1000&display=swap');
+    
+    :root {{
+        --primary-orange: #ff8a00;
+        --accent-orange: #ea580c;
+        --orange-light: #fff7ed;
+        --orange-border: #fed7aa;
+        --orange-badge: #ffedd5;
+        --text-dark: #1c1917;
+        --card-light: #ffffff;
+    }}
 
-:root {
-    --primary-indigo: #6366f1;
-    --primary-dark: #4f46e5;
-    --accent-cyan: #06b6d4;
-    --accent-emerald: #10b981;
-    --accent-amber: #f59e0b;
-    --accent-rose: #f43f5e;
-    --bg-dark: #090d16;
-    --card-dark: #111827;
-    --border-dark: rgba(99, 102, 241, 0.25);
-}
+    html, body, [class*="css"], p, span, label, div, button, h1, h2, h3, h4, h5, h6 {{
+        font-family: 'Cairo', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        font-weight: 850 !important;
+        direction: rtl;
+        text-align: right;
+    }}
 
-html, body, [class*="css"], .stApp, .stMarkdown, button, input, textarea, select {
-    font-family: 'Cairo', -apple-system, BlinkMacSystemFont, sans-serif !important;
-}
+    html {{
+        scroll-behavior: smooth !important;
+    }}
 
-html {
-    scroll-behavior: smooth !important;
-}
+    .stApp {{
+        background: {bg_color} !important;
+        color: {text_color} !important;
+    }}
 
-.stApp {
-    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 50%, #f8fafc 100%) !important;
-}
-
-/* شاشة كاملة 100% بعرض الشاشة واستغلال كامل للمساحات */
-.main .block-container {
-    max-width: 100% !important;
-    width: 100% !important;
-    padding-top: 0.25rem !important;
-    padding-bottom: 2.5rem !important;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
-}
-
-@media (max-width: 768px) {
-    .main .block-container {
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-        padding-top: 0.2rem !important;
-        padding-bottom: 80px !important;
-    }
-}
-
-[data-testid="stHeader"] {
-    background: transparent !important;
-}
-
-[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] {
-    display: none !important;
-}
-
-/* روابط وتأثيرات عامة */
-a {
-    text-decoration: none !important;
-    transition: all 0.2s ease !important;
-}
-a:hover {
-    opacity: 0.9 !important;
-    transform: translateY(-1px) !important;
-}
-
-/* أزرار Streamlit الموحدة بنظام Cyber Indigo */
-.stButton>button {
-    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
-    color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-    border: 0 !important;
-    border-radius: 12px !important;
-    min-height: 40px !important;
-    font-weight: 850 !important;
-    font-size: 14px !important;
-    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.25) !important;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-.stButton>button:hover {
-    transform: translateY(-1.5px) !important;
-    box-shadow: 0 8px 22px rgba(79, 70, 229, 0.35) !important;
-}
-
-.stFormSubmitButton>button {
-    background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
-    color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-    border: 0 !important;
-    border-radius: 12px !important;
-    min-height: 42px !important;
-    font-weight: 900 !important;
-    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25) !important;
-}
-
-.stLinkButton>a {
-    background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%) !important;
-    color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-    border-radius: 12px !important;
-    border: 0 !important;
-    min-height: 40px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    font-weight: 850 !important;
-    box-shadow: 0 4px 14px rgba(6, 182, 212, 0.25) !important;
-}
-
-/* حقول الإدخال والقوائم */
-input, textarea, div[data-baseweb="select"]>div {
-    border: 1.5px solid #cbd5e1 !important;
-    border-radius: 12px !important;
-    background: #ffffff !important;
-    min-height: 42px !important;
-    font-weight: 800 !important;
-    color: #0f172a !important;
-}
-
-/* بطاقات الكونسول والتحكم المدمجة بدون سكرول */
-.console-ribbon {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    background: #ffffff;
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    border-radius: 14px;
-    padding: 8px 14px;
-    margin-bottom: 10px;
-    direction: rtl;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
-    overflow-x: auto;
-}
-
-.console-kpi-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 10px;
-    font-size: 13px;
-    font-weight: 900;
-    white-space: nowrap;
-}
-
-.badge-purple { background: #f5f3ff; color: #7c3aed; border: 1px solid #ddd6fe; }
-.badge-green  { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
-.badge-blue   { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
-.badge-amber  { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
-.badge-cyan   { background: #ecfeff; color: #0891b2; border: 1px solid #a5f3fc; }
-
-.console-card {
-    background: #ffffff;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 14px 16px;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
-    direction: rtl;
-    margin-bottom: 10px;
-}
-
-/* هيدر التطبيق الثابت والحديث */
-.sticky-app-header {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 99990 !important;
-    background: rgba(255, 255, 255, 0.96) !important;
-    backdrop-filter: blur(20px) !important;
-    -webkit-backdrop-filter: blur(20px) !important;
-    border: 1px solid rgba(99, 102, 241, 0.22) !important;
-    border-radius: 16px !important;
-    padding: 8px 16px !important;
-    margin-bottom: 10px !important;
-    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06) !important;
-}
-
-/* بطاقة اسأل حمصا البطل المتوهج */
-.hamza-hero-gradient {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%) !important;
-    border-radius: 18px !important;
-    padding: 16px 20px !important;
-    color: #ffffff !important;
-    direction: rtl !important;
-    box-shadow: 0 10px 28px rgba(217, 119, 6, 0.3) !important;
-    border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
-    margin-bottom: 12px !important;
-    position: relative !important;
-    overflow: hidden !important;
-}
-.hamza-hero-gradient h2, .hamza-hero-gradient h3, .hamza-hero-gradient p, .hamza-hero-gradient span {
-    color: #ffffff !important;
-}
-
-/* بطاقة الحصة المباشرة وزوم التفاعلية */
-.live-zoom-pulse-card {
-    background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%) !important;
-    border: 1.5px solid #86efac !important;
-    border-radius: 16px !important;
-    padding: 14px 16px !important;
-    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.1) !important;
-    margin-bottom: 12px !important;
-    direction: rtl !important;
-}
-
-/* أزرار الدخول السريع المباشرة لـ Google و Facebook */
-.google-direct-btn {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 10px !important;
-    background: #ffffff !important;
-    color: #1f2937 !important;
-    border: 2px solid #e5e7eb !important;
-    border-radius: 12px !important;
-    padding: 11px 18px !important;
-    font-weight: 900 !important;
-    font-size: 14px !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important;
-    width: 100% !important;
-    text-decoration: none !important;
-    cursor: pointer !important;
-}
-.google-direct-btn:hover {
-    background: #f8fafc !important;
-    border-color: #cbd5e1 !important;
-    transform: translateY(-1px) !important;
-}
-
-.facebook-direct-btn {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 10px !important;
-    background: #1877f2 !important;
-    color: #ffffff !important;
-    border: 0 !important;
-    border-radius: 12px !important;
-    padding: 11px 18px !important;
-    font-weight: 900 !important;
-    font-size: 14px !important;
-    box-shadow: 0 4px 12px rgba(24, 119, 242, 0.25) !important;
-    width: 100% !important;
-    text-decoration: none !important;
-    cursor: pointer !important;
-}
-
-/* شريط التنقل السفلي الثابت لشاشات الموبايل */
-@media (max-width: 768px) {
-    .mobile-bottom-dock-container {
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
+    /* استغلال عرض وطول الشاشة 100% بدون هوامش ميتة */
+    .main .block-container {{
+        max-width: 100% !important;
         width: 100% !important;
-        background: rgba(255, 255, 255, 0.98) !important;
+        padding-top: 0.2rem !important;
+        padding-bottom: 2.2rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }}
+
+    @media (max-width: 768px) {{
+        .main .block-container {{
+            padding-left: 0.4rem !important;
+            padding-right: 0.4rem !important;
+            padding-top: 0.15rem !important;
+            padding-bottom: 75px !important;
+        }}
+    }}
+
+    [data-testid="stHeader"] {{
+        background: transparent !important;
+        z-index: 9999 !important;
+    }}
+
+    /* =====================================================
+       زر فتح وإغلاق القائمة الجانبية (Sidebar Drawer Controls)
+       مفعل وظاهر دائماً باللون الأورنج الفاتح
+       ===================================================== */
+    [data-testid="stSidebarCollapsedControl"] {{
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        background: linear-gradient(135deg, #ff8a00, #ea580c) !important;
+        color: #ffffff !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 14px rgba(234, 88, 12, 0.35) !important;
+        top: 10px !important;
+        right: 10px !important;
+        z-index: 999999 !important;
+        padding: 5px !important;
+        transition: transform 0.2s ease !important;
+    }}
+    [data-testid="stSidebarCollapsedControl"]:hover {{
+        transform: scale(1.08) !important;
+    }}
+    [data-testid="stSidebarCollapsedControl"] button, 
+    [data-testid="stSidebarCollapsedControl"] svg {{
+        color: #ffffff !important;
+        fill: #ffffff !important;
+        stroke: #ffffff !important;
+    }}
+
+    [data-testid="stSidebar"] {{
+        display: block !important;
+        background: linear-gradient(180deg, {card_bg} 0%, {light_orange_surf} 50%, {card_bg} 100%) !important;
+        border-left: 2px solid {card_border} !important;
+        box-shadow: -4px 0 24px rgba(234, 88, 12, 0.08) !important;
+        z-index: 999990 !important;
+    }}
+    [data-testid="stSidebar"] hr {{
+        border-color: {card_border} !important;
+        margin: 10px 0 !important;
+    }}
+    [data-testid="stSidebar"] .stButton > button {{
+        background: {card_bg} !important;
+        color: {"#fef3c7" if st.session_state.dark_mode else "#9a3412"} !important;
+        -webkit-text-fill-color: {"#fef3c7" if st.session_state.dark_mode else "#9a3412"} !important;
+        border: 1.5px solid {card_border} !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 8px rgba(234, 88, 12, 0.06) !important;
+        text-align: right !important;
+        justify-content: flex-start !important;
+        min-height: 42px !important;
+        padding: 8px 14px !important;
+        margin: 3px 0 !important;
+        font-size: 13.5px !important;
+        font-weight: 900 !important;
+        transition: all 0.2s ease !important;
+    }}
+    [data-testid="stSidebar"] .stButton > button:hover {{
+        background: linear-gradient(135deg, #ff8a00, #ea580c) !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border-color: #ea580c !important;
+        box-shadow: 0 4px 14px rgba(234, 88, 12, 0.3) !important;
+        transform: translateX(-2px) !important;
+    }}
+
+    /* =====================================================
+       الهيدر الثابت المجمد (Frozen Sticky Header)
+       ===================================================== */
+    .sticky-app-header {{
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 99990 !important;
+        background: {"rgba(27, 22, 18, 0.96)" if st.session_state.dark_mode else "rgba(255, 251, 245, 0.95)"} !important;
         backdrop-filter: blur(20px) !important;
         -webkit-backdrop-filter: blur(20px) !important;
-        border-top: 1.5px solid rgba(99, 102, 241, 0.25) !important;
-        z-index: 999999 !important;
-        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.1) !important;
-        padding: 4px 8px 8px !important;
-    }
-    .mobile-bottom-dock-container div[data-testid="column"] button {
+        border: 1.5px solid {card_border} !important;
+        border-radius: 16px !important;
+        padding: 8px 16px !important;
+        margin-bottom: 8px !important;
+        box-shadow: 0 4px 20px rgba(234, 88, 12, 0.08) !important;
+    }}
+
+    /* =====================================================
+       نظام الأزرار الأورنج الفاتح الموحد (Light Orange Buttons)
+       ===================================================== */
+    .stButton>button {{
+        background: linear-gradient(135deg, #ff8a00 0%, #ea580c 100%) !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border: 0 !important;
+        border-radius: 12px !important;
+        min-height: 42px !important;
+        font-weight: 850 !important;
+        font-size: 14px !important;
+        box-shadow: 0 4px 14px rgba(234, 88, 12, 0.28) !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }}
+    .stButton>button:hover {{
+        background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
+        transform: translateY(-1.5px) !important;
+        box-shadow: 0 8px 22px rgba(234, 88, 12, 0.38) !important;
+    }}
+
+    .stFormSubmitButton>button {{
+        background: linear-gradient(135deg, #ff8a00 0%, #ea580c 100%) !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border: 0 !important;
+        border-radius: 12px !important;
+        min-height: 42px !important;
+        font-weight: 900 !important;
+        box-shadow: 0 4px 14px rgba(234, 88, 12, 0.28) !important;
+    }}
+    .stFormSubmitButton>button:hover {{
+        background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
+    }}
+
+    .stLinkButton>a {{
+        background: linear-gradient(135deg, #ff8a00 0%, #ea580c 100%) !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border-radius: 12px !important;
+        border: 0 !important;
         min-height: 40px !important;
-        font-size: 11px !important;
-        padding: 3px 4px !important;
-        border-radius: 10px !important;
-        white-space: pre !important;
-        line-height: 1.25 !important;
-    }
-}
-@media (min-width: 769px) {
-    .mobile-bottom-dock-container {
-        display: none !important;
-    }
-}
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-weight: 850 !important;
+        box-shadow: 0 4px 14px rgba(234, 88, 12, 0.28) !important;
+    }}
+    .stLinkButton>a:hover {{
+        background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
+    }}
 
-.social-top-container { display: flex; gap: 10px; align-items: center; margin-top: 8px; justify-content: center; }
-.social-btn-top { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; text-decoration: none !important; box-shadow: 0 3px 8px rgba(0,0,0,0.2); transition: transform 0.2s ease; }
-.social-btn-top:hover { transform: scale(1.1); }
-.social-btn-top svg { width: 18px; height: 18px; fill: #ffffff; }
+    /* حقول الإدخال والقوائم */
+    input, textarea, div[data-baseweb="select"]>div {{
+        border: 1.5px solid {card_border} !important;
+        border-radius: 12px !important;
+        background: {card_bg} !important;
+        min-height: 42px !important;
+        font-weight: 800 !important;
+        color: {text_color} !important;
+    }}
+    input:focus, textarea:focus, div[data-baseweb="select"]>div:focus-within {{
+        border-color: #ff8a00 !important;
+        box-shadow: 0 0 0 3px rgba(255, 138, 0, 0.2) !important;
+    }}
 
-.facebook-bg { background-color: #1877F2; }
-.whatsapp-bg { background-color: #25D366; }
-.telegram-bg { background-color: #229ED9; }
-.tiktok-bg   { background-color: #000000; border: 1px solid #444; }
-.youtube-bg  { background-color: #FF0000; }
+    /* كونسول البطاقات المدمج بالهوية الأورنج */
+    .console-ribbon {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        background: {card_bg};
+        border: 1.5px solid {card_border};
+        border-radius: 14px;
+        padding: 8px 14px;
+        margin-bottom: 10px;
+        direction: rtl;
+        box-shadow: 0 4px 16px rgba(234, 88, 12, 0.04);
+        overflow-x: auto;
+    }}
 
-.call-btn-container { display: flex; justify-content: center; margin-top: 14px; margin-bottom: 8px; width: 100%; }
-.call-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff !important; padding: 10px 22px; border-radius: 50px; font-size: 15px; font-weight: 900; text-decoration: none !important; border: 2px solid #ffffff; box-shadow: 0 4px 16px rgba(5, 150, 105, 0.25); }
-.social-footer-box { margin-top: 16px; padding: 12px 0; border-top: 1px solid rgba(150, 150, 150, 0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
-.rights-text { font-size: 13px; font-weight: 900; margin-top: 8px; text-align: center; color: #64748b; }
-</style>
+    .console-kpi-badge {{
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 900;
+        white-space: nowrap;
+    }}
+
+    .badge-purple {{ background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }}
+    .badge-green  {{ background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }}
+    .badge-blue   {{ background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }}
+    .badge-amber  {{ background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }}
+    .badge-cyan   {{ background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }}
+
+    .console-card {{
+        background: {card_bg};
+        border: 1.5px solid {card_border};
+        border-radius: 16px;
+        padding: 14px 16px;
+        box-shadow: 0 4px 16px rgba(234, 88, 12, 0.04);
+        direction: rtl;
+        margin-bottom: 10px;
+    }}
+
+    /* بطاقة اسأل حمصا البطل المتوهج */
+    .hamza-hero-gradient {{
+        background: linear-gradient(135deg, #ff8a00 0%, #ea580c 50%, #c2410c 100%) !important;
+        border-radius: 18px !important;
+        padding: 16px 20px !important;
+        color: #ffffff !important;
+        direction: rtl !important;
+        box-shadow: 0 10px 28px rgba(234, 88, 12, 0.3) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
+        margin-bottom: 12px !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }}
+    .hamza-hero-gradient h2, .hamza-hero-gradient h3, .hamza-hero-gradient p, .hamza-hero-gradient span {{
+        color: #ffffff !important;
+    }}
+
+    /* بطاقة الحصة المباشرة وزوم التفاعلية */
+    .live-zoom-pulse-card {{
+        background: {"#29211a" if st.session_state.dark_mode else "linear-gradient(135deg, #ffffff 0%, #fff7ed 100%)"} !important;
+        border: 1.5px solid #fed7aa !important;
+        border-radius: 16px !important;
+        padding: 14px 16px !important;
+        box-shadow: 0 6px 20px rgba(234, 88, 12, 0.08) !important;
+        margin-bottom: 12px !important;
+        direction: rtl !important;
+    }}
+
+    /* بطاقات المقررات والخدمات */
+    .modern-course-card, .course-card, .subscription-card, .about-panel {{
+        background: {card_bg} !important;
+        border: 1.5px solid {card_border} !important;
+        border-radius: 16px !important;
+        padding: 16px !important;
+        box-shadow: 0 4px 16px rgba(234, 88, 12, 0.04) !important;
+        direction: rtl;
+    }}
+    .modern-course-card:hover, .course-card:hover, .subscription-card:hover {{
+        border-color: #ff8a00 !important;
+        box-shadow: 0 8px 24px rgba(234, 88, 12, 0.15) !important;
+    }}
+
+    /* تبويبات Streamlit بهوية الأورنج */
+    .stTabs [data-baseweb="tab-list"] {{
+        background: {light_orange_surf} !important;
+        border-radius: 12px !important;
+        padding: 4px !important;
+        border: 1px solid {card_border} !important;
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        color: {"#fef3c7" if st.session_state.dark_mode else "#9a3412"} !important;
+        font-weight: 900 !important;
+        border-radius: 8px !important;
+        padding: 8px 16px !important;
+    }}
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {{
+        background: linear-gradient(135deg, #ff8a00, #ea580c) !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(234, 88, 12, 0.25) !important;
+    }}
+
+    /* أزرار الدخول السريع المباشرة لـ Google و Facebook */
+    .google-direct-btn {{
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 10px !important;
+        background: #ffffff !important;
+        color: #1f2937 !important;
+        border: 2px solid #fed7aa !important;
+        border-radius: 12px !important;
+        padding: 11px 18px !important;
+        font-weight: 900 !important;
+        font-size: 14px !important;
+        box-shadow: 0 4px 12px rgba(234, 88, 12, 0.08) !important;
+        width: 100% !important;
+        text-decoration: none !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+    }}
+    .google-direct-btn:hover {{
+        background: #fff7ed !important;
+        border-color: #ff8a00 !important;
+        transform: translateY(-1px) !important;
+    }}
+
+    .facebook-direct-btn {{
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 10px !important;
+        background: #1877f2 !important;
+        color: #ffffff !important;
+        border: 0 !important;
+        border-radius: 12px !important;
+        padding: 11px 18px !important;
+        font-weight: 900 !important;
+        font-size: 14px !important;
+        box-shadow: 0 4px 12px rgba(24, 119, 242, 0.25) !important;
+        width: 100% !important;
+        text-decoration: none !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+    }}
+    .facebook-direct-btn:hover {{
+        transform: translateY(-1px) !important;
+        opacity: 0.95 !important;
+    }}
+
+    /* شريط التنقل السفلي الثابت لشاشات الموبايل (Frozen Mobile Dock) */
+    @media (max-width: 768px) {{
+        .mobile-bottom-dock-container {{
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            background: {"rgba(27, 22, 18, 0.98)" if st.session_state.dark_mode else "rgba(255, 251, 245, 0.98)"} !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border-top: 1.5px solid {card_border} !important;
+            z-index: 999999 !important;
+            box-shadow: 0 -8px 24px rgba(234, 88, 12, 0.12) !important;
+            padding: 4px 8px 8px !important;
+        }}
+        .mobile-bottom-dock-container div[data-testid="column"] button {{
+            min-height: 40px !important;
+            font-size: 11px !important;
+            padding: 3px 4px !important;
+            border-radius: 10px !important;
+            white-space: pre !important;
+            line-height: 1.25 !important;
+        }}
+    }}
+    @media (min-width: 769px) {{
+        .mobile-bottom-dock-container {{
+            display: none !important;
+        }}
+    }}
+
+    .social-top-container {{ display: flex; gap: 10px; align-items: center; margin-top: 8px; justify-content: center; }}
+    .social-btn-top {{ display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; text-decoration: none !important; box-shadow: 0 3px 8px rgba(0,0,0,0.15); transition: transform 0.2s ease; }}
+    .social-btn-top:hover {{ transform: scale(1.1); }}
+    .social-btn-top svg {{ width: 18px; height: 18px; fill: #ffffff; }}
+
+    .facebook-bg {{ background-color: #1877F2; }}
+    .whatsapp-bg {{ background-color: #25D366; }}
+    .telegram-bg {{ background-color: #229ED9; }}
+    .tiktok-bg   {{ background-color: #000000; border: 1px solid #444; }}
+    .youtube-bg  {{ background-color: #FF0000; }}
+
+    .call-btn-container {{ display: flex; justify-content: center; margin-top: 14px; margin-bottom: 8px; width: 100%; }}
+    .call-btn {{ display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(135deg, #ff8a00, #ea580c); color: #ffffff !important; padding: 10px 22px; border-radius: 50px; font-size: 15px; font-weight: 900; text-decoration: none !important; border: 2px solid #ffffff; box-shadow: 0 4px 16px rgba(234, 88, 12, 0.25); }}
+    .social-footer-box {{ margin-top: 16px; padding: 12px 0; border-top: 1px solid {card_border}; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }}
+    .rights-text {{ font-size: 13px; font-weight: 900; margin-top: 8px; text-align: center; color: {"#cbd5e1" if st.session_state.dark_mode else "#78350f"}; }}
+    </style>
 """, unsafe_allow_html=True)
 
-if st.session_state.dark_mode:
-    _theme_css = """
-    .stApp, html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { background:#090d16 !important; color:#f1f5f9 !important; }
-    .main .block-container { background:transparent !important; }
-    .modern-topbar, .about-panel, .quick-card, .modern-course-card, .course-card, .subscription-card, [data-testid="stMetric"], .student-service-card, .independent-page-header, .sticky-app-header, .console-card, .console-ribbon { background:#111827 !important; border-color:rgba(99, 102, 241, 0.3) !important; color:#f1f5f9 !important; box-shadow:0 8px 25px rgba(0,0,0,.4) !important; }
-    .modern-topbar *, .about-panel *, .quick-card *, .modern-course-card *, .course-card *, .subscription-card *, [data-testid="stMetric"] *, .student-service-card *, .independent-page-header *, .sticky-app-header *, .console-card *, .console-ribbon * { color:#f1f5f9 !important; }
-    .modern-stat { background:#111827 !important; border-color:rgba(99, 102, 241, 0.3) !important; }
-    .modern-stat .num, .modern-stat .label, .student-service-card-title, .independent-page-title { color:#f8fafc !important; }
-    .stat-green { background:#06261c !important; } .stat-blue { background:#0c1e3d !important; } .stat-purple { background:#1c1438 !important; } .stat-yellow { background:#2c2007 !important; }
-    .live-zoom-pulse-card { background:#092218 !important; border-color:#059669 !important; }
-    .mobile-bottom-dock-container { background:rgba(17, 24, 39, 0.98) !important; border-top-color:rgba(99, 102, 241, 0.35) !important; }
-    .google-direct-btn { background:#1f2937 !important; color:#f8fafc !important; border-color:#374151 !important; }
-    input, textarea, div[data-baseweb="select"] > div, div[data-baseweb="input"] > div { background:#111827 !important; color:#f8fafc !important; border-color:#374151 !important; -webkit-text-fill-color:#f8fafc !important; }
-    input::placeholder, textarea::placeholder { color:#94a3b8 !important; }
-    label, .stMarkdown, .stText, p, span { color:#e5e7eb !important; }
-    [data-testid="stMetricValue"] { color:#818cf8 !important; } [data-testid="stMetricLabel"] { color:#cbd5e1 !important; }
-    div[data-baseweb="popover"], div[role="dialog"], div[data-baseweb="calendar"] { background:#111827 !important; color:#f8fafc !important; border-color:#374151 !important; }
-    div[data-baseweb="popover"] *, div[role="dialog"] *, div[data-baseweb="calendar"] * { color:#f8fafc !important; }
-    .stTabs [data-baseweb="tab-list"] { background:#0b0f19 !important; } .stTabs [data-baseweb="tab"] { color:#cbd5e1 !important; }
-    .stDataFrame, [data-testid="stDataFrame"] { background:#111827 !important; }
-    .stExpander { background:#111827 !important; border-color:#374151 !important; }
-    .rights-text { color:#94a3b8 !important; }
-    """
-else:
-    _theme_css = ""
-st.markdown(f"<style>{_theme_css}</style>", unsafe_allow_html=True)
+# ==============================================================================
+# القائمة الجانبية الرئيسية الموحدة (Main Sidebar Drawer)
+# تفتح من الجنب وتتيح التنقل الكامل واختيار أي قسم أو ميزة في المنصة
+# ==============================================================================
+def render_main_sidebar():
+    with st.sidebar:
+        st.markdown(f"""
+        <div style="text-align:center; padding:10px 0 14px; border-bottom:1.5px solid {card_border}; margin-bottom:12px;">
+            <img src="{STUDENT_FIXED_IMAGE_URI}" style="width:70px; height:70px; border-radius:50%; object-fit:cover; border:3px solid #ff8a00; box-shadow:0 6px 18px rgba(234, 88, 12, 0.25); margin-bottom:8px;">
+            <div style="font-size:16.5px; font-weight:950; color:#ea580c; line-height:1.2;">م/ محمد غنيم</div>
+            <div style="font-size:11.5px; font-weight:800; color:{text_color}; opacity:0.85;">البشمهندس x الرياضه 2026</div>
+            <div style="margin-top:6px; display:inline-block; background:{light_orange_surf}; color:#c2410c; border:1px solid {card_border}; border-radius:999px; padding:2px 10px; font-size:11px; font-weight:900;">
+                {"🎓 واجهة الطالب" if is_student_mode else ("🏫 منصة الأكاديميات" if is_academy_mode else "👨‍🏫 لوحة المعلم")}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<div style='font-size:12px; font-weight:900; color:#ea580c; margin-bottom:5px;'>⚡ تبديل المنصة السريع:</div>", unsafe_allow_html=True)
+        r_c1, r_c2 = st.columns(2)
+        with r_c1:
+            if st.button("🎓 الطالب", key="sb_role_student", use_container_width=True, type="primary" if is_student_mode else "secondary"):
+                st.query_params["role"] = "student"
+                st.session_state.page_view = "home"
+                st.rerun()
+        with r_c2:
+            if st.button("👨‍🏫 المعلم", key="sb_role_teacher", use_container_width=True, type="primary" if not is_student_mode and not is_academy_mode else "secondary"):
+                st.query_params.clear()
+                st.session_state.teacher_page = "dashboard"
+                st.rerun()
+
+        st.write("---")
+
+        if is_student_mode:
+            st.markdown("<div style='font-size:13px; font-weight:900; color:#ea580c; margin-bottom:8px;'>📌 القائمة الرئيسية:</div>", unsafe_allow_html=True)
+            if st.session_state.logged_student:
+                st_items = [
+                    ("⌂ لوحة الطالب", "dashboard"),
+                    ("🤖 اسأل حمصا الذكي", "hamza"),
+                    ("▣ المقررات والشروحات", "videos"),
+                    ("▤ درجات الواجبات", "hw_grades"),
+                    ("◫ جدول الحصص وZoom", "attendance"),
+                    ("▥ نتائج الاختبارات", "exam_grades"),
+                ]
+                for lbl, tgt in st_items:
+                    act = (st.session_state.student_sub_page == tgt)
+                    if st.button(lbl, key=f"sb_st_{tgt}", use_container_width=True, type="primary" if act else "secondary"):
+                        st.session_state.student_sub_page = tgt
+                        st.rerun()
+                if st.button("↪ تسجيل الخروج", key="sb_st_logout", use_container_width=True):
+                    st.session_state.logged_student = None
+                    st.session_state.page_view = "home"
+                    st.query_params.clear()
+                    st.query_params["role"] = "student"
+                    st.rerun()
+            else:
+                pub_items = [
+                    ("🏠 الرئيسية (منورين المنصة)", "home"),
+                    ("🤖 اسأل حمصا (مجاني فوراً)", "hamza_public"),
+                    ("🔑 تسجيل الدخول", "login"),
+                    ("✨ حساب جديد", "register"),
+                    ("🏫 دخول الأكاديمية", "academy_login"),
+                    ("👥 الدخول كضيف", "guest_reg"),
+                ]
+                for lbl, tgt in pub_items:
+                    act = (st.session_state.page_view == tgt)
+                    if st.button(lbl, key=f"sb_pub_{tgt}", use_container_width=True, type="primary" if act else "secondary"):
+                        st.session_state.page_view = tgt
+                        st.rerun()
+        else:
+            st.markdown("<div style='font-size:13px; font-weight:900; color:#ea580c; margin-bottom:8px;'>👨‍🏫 أقسام لوحة المعلم:</div>", unsafe_allow_html=True)
+            tc_items = [
+                ("📊 كونسول التحكم الرئيسي", "dashboard"),
+                ("♙ إدارة الطلاب المسجلين", "students"),
+                ("◫ جداول وحصص Zoom", "online_schedule"),
+                ("▦ المواعيد الأسبوعية", "weekly_schedule"),
+                ("▣ منشئ ومصحح الامتحانات", "exam_maker"),
+                ("🤖 استوديو حمصا AI", "ai_studio"),
+                ("▤ بنك الأسئلة والمراجعات", "question_bank"),
+                ("▰ المدفوعات والاشتراكات", "payments"),
+                ("🏫 إدارة الأكاديميات", "academies"),
+                ("📢 إدارة الإعلانات", "ads"),
+                ("💾 النسخ الاحتياطي", "online_backup"),
+            ]
+            for lbl, tgt in tc_items:
+                act = (st.session_state.teacher_page == tgt)
+                if st.button(lbl, key=f"sb_tc_{tgt}", use_container_width=True, type="primary" if act else "secondary"):
+                    st.session_state.teacher_page = tgt
+                    st.rerun()
+
+        st.write("---")
+        st.markdown("<div style='font-size:12px; font-weight:900; color:#ea580c; margin-bottom:6px;'>⚙️ إعدادات المظهر:</div>", unsafe_allow_html=True)
+        th_lbl = "☀️ الوضع الفاتح" if st.session_state.dark_mode else "🌙 الوضع الليلي"
+        if st.button(th_lbl, key="sb_theme_toggle_btn", use_container_width=True):
+            st.session_state.dark_mode = not st.session_state.dark_mode
+            st.rerun()
+
+        # التواصل المباشر
+        st.markdown(f"""
+        <div style="text-align:center; margin-top:12px; padding-top:10px; border-top:1.5px dashed {card_border};">
+            <div style="font-size:11px; font-weight:800; color:#9a3412; margin-bottom:8px;">تواصل مباشر:</div>
+            <div class="social-top-container" style="justify-content:center; gap:8px;">
+                <a href="https://wa.me/201016361440" target="_blank" class="social-btn-top whatsapp-bg" title="WhatsApp"><svg viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.599 2.669-.699c.971.53 1.77.822 2.791.823h.002c3.18 0 5.767-2.586 5.768-5.766 0-3.18-2.587-5.766-5.77-5.766zm9.969 5.828c0 5.519-4.481 10-10 10-1.761 0-3.424-.46-4.881-1.267l-5.619 1.474 1.499-5.485c-.911-1.516-1.43-3.285-1.43-5.176 0-5.519 4.481-10 10-10 5.519 0 10 4.481 10 10z"/></svg></a>
+                <a href="https://www.facebook.com/share/19fD41rV3H/" target="_blank" class="social-btn-top facebook-bg" title="Facebook"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+                <a href="https://t.me/mrmaths22" target="_blank" class="social-btn-top telegram-bg" title="Telegram"><svg viewBox="0 0 24 24"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.121l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.832.942z"/></svg></a>
+                <a href="https://youtube.com/@engineermaths?si=8C6T808VuAU5OMOt" target="_blank" class="social-btn-top youtube-bg" title="YouTube"><svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.016 3.016 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+            </div>
+            <div style="font-size:10px; color:#9a3412; opacity:0.75; margin-top:6px;">البشمهندس x الرياضه © 2026</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+render_main_sidebar()
 
 # ============================================================================== 
 # 1. واجهة الطالب الشاملة
 # ==============================================================================
 if is_student_mode:
-    # ===== شريط الطالب العلوي =====
-    _nav_open = st.session_state.student_sidebar_open
-    _toggle_col, _brand_col, _pills_col = st.columns([1.0, 2.2, 8.8], vertical_alignment="center")
-    with _toggle_col:
-        if st.button(("✕" if _nav_open else "☰"), key="student_sidebar_toggle", use_container_width=True, help="إظهار أو إخفاء شريط التنقل"):
-            st.session_state.student_sidebar_open = not st.session_state.student_sidebar_open
-            st.rerun()
-    with _brand_col:
-        st.markdown("<div class='top-navigation-title'>البشمهندس x الرياضه</div><div class='top-navigation-subtitle'>م/ محمد غنيم</div>", unsafe_allow_html=True)
-    with _pills_col:
-        if _nav_open:
-            if st.session_state.logged_student:
-                _student_nav = [("⌂ الرئيسية","dashboard"), ("🤖 اسأل حمصا","hamza"), ("▣ المقررات","videos"), ("▤ الواجبات","hw_grades"), ("◫ الجدول","attendance"), ("▥ النتائج","exam_grades"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__"), ("↪ خروج","__logout__")]
-                _student_current = st.session_state.student_sub_page
-            else:
-                _student_nav = [("⌂ الرئيسية","__home__"), ("🤖 اسأل حمصا","__hamza_public__"), ("👤 دخول","__login__"), ("🏫 الأكاديمية","__academy_login__"), ("✨ حساب جديد","__register__"), ("👥 ضيف","__guest__"), (("☀ فاتح" if st.session_state.dark_mode else "🌙 داكن"),"__theme__")]
-                _student_current = st.session_state.page_view
-
-            # أزرار حقيقية بدل st.pills لضمان استجابة النقر على جميع إصدارات Streamlit Cloud.
-            _nav_cols = st.columns(len(_student_nav), gap="small")
-            for _ni, (_label, _target) in enumerate(_student_nav):
-                with _nav_cols[_ni]:
-                    _is_current = (_target == _student_current)
-                    if st.button(_label, key=f"student_top_nav_btn_{_ni}", use_container_width=True, type="primary" if _is_current else "secondary"):
-                        if _target == "__theme__":
-                            st.session_state.dark_mode = not st.session_state.dark_mode
-                        elif _target == "__logout__":
-                            st.session_state.logged_student=None; st.session_state.page_view="home"; st.session_state.student_sub_page="dashboard"; st.query_params.clear(); st.query_params["role"]="student"
-                        elif _target == "__home__": st.session_state.page_view="home"
-                        elif _target == "__hamza_public__": st.session_state.page_view="hamza_public"
-                        elif _target == "__login__": st.session_state.page_view="login"
-                        elif _target == "__academy_login__": st.session_state.page_view="academy_login"
-                        elif _target == "__register__": st.session_state.page_view="register"
-                        elif _target == "__guest__": st.session_state.page_view="guest_reg"
-                        elif st.session_state.logged_student:
-                            st.session_state.student_sub_page=_target
-                        st.rerun()
-        else:
-            st.markdown('<div class="top-navigation-collapsed"><span class="top-navigation-subtitle">شريط التنقل مخفي — اضغط ☰ لإظهاره</span></div>', unsafe_allow_html=True)
-
-    # صورة/أفاتار الشريط العلوي للطالب
-    _nav_uri = STUDENT_FIXED_IMAGE_URI
-    _nav_avatar_tag = f'<img src="{_nav_uri}" class="modern-avatar">' if _nav_uri else ''
-
+    # الهيدر العلوي المجمد الثابت (Frozen Sticky Header)
     _student_name_for_header = str(st.session_state.logged_student.get("اسم الطالب", "طالبنا العزيز")) if st.session_state.logged_student else "طالبنا العزيز"
     _student_notifs = _app_notifications("student", _student_name_for_header if st.session_state.logged_student else "")
     _student_notif_count = len(_student_notifs)
-    _top_a, _top_b = st.columns([10, 1])
-    with _top_a:
-        st.markdown(f"""
-            <div class="modern-topbar">
-                <div class="modern-brand">
-                    {_nav_avatar_tag}
-                    <div><div style="font-size:12px;color:#64748b!important;font-weight:800;">البشمهندس x الرياضه</div><div style="font-size:19px;color:#0f172a!important;font-weight:900;">مرحباً، {_student_name_for_header}</div></div>
+
+    st.markdown(f"""
+    <div class="sticky-app-header">
+        <div style="display:flex; align-items:center; justify-content:space-between; direction:rtl; flex-wrap:wrap; gap:8px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+                <img src="{STUDENT_FIXED_IMAGE_URI}" style="width:46px; height:46px; border-radius:50%; object-fit:cover; border:2.5px solid #ff8a00; box-shadow:0 4px 12px rgba(234,88,12,0.25);">
+                <div>
+                    <div style="font-size:16px; font-weight:950; color:#ea580c; line-height:1.2;">
+                        البشمهندس x الرياضه <span style="font-size:11px; font-weight:800; background:{light_orange_surf}; color:#c2410c; padding:2px 8px; border-radius:8px; border:1px solid {card_border};">م/ محمد غنيم</span>
+                    </div>
+                    <div style="font-size:12px; color:{text_color}; opacity:0.85; font-weight:700;">
+                        مرحباً، {_student_name_for_header} 👋
+                    </div>
                 </div>
             </div>
-        """, unsafe_allow_html=True)
-    with _top_b:
-        if st.button(f"🔔 {_student_notif_count}", key="student_notifications_btn", use_container_width=True, help="عرض الإشعارات"):
+            <div style="display:flex; align-items:center; gap:8px;">
+                <div style="font-size:11px; font-weight:800; color:#c2410c; background:{light_orange_surf}; border:1px solid {card_border}; padding:4px 10px; border-radius:10px;">
+                    📅 {date.today().strftime('%Y-%m-%d')}
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # شريط الأزرار والتنقل السريع أسفل الهيدر
+    _nav_cols = st.columns([1.5, 7.5, 1.5, 1.5], vertical_alignment="center")
+    with _nav_cols[0]:
+        if st.button("☰ القائمة الجانبية", key="st_sidebar_hint_btn", use_container_width=True, help="فتح القائمة الجانبية الكاملة"):
+            st.session_state.student_sidebar_open = not st.session_state.student_sidebar_open
+    with _nav_cols[1]:
+        if st.session_state.logged_student:
+            _s_pills = [("⌂ الرئيسية", "dashboard"), ("🤖 حمصا", "hamza"), ("▣ المقررات", "videos"), ("▤ الواجبات", "hw_grades"), ("◫ الجدول", "attendance"), ("▥ النتائج", "exam_grades")]
+            _sp_cols = st.columns(len(_s_pills))
+            for _idx, (_l, _t) in enumerate(_s_pills):
+                with _sp_cols[_idx]:
+                    if st.button(_l, key=f"st_pill_nav_{_idx}", use_container_width=True, type="primary" if st.session_state.student_sub_page == _t else "secondary"):
+                        st.session_state.student_sub_page = _t
+                        st.rerun()
+        else:
+            _p_pills = [("⌂ الرئيسية", "home"), ("🤖 حمصا", "hamza_public"), ("🔑 دخول", "login"), ("✨ حساب جديد", "register"), ("🏫 الأكاديمية", "academy_login"), ("👥 ضيف", "guest_reg")]
+            _pp_cols = st.columns(len(_p_pills))
+            for _idx, (_l, _t) in enumerate(_p_pills):
+                with _pp_cols[_idx]:
+                    if st.button(_l, key=f"pub_pill_nav_{_idx}", use_container_width=True, type="primary" if st.session_state.page_view == _t else "secondary"):
+                        st.session_state.page_view = _t
+                        st.rerun()
+    with _nav_cols[2]:
+        _st_mode_lbl = "☀️ فاتح" if st.session_state.dark_mode else "🌙 ليلي"
+        if st.button(_st_mode_lbl, key="st_theme_toggle_pill", use_container_width=True):
+            st.session_state.dark_mode = not st.session_state.dark_mode
+            st.rerun()
+    with _nav_cols[3]:
+        if st.button(f"🔔 {_student_notif_count}", key="st_notif_pill", use_container_width=True):
             st.session_state.student_notifications_open = not st.session_state.student_notifications_open
             st.rerun()
+
     if st.session_state.student_notifications_open:
         _render_notification_box("student", _student_name_for_header if st.session_state.logged_student else "")
 
@@ -3374,113 +3357,219 @@ if is_student_mode:
             ui_booking_title = str(si.get("عنوان_الحجز", "📅 احجز حصتك أونلاين مع م/ محمد غنيم"))
             ui_booking_text = str(si.get("نص_الحجز", "احجز موعدك وتابع حصصك ومواعيد Zoom من داخل المنصة."))
 
-            # الصفحة الرئيسية الجديدة: Hero + صورة المعلم + بطاقة الدخول/التسجيل بنفس التصميم المرجعي
-            st.markdown(f"""
-            <div class="landing-wrap">
-              <div class="landing-hero">
-                <div class="landing-copy">
-                  <div class="brand-pill">{ui_badge}</div>
-                  <h1>منصة <span>البشمهندس x الرياضه</span></h1>
-                  <div class="landing-welcome-row">
-                    <img class="landing-welcome-photo" src="{STUDENT_FIXED_IMAGE_URI}" alt="م/ محمد غنيم">
-                    <h2>{ui_title}</h2>
-                  </div>
-                  <h3 style="margin:8px 0 4px;">{html.escape(str(si.get("عنوان_البطل", "رحلتك نحو التفوق في الرياضيات تبدأ من هنا")))}</h3>
-                  <p>{html.escape(str(si.get("وصف_البطل", "شرح مبسط، تدريب مستمر، اختبارات ومتابعة تساعدك توصل لهدفك.")))}</p>
-                  <div class="landing-features">
-                    <div class="landing-feature"><div class="i">▶</div><div>{html.escape(str(si.get("ميزة_1", "شرح مبسط وتفاعلي")))}</div></div>
-                    <div class="landing-feature"><div class="i">▣</div><div>{html.escape(str(si.get("ميزة_2", "اختبارات وتقييم مستمر")))}</div></div>
-                    <div class="landing-feature"><div class="i">↗</div><div>{html.escape(str(si.get("ميزة_3", "متابعة مستوى الطالب")))}</div></div>
-                    <div class="landing-feature"><div class="i">◉</div><div>{html.escape(str(si.get("ميزة_4", "دعم فني ومساعدة")))}</div></div>
-                  </div>
+            # الواجهة الأساسية الشاملة فائقة الاحترافية (Panoramic Full-Width Zero-Scroll Console)
+            # مقسمة أفقياً كونسول ذكي بعرض الشاشة وشاشة واحدة دون حاجة للتمرير الطويل
+            col_land_hero, col_land_tabs = st.columns([5.2, 6.8], gap="medium")
+
+            with col_land_hero:
+                # 1. كارت الترحيب المتوهج بالهوية الأورنج الفاتحة الفاخرة
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, {card_bg} 0%, {light_orange_surf} 100%); border: 2px solid {card_border}; border-radius: 20px; padding: 18px 20px; box-shadow: 0 8px 30px rgba(234, 88, 12, 0.10); direction: rtl; margin-bottom: 12px; position: relative; overflow: hidden;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <span style="background: linear-gradient(135deg, #ff8a00, #ea580c); color: #ffffff !important; padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 900; box-shadow: 0 3px 10px rgba(234, 88, 12, 0.25);">
+                            🌟 {ui_badge}
+                        </span>
+                        <span style="font-size: 11px; font-weight: 900; color: #ea580c; background: {card_bg}; padding: 3px 10px; border-radius: 12px; border: 1px solid {card_border};">
+                            ⚡ إصدار 2026 الذكي
+                        </span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 12px;">
+                        <img src="{ui_main_uri or STUDENT_FIXED_IMAGE_URI}" style="width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 3.5px solid #ff8a00; box-shadow: 0 6px 20px rgba(234, 88, 12, 0.25); flex-shrink: 0;">
+                        <div>
+                            <h2 style="margin: 0 0 3px; font-size: 20px; font-weight: 950; color: #ea580c !important; line-height: 1.25;">
+                                {ui_title}
+                            </h2>
+                            <div style="font-size: 13.5px; font-weight: 900; color: {text_color};">
+                                م/ محمد غنيم — البشمهندس في الرياضيات
+                            </div>
+                            <div style="font-size: 11.5px; font-weight: 800; color: {text_color}; opacity: 0.85; margin-top: 3px;">
+                                {ui_desc[:90]}...
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1.5px dashed {card_border};">
+                        <div style="font-size: 11.5px; font-weight: 900; color: #ea580c;">✨ شرح مبسط وتفاعلي</div>
+                        <div style="font-size: 11.5px; font-weight: 900; color: #ea580c;">📝 اختبارات وتقييم مستمر</div>
+                        <div style="font-size: 11.5px; font-weight: 900; color: #ea580c;">💻 حصص Zoom أسبوعية</div>
+                        <div style="font-size: 11.5px; font-weight: 900; color: #ea580c;">📊 تقارير فورية لولي الأمر</div>
+                    </div>
                 </div>
-                <img class="landing-photo" src="{ui_main_uri}" alt="م/ محمد غنيم">
-                <div class="landing-login">
-                  <h2>مرحباً بك في منصة</h2>
-                  <h2>البشمهندس x الرياضه</h2>
-                  <p>اختر ما يناسبك لبدء رحلتك التعليمية</p>
-                  <div class="login-tabs-placeholder"></div>
-                </div>
-              </div>
-            </div>
-            <div class="about-panel">
-              <h3>نبذة عن المنصة</h3>
-              <p>{ui_desc}</p>
-            </div>
-            """, unsafe_allow_html=True)
-            # أزرار الدخول والتسجيل هنا هي عناصر Streamlit حقيقية وقابلة للضغط.
-            # تم حذف النصوص HTML القديمة حتى لا تظهر كأنها أزرار غير فعالة.
-            st.markdown("<div class='landing-auth-title'>اختر ما يناسبك لبدء رحلتك التعليمية</div>", unsafe_allow_html=True)
-            c_home_b1,c_home_b2,c_home_b3,c_home_b4=st.columns(4)
-            with c_home_b1:
-                if st.button("تسجيل الدخول", key="landing_login_btn", use_container_width=True, type="primary"):
-                    st.session_state.page_view="login"
-                    st.rerun()
-            with c_home_b2:
-                if st.button("إنشاء حساب جديد", key="landing_register_btn", use_container_width=True):
-                    st.session_state.page_view="register"
-                    st.rerun()
-            with c_home_b3:
-                if st.button("🏫 دخول الأكاديمية", key="landing_academy_btn", use_container_width=True):
-                    st.session_state.page_view="academy_login"
-                    st.rerun()
-            with c_home_b4:
-                if st.button("👥 الدخول كضيف", key="landing_guest_btn", use_container_width=True):
-                    st.session_state.page_view="guest_reg"
-                    st.rerun()
-            st.markdown("""
-            <div style="background:linear-gradient(135deg,#062b63,#1677ff);border-radius:20px;padding:20px 24px;margin:18px 0;color:#fff;direction:rtl;box-shadow:0 12px 30px rgba(6,43,99,.16);">
-                <div style="font-size:28px;font-weight:900;">🤖 اسأل حمصا</div>
-                <div style="font-size:14px;opacity:.92;margin-top:5px;">حل مسألتك بالتصوير 📷 أو بالكتابة ✍️ — بدون تسجيل دخول</div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("🚀 ابدأ مع حمصا الآن", key="public_hamza_landing_btn", use_container_width=True, type="primary"):
-                st.session_state.page_view="hamza_public"
-                st.rerun()
-            render_student_ads()
-            st.markdown("### 📚 ماذا ستجد داخل المنصة؟")
-            cc1,cc2,cc3,cc4=st.columns(4)
-            card_items = [
-                (cc1, "▣", "المقررات والشروحات", "فيديوهات منظمة حسب المرحلة", "btn_landing_vids", "استعراض المقررات 📺"),
-                (cc2, "✦", "الاختبارات التفاعلية", "اختبارات ونتائج وتقييم", "btn_landing_exms", "خوض الاختبارات 📝"),
-                (cc3, "◫", "الجدول والحصص", "Zoom والحصص والمتابعة", "btn_landing_schd", "مواعيد الحصص 📅"),
-                (cc4, "◈", "اشتراكات درسلي", "باقات تعليمية ومتابعة", "btn_landing_drsl", "باقات درسلي 💎")
-            ]
-            for cc, icon, title, desc, b_key, b_lbl in card_items:
-                with cc:
-                    st.markdown(f"<div class='modern-course-card'><div class='course-icon'>{icon}</div><h4>{title}</h4><p>{desc}</p></div>", unsafe_allow_html=True)
-                    if st.button(b_lbl, key=b_key, use_container_width=True):
+                """, unsafe_allow_html=True)
+
+                # 2. أزرار الدخول السريع في شبكة 2x2
+                st.markdown("<div style='font-size:13px; font-weight:900; color:#ea580c; margin-bottom:6px; direction:rtl;'>🚀 بوابات الدخول السريعة:</div>", unsafe_allow_html=True)
+                b_r1_c1, b_r1_c2 = st.columns(2)
+                with b_r1_c1:
+                    if st.button("🔑 تسجيل الدخول", key="home_split_login_btn", use_container_width=True, type="primary"):
                         st.session_state.page_view = "login"
                         st.rerun()
-            st.write("---")
-            render_darssly_cards("home")
-            st.markdown(f"<div class='vertical-section-header'>{ui_booking_title}</div>", unsafe_allow_html=True)
-            if ui_booking_text.strip(): st.markdown(f"<p style='text-align:center;font-weight:800;line-height:1.8;color:#526984'>{ui_booking_text}</p>", unsafe_allow_html=True)
-            with st.form("online_booking_form", clear_on_submit=True):
-                book_name = st.text_input("اسم الطالب بالكامل:")
-                book_curr = st.selectbox("اختر المنهج الدراسي / الدولة:", list(CURRICULUM_DATA.keys()), key="book_c")
-                book_grade = st.selectbox("المرحلة / الصف الدراسي:", CURRICULUM_DATA[book_curr], key="book_g")
-                book_phone = st.text_input("رقم هاتف الطالب:")
-                book_parent_phone = st.text_input("رقم تليفون ولي الأمر:")
-                if st.form_submit_button("إرسال طلب الحجز"):
-                    if not book_name.strip() or not book_phone.strip(): st.error("يرجى كتابة اسم الطالب ورقم الهاتف على الأقل.")
-                    else:
-                        new_booking={"تاريخ_الحجز":str(date.today()),"اسم الطالب":book_name.strip(),"المنهج_الدولة":book_curr,"المرحلة_الصف":book_grade,"رقم_الهاتف":book_phone.strip(),"رقم_ولي_الأمر":book_parent_phone.strip(),"الحالة":"قيد المتابعة"}
-                        st.session_state.bookings_df=pd.concat([st.session_state.bookings_df,pd.DataFrame([new_booking])],ignore_index=True)
-                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
-                        st.success("✓ تم إرسال طلب الحجز بنجاح!")
+                with b_r1_c2:
+                    if st.button("✨ إنشاء حساب جديد", key="home_split_reg_btn", use_container_width=True):
+                        st.session_state.page_view = "register"
+                        st.rerun()
+
+                b_r2_c1, b_r2_c2 = st.columns(2)
+                with b_r2_c1:
+                    if st.button("🏫 دخول الأكاديمية", key="home_split_acad_btn", use_container_width=True):
+                        st.session_state.page_view = "academy_login"
+                        st.rerun()
+                with b_r2_c2:
+                    if st.button("👥 الدخول كضيف سريع", key="home_split_guest_btn", use_container_width=True):
+                        st.session_state.page_view = "guest_reg"
+                        st.rerun()
+
+                # 3. تسجيل مباشر بـ Google و Facebook بنقرة واحدة بدون كتابة
+                st.markdown("""
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0;">
+                    <a href="https://accounts.google.com/ServiceLogin?service=mail" target="_blank" class="google-direct-btn">
+                        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                        <span>دخول بـ Google</span>
+                    </a>
+                    <a href="https://www.facebook.com/login.php" target="_blank" class="facebook-direct-btn">
+                        <svg width="18" height="18" fill="#ffffff" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                        <span>دخول بـ Facebook</span>
+                    </a>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # 4. بنر اسأل حمصا المباشر
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #ff8a00 0%, #ea580c 100%); border-radius: 16px; padding: 12px 16px; color: #fff; direction: rtl; box-shadow: 0 6px 18px rgba(234, 88, 12, 0.25); margin-top: 8px; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:26px; background:rgba(255,255,255,0.2); border-radius:10px; padding:2px 8px;">🤖</span>
+                        <div>
+                            <div style="font-size:15px; font-weight:950; color:#fff !important;">اسأل حمصا الذكي</div>
+                            <div style="font-size:11px; opacity:0.92; color:#fff !important;">حل فوري بالتصوير 📷 أو بالكتابة ✍️ بدون تسجيل</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("🚀 حل مسألتك الآن مع حمصا", key="home_split_hamza_btn", use_container_width=True):
+                    st.session_state.page_view = "hamza_public"
+                    st.rerun()
+
+            with col_land_tabs:
+                # الكونسول التفاعلي بنظام التبويبات المدمجة بدون سكرول
+                land_tab1, land_tab2, land_tab3, land_tab4 = st.tabs([
+                    "🌟 خدمات المنصة",
+                    "💎 باقات درسلي",
+                    "📅 حجز درس أونلاين",
+                    "📢 إعلانات المنصة"
+                ])
+
+                with land_tab1:
+                    st.markdown(f"<div style='font-size:14px; font-weight:900; color:#ea580c; margin-bottom:8px;'>ماذا ستجد داخل المنصة؟</div>", unsafe_allow_html=True)
+                    s_c1, s_c2 = st.columns(2)
+                    with s_c1:
+                        st.markdown(f"""
+                        <div class="console-card" style="margin-bottom:8px; padding:12px;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span style="font-size:24px;">📺</span>
+                                <div>
+                                    <div style="font-weight:900; color:#ea580c; font-size:14px;">المقررات والشروحات</div>
+                                    <div style="font-size:11px; color:{text_color}; opacity:0.85;">فيديوهات منظمة ومسجلة بجودة عالية</div>
+                                </div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        if st.button("استعراض المقررات 📺", key="tab_btn_vids", use_container_width=True):
+                            st.session_state.page_view = "login"
+                            st.rerun()
+
+                        st.markdown(f"""
+                        <div class="console-card" style="margin-bottom:8px; padding:12px;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span style="font-size:24px;">📅</span>
+                                <div>
+                                    <div style="font-weight:900; color:#ea580c; font-size:14px;">الجدول وحصص Zoom</div>
+                                    <div style="font-size:11px; color:{text_color}; opacity:0.85;">بثوث تفاعلية ومواعيد منتظمة</div>
+                                </div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        if st.button("مواعيد الحصص 📅", key="tab_btn_schd", use_container_width=True):
+                            st.session_state.page_view = "login"
+                            st.rerun()
+
+                    with s_c2:
+                        st.markdown(f"""
+                        <div class="console-card" style="margin-bottom:8px; padding:12px;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span style="font-size:24px;">📝</span>
+                                <div>
+                                    <div style="font-weight:900; color:#ea580c; font-size:14px;">الاختبارات والتقييم</div>
+                                    <div style="font-size:11px; color:{text_color}; opacity:0.85;">اختبارات إلكترونية ومقالية مع تصحيح ذكي</div>
+                                </div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        if st.button("خوض الاختبارات 📝", key="tab_btn_exms", use_container_width=True):
+                            st.session_state.page_view = "login"
+                            st.rerun()
+
+                        st.markdown(f"""
+                        <div class="console-card" style="margin-bottom:8px; padding:12px;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span style="font-size:24px;">🎯</span>
+                                <div>
+                                    <div style="font-weight:900; color:#ea580c; font-size:14px;">بنك الأسئلة والمراجعة</div>
+                                    <div style="font-size:11px; color:{text_color}; opacity:0.85;">تدريبات ونماذج امتحانات ثانوية عامة</div>
+                                </div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        if st.button("بنك الأسئلة 🎯", key="tab_btn_bank", use_container_width=True):
+                            st.session_state.page_view = "login"
+                            st.rerun()
+
+                with land_tab2:
+                    render_darssly_cards("home")
+
+                with land_tab3:
+                    st.markdown(f"<div style='font-size:14.5px; font-weight:900; color:#ea580c; margin-bottom:4px;'>{ui_booking_title}</div>", unsafe_allow_html=True)
+                    if ui_booking_text.strip():
+                        st.markdown(f"<p style='font-size:11.5px; color:{text_color}; margin-bottom:10px;'>{ui_booking_text}</p>", unsafe_allow_html=True)
+                    with st.form("online_booking_form_split", clear_on_submit=True):
+                        bk_col1, bk_col2 = st.columns(2)
+                        with bk_col1:
+                            book_name = st.text_input("اسم الطالب بالكامل:")
+                            book_curr = st.selectbox("المنهج الدراسي / الدولة:", list(CURRICULUM_DATA.keys()), key="book_c_split")
+                            book_grade = st.selectbox("المرحلة / الصف الدراسي:", CURRICULUM_DATA[book_curr], key="book_g_split")
+                        with bk_col2:
+                            book_phone = st.text_input("رقم هاتف الطالب:")
+                            book_parent_phone = st.text_input("رقم هاتف ولي الأمر:")
+                            book_sub = st.form_submit_button("🚀 إرسال طلب الحجز", use_container_width=True)
+                            if book_sub:
+                                if not book_name.strip() or not book_phone.strip():
+                                    st.error("يرجى كتابة اسم الطالب ورقم الهاتف على الأقل.")
+                                else:
+                                    new_booking = {
+                                        "تاريخ_الحجز": str(date.today()),
+                                        "اسم الطالب": book_name.strip(),
+                                        "المنهج_الدولة": book_curr,
+                                        "المرحلة_الصف": book_grade,
+                                        "رقم_الهاتف": book_phone.strip(),
+                                        "رقم_ولي_الأمر": book_parent_phone.strip(),
+                                        "الحالة": "قيد المتابعة"
+                                    }
+                                    st.session_state.bookings_df = pd.concat([st.session_state.bookings_df, pd.DataFrame([new_booking])], ignore_index=True)
+                                    save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                                    st.success("✓ تم إرسال طلب الحجز بنجاح! سنتواصل معك فوراً.")
+
+                with land_tab4:
+                    render_student_ads()
 
         elif st.session_state.page_view == "login":
-            st.markdown("""
+            st.markdown(f"""
             <div class='about-panel' style='max-width:820px;margin:10px auto 20px;text-align:center;'>
                 <div style="font-size:36px;margin-bottom:8px;">🔐</div>
-                <h2 style='color:#062b63;margin:0 0 6px;font-weight:900;'>تسجيل الدخول إلى منصة الطالب</h2>
-                <p style='color:#64748b;font-size:14px;margin:0;'>ادخل إلى حسابك في البشمهندس x الرياضه وتابع دروسك ونتائجك وحصصك.</p>
+                <h2 style='color:#ea580c;margin:0 0 6px;font-weight:900;'>تسجيل الدخول إلى منصة الطالب</h2>
+                <p style='color:{text_color};opacity:0.85;font-size:14px;margin:0;'>ادخل إلى حسابك في البشمهندس x الرياضه وتابع دروسك ونتائجك وحصصك.</p>
             </div>
             """, unsafe_allow_html=True)
             
             with st.container(border=True):
-                st.markdown("<div style='font-size:16px;font-weight:900;color:#1e3a5f;margin-bottom:14px;text-align:center;'>🚀 تسجيل الدخول المباشر لحساب Google أو Facebook دون كتابة</div>", unsafe_allow_html=True)
+                st.markdown("<div style='font-size:16px;font-weight:900;color:#ea580c;margin-bottom:14px;text-align:center;'>🚀 تسجيل الدخول المباشر لحساب Google أو Facebook دون كتابة</div>", unsafe_allow_html=True)
                 
                 # أزرار Google: تحويل مباشر + دخول فوري بنقرة واحدة
                 col_g1, col_g2 = st.columns(2)
@@ -3574,11 +3663,11 @@ if is_student_mode:
                 st.markdown("</div>", unsafe_allow_html=True)
 
         elif st.session_state.page_view == "academy_login":
-            st.markdown("""
+            st.markdown(f"""
             <div class='about-panel' style='max-width:820px;margin:10px auto 20px;text-align:center;'>
                 <div style="font-size:36px;margin-bottom:8px;">🏫</div>
-                <h2 style='color:#062b63;margin:0 0 6px;font-weight:900;'>دخول الأكاديمية والمشرفين</h2>
-                <p style='color:#64748b;font-size:14px;margin:0;'>إدارة حسابات الأكاديمية والطلاب والحضور والمواعيد والحسابات المعتمدة.</p>
+                <h2 style='color:#ea580c;margin:0 0 6px;font-weight:900;'>دخول الأكاديمية والمشرفين</h2>
+                <p style='color:{text_color};opacity:0.85;font-size:14px;margin:0;'>إدارة حسابات الأكاديمية والطلاب والحضور والمواعيد والحسابات المعتمدة.</p>
             </div>
             """, unsafe_allow_html=True)
             
@@ -3587,7 +3676,7 @@ if is_student_mode:
                 ac_role = st.radio("اختر صفة الدخول للأكاديمية:*", ["رئيس الأكاديمية", "مشرف أكاديمية"], horizontal=True, key="academy_role_selection_radio")
                 _role_clean = "رئيس الأكاديمية" if ac_role == "رئيس الأكاديمية" else "مشرف أكاديمي"
                 
-                st.markdown("<div style='font-size:15px;font-weight:900;color:#1e3a5f;margin:14px 0 10px;text-align:center;'>⚡ الدخول المباشر السريع عبر Google أو Facebook</div>", unsafe_allow_html=True)
+                st.markdown("<div style='font-size:15px;font-weight:900;color:#ea580c;margin:14px 0 10px;text-align:center;'>⚡ الدخول المباشر السريع عبر Google أو Facebook</div>", unsafe_allow_html=True)
                 
                 col_ac_s1, col_ac_s2 = st.columns(2)
                 with col_ac_s1:
@@ -3686,7 +3775,84 @@ if is_student_mode:
                             st.query_params["role"] = "academy"
                             st.rerun()
         elif st.session_state.page_view == "register":
-            st.markdown("<div class='about-panel' style='max-width:820px;margin:auto;text-align:center'><h3>✨ إنشاء حساب جديد</h3><p>أنشئ حسابك مجاناً وابدأ رحلتك التعليمية مع البشمهندس x الرياضه.</p></div>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class='about-panel' style='max-width:820px;margin:10px auto 16px;text-align:center;'>
+                <div style="font-size:36px;margin-bottom:8px;">✨</div>
+                <h2 style='color:#ea580c;margin:0 0 6px;font-weight:900;'>إنشاء حساب جديد في منصة الطالب</h2>
+                <p style='color:{text_color};opacity:0.85;font-size:14px;margin:0;'>أنشئ حسابك فوراً أو انضم بنقرة واحدة عبر Google / Facebook</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            with st.container(border=True):
+                st.markdown("<div style='font-size:15px;font-weight:900;color:#ea580c;margin-bottom:12px;text-align:center;'>⚡ التسجيل الفوري المباشر عبر Google أو Facebook دون كتابة</div>", unsafe_allow_html=True)
+                
+                # أزرار Google: تحويل مباشر + دخول فوري بنقرة واحدة
+                col_rg1, col_rg2 = st.columns(2)
+                with col_rg1:
+                    st.link_button("🌐 فتح وتحويل مباشر لحساب Google (Gmail)", "https://accounts.google.com/AccountChooser?service=lso", use_container_width=True)
+                with col_rg2:
+                    if st.button("⚡ تسجيل وحساب فوري بـ Google (ضغطة واحدة دون كتابة)", key="btn_reg_instant_google", use_container_width=True, type="primary"):
+                        default_google_user = "طالب Google المعتمد"
+                        google_id = "google_verified_student"
+                        matched = st.session_state.users_df[
+                            (st.session_state.users_df["رقم الهاتف"].astype(str).str.strip() == google_id) |
+                            (st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == default_google_user)
+                        ]
+                        if not matched.empty:
+                            u_info = matched.iloc[0].to_dict()
+                        else:
+                            u_info = {
+                                "اسم الطالب": default_google_user,
+                                "رقم الهاتف": google_id,
+                                "كلمة المرور": "google_oauth_instant",
+                                "المنهج/الدولة": "المناهج المصرية",
+                                "المجموعة/الصف": "الصف الثالث الثانوي",
+                                "تاريخ التسجيل": str(date.today()),
+                                "الحالة_حظر": "نشط",
+                                "حالة_الاشتراك_البنك": "غير مشترك"
+                            }
+                            st.session_state.users_df = pd.concat([st.session_state.users_df, pd.DataFrame([u_info])], ignore_index=True)
+                            save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.session_state.logged_student = u_info
+                        st.query_params["role"] = "student"
+                        st.query_params["st_phone"] = u_info.get("رقم الهاتف", google_id)
+                        st.success("✓ تم إنشاء حسابك بنجاح وبسرعة عبر Google!")
+                        st.rerun()
+
+                # أزرار Facebook: تحويل مباشر + دخول فوري بنقرة واحدة
+                col_rf1, col_rf2 = st.columns(2)
+                with col_rf1:
+                    st.link_button("📘 فتح وتحويل مباشر لحساب Facebook", "https://www.facebook.com/login", use_container_width=True)
+                with col_rf2:
+                    if st.button("🚀 تسجيل وحساب فوري بـ Facebook (ضغطة واحدة دون كتابة)", key="btn_reg_instant_fb", use_container_width=True):
+                        default_fb_user = "طالب Facebook المعتمد"
+                        fb_id = "fb_verified_student"
+                        matched = st.session_state.users_df[
+                            (st.session_state.users_df["رقم الهاتف"].astype(str).str.strip() == fb_id) |
+                            (st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == default_fb_user)
+                        ]
+                        if not matched.empty:
+                            u_info = matched.iloc[0].to_dict()
+                        else:
+                            u_info = {
+                                "اسم الطالب": default_fb_user,
+                                "رقم الهاتف": fb_id,
+                                "كلمة المرور": "fb_oauth_instant",
+                                "المنهج/الدولة": "المناهج المصرية",
+                                "المجموعة/الصف": "الصف الثالث الثانوي",
+                                "تاريخ التسجيل": str(date.today()),
+                                "الحالة_حظر": "نشط",
+                                "حالة_الاشتراك_البنك": "غير مشترك"
+                            }
+                            st.session_state.users_df = pd.concat([st.session_state.users_df, pd.DataFrame([u_info])], ignore_index=True)
+                            save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.session_state.logged_student = u_info
+                        st.query_params["role"] = "student"
+                        st.query_params["st_phone"] = u_info.get("رقم الهاتف", fb_id)
+                        st.success("✓ تم إنشاء حسابك بنجاح وبسرعة عبر Facebook!")
+                        st.rerun()
+
+                st.markdown("<div style='text-align:center;margin:14px 0 10px;color:#94a3b8;font-weight:900;'>─── أو بإنشاء حساب يدوي ───</div>", unsafe_allow_html=True)
             with st.form("student_register_form"):
                 reg_name=st.text_input("اسمك بالكامل:"); reg_phone=st.text_input("رقم الهاتف المحمول (لتسجيل الدخول به لاحقاً):*")
                 reg_curr=st.selectbox("المنهج الدراسي / الدولة:",list(CURRICULUM_DATA.keys())); reg_grade=st.selectbox("المرحلة / الصف الدراسي:",CURRICULUM_DATA[reg_curr]); reg_pass=st.text_input("اختر رقماً سرياً خاصاً بك:",type="password")
@@ -5501,13 +5667,13 @@ with col_thdr1:
     st.markdown(f"""
     <div class="sticky-app-header" style="margin-bottom:0;">
         <div style="display:flex; align-items:center; gap:14px; direction:rtl;">
-            <img src="{STUDENT_FIXED_IMAGE_URI}" style="width:48px; height:48px; border-radius:50%; object-fit:cover; border:2.5px solid #2563eb; box-shadow:0 4px 14px rgba(37,99,235,0.35); flex-shrink:0;">
+            <img src="{STUDENT_FIXED_IMAGE_URI}" style="width:48px; height:48px; border-radius:50%; object-fit:cover; border:2.5px solid #ff8a00; box-shadow:0 4px 14px rgba(234,88,12,0.35); flex-shrink:0;">
             <div>
                 <div style="font-size:18px; font-weight:950; color:{text_color}; line-height:1.2;">
                     مرحباً بك، م/ محمد غنيم 👋
                 </div>
                 <div style="font-size:12px; color:{text_color}; opacity:0.85; font-weight:700; margin-top:3px; display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
-                    <span style="background:rgba(37,99,235,0.12); color:#2563eb; padding:2px 8px; border-radius:8px; font-weight:800;">لوحة تحكم المعلم</span>
+                    <span style="background:rgba(255,138,0,0.12); color:#ea580c; padding:2px 8px; border-radius:8px; font-weight:800;">لوحة تحكم المعلم</span>
                     <span>•</span>
                     <span>البشمهندس x الرياضه</span>
                     <span>•</span>
@@ -6326,11 +6492,11 @@ elif t_page == "dashboard":
     _t_h1, _t_h2 = st.columns([7, 3], vertical_alignment="center")
     with _t_h1:
         st.markdown(f"""
-        <div style="background:{card_bg}; border:1px solid {card_border}; border-right:5px solid #6366f1; border-radius:16px; padding:10px 16px; display:flex; align-items:center; justify-content:space-between; direction:rtl; margin-bottom:8px; box-shadow:0 4px 15px rgba(0,0,0,0.04);">
+        <div style="background:{card_bg}; border:1px solid {card_border}; border-right:5px solid #ff8a00; border-radius:16px; padding:10px 16px; display:flex; align-items:center; justify-content:space-between; direction:rtl; margin-bottom:8px; box-shadow:0 4px 15px rgba(234,88,12,0.06);">
             <div style="display:flex; align-items:center; gap:12px;">
-                <img src="{profile_uri}" style="width:48px; height:48px; border-radius:50%; object-fit:cover; border:2.5px solid #6366f1; box-shadow:0 4px 10px rgba(99,102,241,0.25);">
+                <img src="{profile_uri}" style="width:48px; height:48px; border-radius:50%; object-fit:cover; border:2.5px solid #ff8a00; box-shadow:0 4px 10px rgba(234,88,12,0.25);">
                 <div>
-                    <div style="font-size:17px; font-weight:950; color:{text_color}; line-height:1.2;">م/ محمد غنيم 👋 <span style="font-size:12px; font-weight:800; background:rgba(99,102,241,0.12); color:#6366f1; padding:2px 8px; border-radius:10px;">⚡ كونسول الإدارة الشامل</span></div>
+                    <div style="font-size:17px; font-weight:950; color:{text_color}; line-height:1.2;">م/ محمد غنيم 👋 <span style="font-size:12px; font-weight:800; background:rgba(255,138,0,0.12); color:#ea580c; padding:2px 8px; border-radius:10px;">⚡ كونسول الإدارة الشامل</span></div>
                     <div style="font-size:12px; color:{text_color}; opacity:0.8; font-weight:700;">البشمهندس في الرياضيات • لوحة التحكم المتطورة</div>
                 </div>
             </div>
