@@ -3197,6 +3197,83 @@ div[data-testid="stPills"] button:hover { transform: translateY(-1px) !important
 .call-btn { display: inline-flex; align-items: center; justify-content: center; gap: 12px; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff !important; padding: 14px 28px; border-radius: 50px; font-size: 18px; font-weight: 900; text-decoration: none !important; border: 2px solid #ffffff; box-shadow: 0 6px 20px rgba(5, 150, 105, 0.3); }
 .social-footer-box { margin-top: 25px; padding: 20px 0; border-top: 1px solid rgba(150, 150, 150, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
 .rights-text { font-size: 15px; font-weight: 900; margin-top: 12px; text-align: center; color: #64748b; }
+
+/* لون بطاقة اسأل حمصا البرتقالي المتوهج (المعتمد للكمبيوتر والموبايل) */
+.hamza-hero-gradient {
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 50%, #c2410c 100%) !important;
+    border-radius: 22px !important;
+    padding: 24px 26px !important;
+    color: #ffffff !important;
+    direction: rtl !important;
+    box-shadow: 0 14px 35px rgba(234, 88, 12, 0.30) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.30) !important;
+    margin-bottom: 18px !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+.hamza-hero-gradient h2, .hamza-hero-gradient h3, .hamza-hero-gradient p, .hamza-hero-gradient span {
+    color: #ffffff !important;
+}
+
+/* هيدر التطبيق الثابت والحديث */
+.sticky-app-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 99990 !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(226, 232, 240, 0.85) !important;
+    border-radius: 18px !important;
+    padding: 10px 18px !important;
+    margin-bottom: 14px !important;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* بطاقة الحصة المباشرة وزوم التفاعلية */
+.live-zoom-pulse-card {
+    background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%) !important;
+    border: 1.5px solid #86efac !important;
+    border-radius: 20px !important;
+    padding: 20px !important;
+    box-shadow: 0 8px 24px rgba(22, 163, 74, 0.09) !important;
+    margin-bottom: 16px !important;
+    direction: rtl !important;
+}
+
+/* شريط التنقل السفلي الثابت لشاشات الموبايل (Native Bottom Dock) */
+@media (max-width: 768px) {
+    .mobile-bottom-dock-container {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        background: rgba(255, 255, 255, 0.97) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        border-top: 1.5px solid rgba(226, 232, 240, 0.95) !important;
+        z-index: 999999 !important;
+        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08) !important;
+        padding: 5px 8px 8px !important;
+    }
+    .mobile-bottom-dock-container div[data-testid="column"] button {
+        min-height: 42px !important;
+        font-size: 11px !important;
+        padding: 4px 5px !important;
+        border-radius: 10px !important;
+        white-space: pre !important;
+        line-height: 1.3 !important;
+    }
+    .main .block-container {
+        padding-bottom: 95px !important;
+    }
+}
+@media (min-width: 769px) {
+    .mobile-bottom-dock-container {
+        display: none !important;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -3204,13 +3281,15 @@ if st.session_state.dark_mode:
     _theme_css = """
     .stApp, html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { background:#0b1220 !important; color:#e5e7eb !important; }
     .main .block-container { background:transparent !important; }
-    .modern-topbar, .about-panel, .quick-card, .modern-course-card, .course-card, .subscription-card, [data-testid="stMetric"], .student-service-card, .independent-page-header { background:#111827 !important; border-color:#273449 !important; color:#e5e7eb !important; box-shadow:0 8px 24px rgba(0,0,0,.25) !important; }
-    .modern-topbar *, .about-panel *, .quick-card *, .modern-course-card *, .course-card *, .subscription-card *, [data-testid="stMetric"] *, .student-service-card *, .independent-page-header * { color:#e5e7eb !important; }
+    .modern-topbar, .about-panel, .quick-card, .modern-course-card, .course-card, .subscription-card, [data-testid="stMetric"], .student-service-card, .independent-page-header, .sticky-app-header { background:#111827 !important; border-color:#273449 !important; color:#e5e7eb !important; box-shadow:0 8px 24px rgba(0,0,0,.25) !important; }
+    .modern-topbar *, .about-panel *, .quick-card *, .modern-course-card *, .course-card *, .subscription-card *, [data-testid="stMetric"] *, .student-service-card *, .independent-page-header *, .sticky-app-header * { color:#e5e7eb !important; }
     .modern-topbar div[style*="color:#0f172a"], .modern-topbar div[style*="color: #0f172a"] { color:#f8fafc !important; }
     .modern-hero { background:linear-gradient(135deg,#0f2a52,#123f78,#145bb3) !important; border-color:#1e3a5f !important; }
     .modern-stat { background:#111827 !important; border-color:#273449 !important; }
     .modern-stat .num, .modern-stat .label, .modern-section-title h3, .modern-course-card h4, .course-title, .student-service-card-title, .independent-page-title { color:#f8fafc !important; }
     .stat-green { background:#102b24 !important; } .stat-blue { background:#10243d !important; } .stat-purple { background:#221b3d !important; } .stat-yellow { background:#332a12 !important; }
+    .live-zoom-pulse-card { background:#0f251d !important; border-color:#166534 !important; }
+    .mobile-bottom-dock-container { background:rgba(17, 24, 39, 0.97) !important; border-top-color:#334155 !important; }
     .landing-wrap { background:#0f172a !important; border-color:#24324a !important; }
     .about-panel { background:linear-gradient(180deg,#111827,#0f172a) !important; }
     .about-panel h3 { color:#93c5fd !important; } .about-panel p { color:#cbd5e1 !important; }
@@ -3624,7 +3703,7 @@ if is_student_mode:
                     prov_icon = "🌐" if st.session_state.student_social_provider == "google" else "📘"
                     with st.container(border=True):
                         st.markdown(f"<div style='font-size:15px;font-weight:900;color:#0b5ed7;'>{prov_icon} متابعة التسجيل والدخول بحساب {prov_title}</div>", unsafe_allow_html=True)
-                        soc_account_input = st.text_input(f"البريد الإلكتروني أو اسم حسابك على {prov_title}:*", placeholder=f"مثال: student@{prov_title.lower()}.com", key=f"soc_input_{prov_title}")
+                        soc_account_input = st.text_input(f"البريد الإلكتروني أو اسم حسابك على {prov_title}:*", placeholder=f"مثال: student@{prov_title.lower()}.com (أو اتركه فارغاً للدخول الفوري)", key=f"soc_input_{prov_title}")
                         soc_student_name = st.text_input("اسم الطالب بالكامل (في حال كان هذا أول دخول لك):", placeholder="مثال: أحمد محمد علي", key=f"soc_name_{prov_title}")
                         
                         col_s_go, col_s_can = st.columns([2, 1])
@@ -3632,45 +3711,45 @@ if is_student_mode:
                             if st.button(f"🚀 تأكيد الدخول الفوري عبر {prov_title}", use_container_width=True, type="primary", key=f"soc_submit_{prov_title}"):
                                 acc_clean = soc_account_input.strip()
                                 if not acc_clean:
-                                    st.error(f"يرجى إدخال حساب {prov_title} الخاص بك.")
-                                else:
-                                    # البحث عن الطالب برقم الهاتف أو الحساب أو الاسم
-                                    matched = st.session_state.users_df[
-                                        (st.session_state.users_df["رقم الهاتف"].astype(str).str.strip() == acc_clean) |
-                                        (st.session_state.users_df["اسم الطالب"].astype(str).str.strip().str.lower() == acc_clean.lower())
-                                    ]
-                                    if not matched.empty:
-                                        u_info = matched.iloc[0].to_dict()
-                                        if u_info.get("الحالة_حظر") == "محظور":
-                                            st.error("🚫 تم حظر هذا الحساب من قبل المعلم.")
-                                        else:
-                                            st.session_state.logged_student = u_info
-                                            st.query_params["role"] = "student"
-                                            st.query_params["st_phone"] = u_info.get("رقم الهاتف", acc_clean)
-                                            st.session_state.student_social_provider = None
-                                            st.success(f"مرحباً بك مجدداً يا {u_info['اسم الطالب']}! تم تسجيل دخولك بنجاح عبر {prov_title}.")
-                                            st.rerun()
+                                    acc_clean = f"student_{prov_title.lower()}@edu.com"
+                                
+                                # البحث عن الطالب برقم الهاتف أو الحساب أو الاسم
+                                matched = st.session_state.users_df[
+                                    (st.session_state.users_df["رقم الهاتف"].astype(str).str.strip() == acc_clean) |
+                                    (st.session_state.users_df["اسم الطالب"].astype(str).str.strip().str.lower() == acc_clean.lower())
+                                ]
+                                if not matched.empty:
+                                    u_info = matched.iloc[0].to_dict()
+                                    if u_info.get("الحالة_حظر") == "محظور":
+                                        st.error("🚫 تم حظر هذا الحساب من قبل المعلم.")
                                     else:
-                                        # تسجيل الطالب تلقائياً في أول دخول له بالحساب الاجتماعي
-                                        st_name_to_use = soc_student_name.strip() if soc_student_name.strip() else acc_clean.split("@")[0].replace(".", " ").capitalize()
-                                        new_user_soc = {
-                                            "اسم الطالب": st_name_to_use,
-                                            "رقم الهاتف": acc_clean,
-                                            "كلمة المرور": f"soc_{prov_title.lower()}_{hashlib.md5(acc_clean.encode()).hexdigest()[:6]}",
-                                            "المنهج/الدولة": "المناهج المصرية",
-                                            "المجموعة/الصف": "الصف الثالث الثانوي",
-                                            "تاريخ التسجيل": str(date.today()),
-                                            "الحالة_حظر": "نشط",
-                                            "حالة_الاشتراك_البنك": "غير مشترك"
-                                        }
-                                        st.session_state.users_df = pd.concat([st.session_state.users_df, pd.DataFrame([new_user_soc])], ignore_index=True)
-                                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
-                                        st.session_state.logged_student = new_user_soc
+                                        st.session_state.logged_student = u_info
                                         st.query_params["role"] = "student"
-                                        st.query_params["st_phone"] = acc_clean
+                                        st.query_params["st_phone"] = u_info.get("رقم الهاتف", acc_clean)
                                         st.session_state.student_social_provider = None
-                                        st.success(f"أهلاً بك يا {st_name_to_use}! تم إنشاء حسابك وتسجيل دخولك بنجاح عبر {prov_title}.")
+                                        st.success(f"مرحباً بك مجدداً يا {u_info['اسم الطالب']}! تم تسجيل دخولك بنجاح عبر {prov_title}.")
                                         st.rerun()
+                                else:
+                                    # تسجيل الطالب تلقائياً في أول دخول له بالحساب الاجتماعي
+                                    st_name_to_use = soc_student_name.strip() if soc_student_name.strip() else acc_clean.split("@")[0].replace(".", " ").capitalize()
+                                    new_user_soc = {
+                                        "اسم الطالب": st_name_to_use,
+                                        "رقم الهاتف": acc_clean,
+                                        "كلمة المرور": f"soc_{prov_title.lower()}_{hashlib.md5(acc_clean.encode()).hexdigest()[:6]}",
+                                        "المنهج/الدولة": "المناهج المصرية",
+                                        "المجموعة/الصف": "الصف الثالث الثانوي",
+                                        "تاريخ التسجيل": str(date.today()),
+                                        "الحالة_حظر": "نشط",
+                                        "حالة_الاشتراك_البنك": "غير مشترك"
+                                    }
+                                    st.session_state.users_df = pd.concat([st.session_state.users_df, pd.DataFrame([new_user_soc])], ignore_index=True)
+                                    save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                                    st.session_state.logged_student = new_user_soc
+                                    st.query_params["role"] = "student"
+                                    st.query_params["st_phone"] = acc_clean
+                                    st.session_state.student_social_provider = None
+                                    st.success(f"أهلاً بك يا {st_name_to_use}! تم إنشاء حسابك وتسجيل دخولك بنجاح عبر {prov_title}.")
+                                    st.rerun()
                         with col_s_can:
                             if st.button("إلغاء", use_container_width=True, key=f"soc_cancel_{prov_title}"):
                                 st.session_state.student_social_provider = None
@@ -3694,6 +3773,12 @@ if is_student_mode:
                                 st.session_state.logged_student=user_info; st.query_params["role"]="student"; st.query_params["st_phone"]=user_info["رقم الهاتف"]
                                 st.success(f"مرحباً بك مجدداً يا {user_info['اسم الطالب']}!"); st.rerun()
                         else: st.error("رقم الهاتف أو الرقم السري غير صحيح.")
+                
+                st.markdown("<div style='margin-top:14px;text-align:center;'>", unsafe_allow_html=True)
+                if st.button("🏫 هل أنت رئيس أو مشرف أكاديمية؟ اضغط هنا للدخول عبر Google / Facebook", use_container_width=True, key="btn_jump_to_acad_from_student"):
+                    st.session_state.page_view = "academy_login"
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
 
         elif st.session_state.page_view == "academy_login":
             st.markdown("""
@@ -3880,22 +3965,44 @@ if is_student_mode:
             st.query_params["role"] = "student"
             st.rerun()
 
-        col_u1, col_u2 = st.columns([4, 1])
-        with col_u1:
+        # ===== هيدر التطبيق الثابت والحديث (Persistent Sticky App Header) =====
+        col_hdr1, col_hdr2 = st.columns([5, 2])
+        with col_hdr1:
             st.markdown(f"""
-                <div style="background: {card_bg}; padding: 14px 20px; border-radius: 12px; border-right: 5px solid #10b981; margin-bottom: 20px; border: 1px solid {card_border};">
-                    <h3 style="margin: 0; color: #059669; font-size: 20px;">أهلاً بك: {st_user['اسم الطالب']} 🌟</h3>
-                    <p style="margin: 4px 0 10px 0; font-weight: 900; color: {text_color}; font-size: 16px;">{st_user.get('المنهج/الدولة', '')} | {st_user.get('المجموعة/الصف', '')} | الهاتف: {st_user.get('رقم الهاتف', '')}</p>
+            <div class="sticky-app-header" style="margin-bottom:0;">
+                <div style="display:flex; align-items:center; gap:12px; direction:rtl;">
+                    <div style="width:48px; height:48px; border-radius:50%; background:linear-gradient(135deg, #f97316, #ea580c); color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:900; box-shadow:0 4px 14px rgba(234,88,12,0.35); border:2px solid #ffffff; flex-shrink:0;">
+                        🎓
+                    </div>
+                    <div>
+                        <div style="font-size:18px; font-weight:950; color:{text_color}; line-height:1.2;">
+                            مرحباً بك، {st_user['اسم الطالب']} 👋
+                        </div>
+                        <div style="font-size:12px; color:{text_color}; opacity:0.85; font-weight:700; margin-top:3px; display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
+                            <span style="background:rgba(234,88,12,0.12); color:#ea580c; padding:2px 8px; border-radius:8px; font-weight:800;">{st_user.get('المجموعة/الصف', '')}</span>
+                            <span>•</span>
+                            <span>{st_user.get('المنهج/الدولة', '')}</span>
+                            <span>•</span>
+                            <span>📱 {st_user.get('رقم الهاتف', '')}</span>
+                        </div>
+                    </div>
                 </div>
+            </div>
             """, unsafe_allow_html=True)
-        with col_u2:
-            st.write("")
-            if st.button("🚪 خروج"):
-                st.session_state.logged_student = None
-                st.session_state.page_view = "home"
-                st.query_params.clear()
-                st.query_params["role"] = "student"
-                st.rerun()
+        with col_hdr2:
+            c_h_btn1, c_h_btn2 = st.columns(2)
+            with c_h_btn1:
+                _mode_icon = "☀️ فاتح" if st.session_state.dark_mode else "🌙 ليلي"
+                if st.button(_mode_icon, key="btn_hdr_dark_mode", use_container_width=True):
+                    st.session_state.dark_mode = not st.session_state.dark_mode
+                    st.rerun()
+            with c_h_btn2:
+                if st.button("🚪 خروج", key="btn_hdr_logout", use_container_width=True):
+                    st.session_state.logged_student = None
+                    st.session_state.page_view = "home"
+                    st.query_params.clear()
+                    st.query_params["role"] = "student"
+                    st.rerun()
 
         # ===== التحقق من الصفحة الفرعية المختارة للطالب =====
         sub_page = st.session_state.get("student_sub_page", "dashboard")
@@ -3904,19 +4011,7 @@ if is_student_mode:
         # 1. لوحة التحكم الرئيسية (Dashboard)
         # -------------------------------------------------------------
         if sub_page == "dashboard":
-            # بنر ترحيبي عريض وفخم
-            st.markdown(f"""
-                <div class="modern-hero" style="margin-bottom:12px;">
-                    <div>
-                        <div style="display:inline-block;background:#2563eb;color:#fff!important;border-radius:999px;padding:5px 14px;font-size:12px;font-weight:900;margin-bottom:10px;">البشمهندس x الرياضه 🌟</div>
-                        <h1 style="margin:4px 0 8px;">أهلاً بك، {st_user['اسم الطالب']} 👋</h1>
-                        <p style="margin:0;opacity:0.92;">{st_user.get('المنهج/الدولة','')} • {st_user.get('المجموعة/الصف','')} • نتمنى لك رحلة تعلم مميزة وتفوق مستمر في الرياضيات</p>
-                    </div>
-                    <div class="hero-art">📚🎓</div>
-                </div>
-            """, unsafe_allow_html=True)
-
-            # إحصائيات الطالب السريعة
+            # إحصائيات ومؤشرات الطالب السريعة (KPI Metric Badges)
             _student_key_for_stats = str(st_user.get("اسم الطالب", "")).strip().lower()
             _my_hw = len(st.session_state.assessments_df[st.session_state.assessments_df["اسم الطالب"].astype(str).str.strip().str.lower() == _student_key_for_stats]) if "اسم الطالب" in st.session_state.assessments_df.columns else 0
             _my_exams = len(st.session_state.exams_df)
@@ -3924,7 +4019,7 @@ if is_student_mode:
             _my_weekly = len(st.session_state.weekly_schedule_df[st.session_state.weekly_schedule_df["اسم الطالب"].astype(str).str.strip().str.lower() == _student_key_for_stats]) if "اسم الطالب" in st.session_state.weekly_schedule_df.columns else 0
 
             st.markdown(f"""
-                <div class="modern-stats">
+                <div class="modern-stats" style="margin-top:10px; margin-bottom:16px;">
                     <div class="modern-stat stat-green"><div class="icon">📝</div><div class="num">{_my_hw}</div><div class="label">الواجبات والمهام</div></div>
                     <div class="modern-stat stat-blue"><div class="icon">🧠</div><div class="num">{_my_exams}</div><div class="label">الاختبارات المتاحة</div></div>
                     <div class="modern-stat stat-purple"><div class="icon">💻</div><div class="num">{_my_sched}</div><div class="label">حصص Zoom</div></div>
@@ -3932,11 +4027,112 @@ if is_student_mode:
                 </div>
             """, unsafe_allow_html=True)
 
-            # شبكة بطاقات الخدمات — كل بطاقة تفتح صفحة مستقلة كاملة
-            st.markdown("<div class='vertical-section-header'>🗂️ لوحة خدمات الطالب — اضغط على أي أيقونة لفتحها في صفحة مستقلة</div>", unsafe_allow_html=True)
+            # بطاقة اسأل حمصا البطل المتوهجة (Hero AI Solver Card باللون البرتقالي المعتمد للموبايل والكمبيوتر)
+            st.markdown(f"""
+                <div class="hamza-hero-gradient">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <div style="font-size:38px; background:rgba(255,255,255,0.22); border-radius:18px; padding:6px 12px; border:1px solid rgba(255,255,255,0.4); box-shadow:0 4px 12px rgba(0,0,0,0.1);">🤖</div>
+                            <div>
+                                <div style="display:inline-block; background:rgba(255,255,255,0.25); border:1px solid rgba(255,255,255,0.45); color:#ffffff !important; padding:3px 12px; border-radius:20px; font-size:12px; font-weight:900; margin-bottom:6px;">⚡ الذكاء الاصطناعي الفوري 24/7</div>
+                                <h2 style="margin:0; font-size:24px; font-weight:950; color:#ffffff !important; letter-spacing:-0.5px;">اسأل حمصا الذكي — معلمك الفوري</h2>
+                            </div>
+                        </div>
+                        <div style="background:rgba(0,0,0,0.18); border-radius:14px; padding:6px 14px; border:1px solid rgba(255,255,255,0.25); text-align:center;">
+                            <span style="font-size:12px; font-weight:800; color:#ffffff !important;">📄 طباعة وتحميل الحل PDF مسمّى</span>
+                        </div>
+                    </div>
+                    <p style="margin:0 0 14px; font-size:15px; opacity:0.95; line-height:1.7; color:#ffffff !important; font-weight:600;">
+                        حل أي مسألة رياضية خطوة بخطوة بالذكاء الاصطناعي مع الشرح التفصيلي، عبر الكتابة المباشرة أو التصوير بالكاميرا أو رفع ملف.
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+
+            col_hz1, col_hz2 = st.columns([3, 1])
+            with col_hz1:
+                if st.button("🚀 افتح منصة اسأل حمصا بالكامل (حل فوري + مسح بالكاميرا + طباعة PDF)", key="btn_hero_open_hamza", use_container_width=True, type="primary"):
+                    st.session_state.student_sub_page = "hamza"
+                    st.rerun()
+            with col_hz2:
+                if st.button("📸 تصوير مسألة بالكاميرا", key="btn_hero_cam_hamza", use_container_width=True):
+                    st.session_state.student_sub_page = "hamza"
+                    st.rerun()
+
+            # بطاقة الحصة المباشرة وزوم التفاعلية ذات العد التنازلي الحي
+            student_name_str = str(st_user.get("اسم الطالب", "")).strip()
+            os_df = st.session_state.online_schedule_df
+            st_sched = os_df[os_df["اسم الطالب"].astype(str).str.strip().str.lower() == student_name_str.lower()]
+
+            if not st_sched.empty:
+                next_session = st_sched.iloc[0]
+                academy_name = next_session.get("اسم الأكاديمية", "أكاديمية البشمهندس")
+                sched_grade = next_session.get("المجموعة/الصف", st_user.get("المجموعة/الصف", ""))
+                sched_date = next_session.get("تاريخ الحصة", str(date.today()))
+                sched_time = next_session.get("ساعة الحصة", "18:00")
+                zoom_link = next_session.get("رابط زوم", "")
+                zoom_status = next_session.get("حالة فتح الحصة", "مغلقة")
+                sched_sup_phone = next_session.get("رقم مشرف الأكاديمية", "")
+
+                try:
+                    target_dt = datetime.strptime(f"{sched_date} {sched_time}", "%Y-%m-%d %H:%M")
+                    diff_seconds = int((target_dt - datetime.now()).total_seconds())
+                except Exception:
+                    diff_seconds = -1
+
+                if diff_seconds > 0:
+                    d_days = diff_seconds // 86400
+                    d_hours = (diff_seconds % 86400) // 3600
+                    d_mins = (diff_seconds % 3600) // 60
+                    d_secs = diff_seconds % 60
+                    countdown_pill = f"{d_hours:02d} : {d_mins:02d} : {d_secs:02d}" if d_days == 0 else f"{d_days} يوم و {d_hours} س و {d_mins} د"
+                    status_badge = "⏳ الحصة المباشرة القادمة"
+                    badge_bg = "#fef3c7"
+                    badge_color = "#b45309"
+                elif diff_seconds == 0 or zoom_status == "مفتوحة":
+                    countdown_pill = "🟢 البث مباشر الآن!"
+                    status_badge = "🔴 مباشر الآن (Live)"
+                    badge_bg = "#dcfce7"
+                    badge_color = "#15803d"
+                else:
+                    countdown_pill = "📌 موعد الحصة قد حان"
+                    status_badge = "📅 حصة اليوم"
+                    badge_bg = "#e0f2fe"
+                    badge_color = "#0369a1"
+
+                st.markdown(f"""
+                <div class="live-zoom-pulse-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#16a34a; box-shadow:0 0 10px #16a34a;"></span>
+                            <span style="background:{badge_bg}; color:{badge_color}; border-radius:20px; padding:3px 12px; font-size:12px; font-weight:900;">{status_badge}</span>
+                        </div>
+                        <div style="background:#0f172a; color:#38bdf8; font-family:monospace; font-size:15px; font-weight:900; padding:4px 14px; border-radius:12px; letter-spacing:1px; direction:ltr;">
+                            {countdown_pill}
+                        </div>
+                    </div>
+                    <div>
+                        <h3 style="margin:0 0 4px; font-size:18px; font-weight:900; color:{text_color};">💻 حصة البث المباشر — {sched_grade}</h3>
+                        <p style="margin:0; font-size:13px; color:{text_color}; opacity:0.85;">
+                            🏛️ {academy_name} • 📅 {sched_date} في تمام الساعة {sched_time} • 📞 المشرف: {sched_sup_phone}
+                        </p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                col_z_btn1, col_z_btn2 = st.columns([2, 1])
+                with col_z_btn1:
+                    _zl = zoom_link if (zoom_link and zoom_link != "nan") else "https://us05web.zoom.us/j/83526892910?pwd=2jWRgATgBRPbXttdnm0QpLwBApsZL4.1"
+                    st.link_button("🚀 انضم الآن إلى حصة زوم المباشرة", _zl, use_container_width=True)
+                with col_z_btn2:
+                    if st.button("💻 جدول حصص زوم الكامل", key="btn_dash_open_zoom_page", use_container_width=True):
+                        st.session_state.student_sub_page = "online_zoom"
+                        st.rerun()
+
+            # شبكة بطاقات الخدمات — كل بطاقة تفتح صفحة مستقلة كاملة (4 أعمدة للكمبيوتر وتناسب الموبايل)
+            st.markdown("<div class='vertical-section-header' style='margin-top:20px;'>🗂️ لوحة خدمات الطالب التفاعلية — اضغط لفتح الخدمة في صفحة مستقلة</div>", unsafe_allow_html=True)
 
             _services_dash = [
-                {"key": "hamza", "icon": "🤖", "title": "اسأل حمصا الذكي", "badge": "ذكاء اصطناعي ⚡", "desc": "حل المسائل الرياضية بالتصوير أو الرفع أو الكتابة خطوة بخطوة مع طباعة وتحميل الحل كملف PDF مسمّى.", "color": "#1677ff", "btn": "فتح اسأل حمصا 🚀", "type": "primary"},
+                {"key": "hamza", "icon": "🤖", "title": "اسأل حمصا الذكي", "badge": "ذكاء اصطناعي ⚡", "desc": "حل المسائل الرياضية بالتصوير أو الكتابة خطوة بخطوة مع طباعة وتحميل الحل كملف PDF مسمّى.", "color": "#ea580c", "btn": "فتح اسأل حمصا 🚀", "type": "primary"},
                 {"key": "videos", "icon": "🎥", "title": "المقررات والفيديوهات", "badge": "شروحات مسجلة 📺", "desc": "مكتبة الحصص والشروحات المنظمة لمرحلتك مع التعليق التفاعلي والتواصل المباشر.", "color": "#059669", "btn": "عرض الفيديوهات 🎬", "type": "secondary"},
                 {"key": "bank", "icon": "▤", "title": "بنك الأسئلة الشامل", "badge": "تدريب واختبارات 📚", "desc": "بنك الأسئلة والمراجعات مع التحقق الفوري من الإجابات والاشتراك عبر InstaPay.", "color": "#dc2626", "btn": "دخول بنك الأسئلة 💳", "type": "secondary"},
                 {"key": "abqary", "icon": "🧠", "title": "اختبارات عبقري", "badge": "موقع عبقري 💡", "desc": "امتحانات منصة عبقري التفاعلية المباشرة والاستعلام الفوري عن النتيجة برقم سري.", "color": "#7c3aed", "btn": "فتح امتحانات عبقري 📝", "type": "secondary"},
@@ -3949,20 +4145,20 @@ if is_student_mode:
                 {"key": "darssly", "icon": "💎", "title": "اشتراكات درسلي", "badge": "باقات شهرية 💎", "desc": "تفاصيل باقات الشرح الشهرية والمتابعة مع روابط الاشتراك المباشرة في منصة درسلي.", "color": "#f59e0b", "btn": "تفاصيل باقات درسلي 💳", "type": "secondary"},
             ]
 
-            for row_s in range(0, len(_services_dash), 3):
-                chunk = _services_dash[row_s:row_s+3]
+            for row_s in range(0, len(_services_dash), 4):
+                chunk = _services_dash[row_s:row_s+4]
                 cols = st.columns(len(chunk))
                 for idx, srv in enumerate(chunk):
                     with cols[idx]:
                         st.markdown(f"""
-                            <div style="background:{card_bg}; border:1.5px solid {srv['color']}33; border-top:5px solid {srv['color']}; border-radius:16px; padding:18px 16px; min-height:175px; box-shadow:0 6px 18px rgba(0,0,0,0.04); direction:rtl; text-align:right; margin-bottom:8px; display:flex; flex-direction:column; justify-content:space-between;">
+                            <div style="background:{card_bg}; border:1.5px solid {srv['color']}33; border-top:4px solid {srv['color']}; border-radius:18px; padding:16px 14px; min-height:165px; box-shadow:0 6px 18px rgba(0,0,0,0.04); direction:rtl; text-align:right; margin-bottom:8px; display:flex; flex-direction:column; justify-content:space-between;">
                                 <div>
                                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                                        <span style="font-size:32px;">{srv['icon']}</span>
-                                        <span style="background:{srv['color']}18; color:{srv['color']}; border:1px solid {srv['color']}44; border-radius:12px; padding:3px 10px; font-size:12px; font-weight:800;">{srv['badge']}</span>
+                                        <div style="width:40px; height:40px; border-radius:12px; background:{srv['color']}18; display:flex; align-items:center; justify-content:center; font-size:22px;">{srv['icon']}</div>
+                                        <span style="background:{srv['color']}15; color:{srv['color']}; border:1px solid {srv['color']}35; border-radius:12px; padding:2px 8px; font-size:11px; font-weight:800;">{srv['badge']}</span>
                                     </div>
-                                    <h4 style="margin:0 0 6px; color:{text_color}; font-size:17px; font-weight:900;">{srv['title']}</h4>
-                                    <p style="margin:0; font-size:13px; color:{text_color}; opacity:0.82; line-height:1.6;">{srv['desc']}</p>
+                                    <h4 style="margin:0 0 6px; color:{text_color}; font-size:16px; font-weight:900;">{srv['title']}</h4>
+                                    <p style="margin:0; font-size:12px; color:{text_color}; opacity:0.80; line-height:1.5;">{srv['desc']}</p>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
@@ -4730,6 +4926,31 @@ if is_student_mode:
             if st.button("⬅️ العودة للوحة الخدمات الرئيسية", key=f"indep_bottom_back_{sub_page}", use_container_width=True):
                 st.session_state.student_sub_page = "dashboard"
                 st.rerun()
+
+        # ===== شريط التنقل السفلي الثابت لشاشات الموبايل (Native Mobile Bottom Dock) =====
+        st.markdown('<div class="mobile-bottom-dock-container">', unsafe_allow_html=True)
+        col_dock1, col_dock2, col_dock3, col_dock4, col_dock5 = st.columns(5)
+        with col_dock1:
+            if st.button("🏠\nالرئيسية", key="btn_dock_home", use_container_width=True):
+                st.session_state.student_sub_page = "dashboard"
+                st.rerun()
+        with col_dock2:
+            if st.button("🤖\nحمصا", key="btn_dock_hamza", use_container_width=True):
+                st.session_state.student_sub_page = "hamza"
+                st.rerun()
+        with col_dock3:
+            if st.button("💻\nزوم", key="btn_dock_zoom", use_container_width=True):
+                st.session_state.student_sub_page = "online_zoom"
+                st.rerun()
+        with col_dock4:
+            if st.button("📊\nدرجاتي", key="btn_dock_grades", use_container_width=True):
+                st.session_state.student_sub_page = "hw_grades"
+                st.rerun()
+        with col_dock5:
+            if st.button("💬\nتواصل", key="btn_dock_chat", use_container_width=True):
+                st.session_state.student_sub_page = "chat"
+                st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("""
         <div class="call-btn-container">
