@@ -4601,6 +4601,28 @@ if is_academy_mode:
             st.info("لا يوجد مدرسون مسجلون في الأكاديمية بعد.")
     st.stop()
 
+# ==============================================================================# 2. قفل لوحة تحكم المعلم برقم سري ثابت
+# ==============================================================================
+# لا يظهر أي جزء من لوحة التحكم قبل إدخال الرقم السري الصحيح.
+if not st.session_state.get("teacher_panel_unlocked", False):
+    st.markdown("""
+    <div style="max-width:620px;margin:8vh auto 20px;padding:30px;border-radius:24px;background:linear-gradient(135deg,#071b3b,#1459a8);color:#fff;text-align:center;box-shadow:0 18px 50px rgba(7,27,59,.20);direction:rtl;">
+      <div style="font-size:42px;margin-bottom:8px;">🔐</div>
+      <h2 style="color:#fff;margin:0 0 8px;">لوحة التحكم محمية</h2>
+      <p style="color:#dbeafe;margin:0;">أدخل الرقم السري الثابت للمتابعة</p>
+    </div>
+    """, unsafe_allow_html=True)
+    with st.form("teacher_panel_password_form", clear_on_submit=False):
+        _teacher_panel_password = st.text_input("الرقم السري", type="password", placeholder="أدخل الرقم السري", max_chars=32)
+        _teacher_panel_submit = st.form_submit_button("🔓 فتح لوحة التحكم", use_container_width=True, type="primary")
+    if _teacher_panel_submit:
+        if _teacher_panel_password == "140140":
+            st.session_state.teacher_panel_unlocked = True
+            st.rerun()
+        else:
+            st.error("الرقم السري غير صحيح. حاول مرة أخرى.")
+    st.stop()
+
 # ==============================================================================# 2. لوحة تحكم المعلم (الشاملة بجميع الأقسام وزوم الأونلاين والتقارير المالية)
 # ==============================================================================
 total_exams_count = len(st.session_state.exams_df)
