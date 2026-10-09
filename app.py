@@ -2790,28 +2790,29 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# الهوية البصرية الجديدة الفاخرة — البشمهندس x الرياضه 2026
-# قالب وتصميم SaaS عصري متقدم: Cyber Obsidian + Electric Indigo + Emerald Neon + Sunburst Amber
-# شاشة كاملة متجاوبة للكمبيوتر والموبايل بنظام كونسول مدمج بدون سكرول
+# الهوية البصرية الجديدة الشاملة — البشمهندس x الرياضه
+# نفس روح التصميم المرجعي: Navy + Electric Blue + White + Pastel cards
+# بدون تغيير منطق الصفحات أو قواعد البيانات أو المهام.
 # =============================================================================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900;1000&display=swap');
-
-:root {
-    --primary-indigo: #6366f1;
-    --primary-dark: #4f46e5;
-    --accent-cyan: #06b6d4;
-    --accent-emerald: #10b981;
-    --accent-amber: #f59e0b;
-    --accent-rose: #f43f5e;
-    --bg-dark: #090d16;
-    --card-dark: #111827;
-    --border-dark: rgba(99, 102, 241, 0.25);
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
+:root{
+    --navy:#062b63;
+    --navy2:#041f4a;
+    --blue:#1677ff;
+    --blue2:#0b5fe7;
+    --sky:#eaf4ff;
+    --emerald:#10b981;
+    --emerald-dark:#059669;
+    --ink:#0b2145;
+    --muted:#64748b;
+    --line:#dbe7f5;
+    --card:#ffffff;
 }
 
 html, body, [class*="css"], .stApp, .stMarkdown, button, input, textarea, select {
-    font-family: 'Cairo', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    font-family: 'Cairo', sans-serif !important;
 }
 
 html {
@@ -2819,25 +2820,24 @@ html {
 }
 
 .stApp {
-    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 50%, #f8fafc 100%) !important;
+    background: linear-gradient(180deg, #f8fbfe 0%, #eef5fc 48%, #f8fbfe 100%) !important;
 }
 
-/* شاشة كاملة 100% بعرض الشاشة واستغلال كامل للمساحات */
+/* شاشة كاملة 100% دون أي قيود عرض واستغلال كل نقطة في الشاشة */
 .main .block-container {
     max-width: 100% !important;
     width: 100% !important;
-    padding-top: 0.25rem !important;
-    padding-bottom: 2.5rem !important;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 2rem !important;
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
 }
 
 @media (max-width: 768px) {
     .main .block-container {
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-        padding-top: 0.2rem !important;
-        padding-bottom: 80px !important;
+        padding-left: 0.6rem !important;
+        padding-right: 0.6rem !important;
+        padding-top: 0.35rem !important;
     }
 }
 
@@ -2849,233 +2849,343 @@ html {
     display: none !important;
 }
 
-/* روابط وتأثيرات عامة */
+/* ضبط وتحسين جميع الروابط والانكور في التطبيق */
 a {
     text-decoration: none !important;
-    transition: all 0.2s ease !important;
+    transition: all 0.22s ease !important;
 }
+
 a:hover {
     opacity: 0.9 !important;
     transform: translateY(-1px) !important;
 }
 
-/* أزرار Streamlit الموحدة بنظام Cyber Indigo */
+[data-testid="stHeaderActionElements"] {
+    opacity: 0.35 !important;
+    transition: opacity 0.2s ease !important;
+}
+
+[data-testid="stHeaderActionElements"]:hover {
+    opacity: 1 !important;
+}
+
+a[data-testid="stHeaderActionElements"] svg {
+    fill: #1677ff !important;
+}
+
+/* أزرار Streamlit الموحدة */
 .stButton>button {
-    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+    background: linear-gradient(135deg, #1677ff, #0b5fe7) !important;
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
     border: 0 !important;
     border-radius: 12px !important;
-    min-height: 40px !important;
+    min-height: 44px !important;
     font-weight: 850 !important;
-    font-size: 14px !important;
-    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.25) !important;
+    font-size: 15px !important;
+    box-shadow: 0 6px 18px rgba(22, 119, 255, 0.18) !important;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 .stButton>button:hover {
     transform: translateY(-1.5px) !important;
-    box-shadow: 0 8px 22px rgba(79, 70, 229, 0.35) !important;
+    box-shadow: 0 10px 24px rgba(22, 119, 255, 0.28) !important;
 }
 
 .stFormSubmitButton>button {
-    background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
+    background: linear-gradient(135deg, #1677ff, #0b5fe7) !important;
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
     border: 0 !important;
     border-radius: 12px !important;
-    min-height: 42px !important;
+    min-height: 44px !important;
     font-weight: 900 !important;
-    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25) !important;
 }
 
 .stLinkButton>a {
-    background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%) !important;
+    background: linear-gradient(135deg, #1677ff, #0b5fe7) !important;
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
     border-radius: 12px !important;
     border: 0 !important;
-    min-height: 40px !important;
+    min-height: 44px !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     font-weight: 850 !important;
-    box-shadow: 0 4px 14px rgba(6, 182, 212, 0.25) !important;
+    box-shadow: 0 6px 18px rgba(22, 119, 255, 0.18) !important;
+}
+
+.stLinkButton>a:hover {
+    transform: translateY(-1.5px) !important;
+    box-shadow: 0 10px 24px rgba(22, 119, 255, 0.28) !important;
 }
 
 /* حقول الإدخال والقوائم */
 input, textarea, div[data-baseweb="select"]>div {
-    border: 1.5px solid #cbd5e1 !important;
+    border: 1px solid #d5e3f3 !important;
     border-radius: 12px !important;
     background: #ffffff !important;
-    min-height: 42px !important;
-    font-weight: 800 !important;
+    min-height: 44px !important;
+    font-weight: 750 !important;
     color: #0f172a !important;
 }
 
-/* بطاقات الكونسول والتحكم المدمجة بدون سكرول */
-.console-ribbon {
+label {
+    font-weight: 850 !important;
+    color: #1e3a5f !important;
+    margin-bottom: 5px !important;
+}
+
+/* الكروت والمقاييس */
+[data-testid="stMetric"] {
+    background: #ffffff !important;
+    border: 1px solid #e0eaf5 !important;
+    border-radius: 18px !important;
+    padding: 16px !important;
+    box-shadow: 0 8px 22px rgba(20, 58, 100, 0.06) !important;
+}
+[data-testid="stMetricValue"] { color: #125cc9 !important; font-weight: 900 !important; }
+[data-testid="stMetricLabel"] { color: #64748b !important; font-weight: 800 !important; }
+
+/* بطاقات الخدمات التفاعلية المستقلة */
+.student-services-container {
+    width: 100% !important;
+    margin: 15px 0 25px 0;
+    direction: rtl;
+}
+
+.student-service-card {
+    background: #ffffff;
+    border: 1.5px solid #dce8f6;
+    border-radius: 20px;
+    padding: 22px 18px 18px;
+    box-shadow: 0 9px 24px rgba(6, 43, 99, 0.06);
+    transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 220px;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.student-service-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 36px rgba(22, 119, 255, 0.14);
+    border-color: #1677ff;
+}
+
+.student-service-card-badge {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    background: #eff6ff;
+    color: #1677ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.student-service-card-icon {
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #e0f2fe, #eff6ff);
+    border: 1px solid #bfdbfe;
+    box-shadow: 0 4px 12px rgba(22, 119, 255, 0.08);
+}
+
+.student-service-card-title {
+    font-size: 18px;
+    font-weight: 900;
+    color: #0b2b57 !important;
+    margin: 0 0 6px 0;
+}
+
+.student-service-card-desc {
+    font-size: 13px;
+    color: #64748b !important;
+    font-weight: 700;
+    line-height: 1.6;
+    margin: 0 0 14px 0;
+    flex-grow: 1;
+}
+
+/* ترويسة الصفحة المستقلة */
+.independent-page-header {
+    background: linear-gradient(135deg, #ffffff, #f0f7ff);
+    border: 1.5px solid #d5e6f8;
+    border-radius: 20px;
+    padding: 18px 24px;
+    margin-bottom: 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    background: #ffffff;
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    border-radius: 14px;
-    padding: 8px 14px;
-    margin-bottom: 10px;
+    box-shadow: 0 8px 24px rgba(6, 43, 99, 0.06);
     direction: rtl;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
-    overflow-x: auto;
+    width: 100%;
 }
 
-.console-kpi-badge {
-    display: inline-flex;
+.independent-page-title-box {
+    display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 10px;
-    font-size: 13px;
+    gap: 14px;
+}
+
+.independent-page-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #062b63, #1677ff);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    box-shadow: 0 6px 16px rgba(22, 119, 255, 0.25);
+}
+
+.independent-page-title {
+    font-size: 22px;
     font-weight: 900;
-    white-space: nowrap;
+    color: #0b2b57 !important;
+    margin: 0;
 }
 
-.badge-purple { background: #f5f3ff; color: #7c3aed; border: 1px solid #ddd6fe; }
-.badge-green  { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
-.badge-blue   { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
-.badge-amber  { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
-.badge-cyan   { background: #ecfeff; color: #0891b2; border: 1px solid #a5f3fc; }
-
-.console-card {
-    background: #ffffff;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 14px 16px;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
-    direction: rtl;
-    margin-bottom: 10px;
+.independent-page-subtitle {
+    font-size: 13px;
+    color: #64748b !important;
+    font-weight: 750;
+    margin: 2px 0 0 0;
 }
 
-/* هيدر التطبيق الثابت والحديث */
-.sticky-app-header {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 99990 !important;
-    background: rgba(255, 255, 255, 0.96) !important;
-    backdrop-filter: blur(20px) !important;
-    -webkit-backdrop-filter: blur(20px) !important;
-    border: 1px solid rgba(99, 102, 241, 0.22) !important;
-    border-radius: 16px !important;
-    padding: 8px 16px !important;
-    margin-bottom: 10px !important;
-    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06) !important;
+/* أزرار الدخول عبر وسائل التواصل */
+.social-login-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 14px 0 18px;
+    width: 100%;
 }
 
-/* بطاقة اسأل حمصا البطل المتوهج */
-.hamza-hero-gradient {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%) !important;
-    border-radius: 18px !important;
-    padding: 16px 20px !important;
-    color: #ffffff !important;
-    direction: rtl !important;
-    box-shadow: 0 10px 28px rgba(217, 119, 6, 0.3) !important;
-    border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
-    margin-bottom: 12px !important;
-    position: relative !important;
-    overflow: hidden !important;
-}
-.hamza-hero-gradient h2, .hamza-hero-gradient h3, .hamza-hero-gradient p, .hamza-hero-gradient span {
-    color: #ffffff !important;
-}
-
-/* بطاقة الحصة المباشرة وزوم التفاعلية */
-.live-zoom-pulse-card {
-    background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%) !important;
-    border: 1.5px solid #86efac !important;
-    border-radius: 16px !important;
-    padding: 14px 16px !important;
-    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.1) !important;
-    margin-bottom: 12px !important;
-    direction: rtl !important;
+.social-login-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 900;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
+    text-align: center;
+    width: 100%;
+    text-decoration: none !important;
 }
 
-/* أزرار الدخول السريع المباشرة لـ Google و Facebook */
-.google-direct-btn {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 10px !important;
+.google-auth-btn {
     background: #ffffff !important;
     color: #1f2937 !important;
-    border: 2px solid #e5e7eb !important;
-    border-radius: 12px !important;
-    padding: 11px 18px !important;
-    font-weight: 900 !important;
-    font-size: 14px !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important;
-    width: 100% !important;
-    text-decoration: none !important;
-    cursor: pointer !important;
+    border: 1.5px solid #e5e7eb !important;
 }
-.google-direct-btn:hover {
-    background: #f8fafc !important;
-    border-color: #cbd5e1 !important;
-    transform: translateY(-1px) !important;
+.google-auth-btn:hover {
+    background: #f9fafb !important;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
 }
 
-.facebook-direct-btn {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 10px !important;
-    background: #1877f2 !important;
+.facebook-auth-btn {
+    background: #1877F2 !important;
     color: #ffffff !important;
-    border: 0 !important;
-    border-radius: 12px !important;
-    padding: 11px 18px !important;
-    font-weight: 900 !important;
-    font-size: 14px !important;
-    box-shadow: 0 4px 12px rgba(24, 119, 242, 0.25) !important;
-    width: 100% !important;
-    text-decoration: none !important;
-    cursor: pointer !important;
+}
+.facebook-auth-btn:hover {
+    background: #1565cc !important;
+    box-shadow: 0 6px 18px rgba(24, 119, 242, 0.28);
+    transform: translateY(-1px);
 }
 
-/* شريط التنقل السفلي الثابت لشاشات الموبايل */
-@media (max-width: 768px) {
-    .mobile-bottom-dock-container {
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
-        background: rgba(255, 255, 255, 0.98) !important;
-        backdrop-filter: blur(20px) !important;
-        -webkit-backdrop-filter: blur(20px) !important;
-        border-top: 1.5px solid rgba(99, 102, 241, 0.25) !important;
-        z-index: 999999 !important;
-        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.1) !important;
-        padding: 4px 8px 8px !important;
-    }
-    .mobile-bottom-dock-container div[data-testid="column"] button {
-        min-height: 40px !important;
-        font-size: 11px !important;
-        padding: 3px 4px !important;
-        border-radius: 10px !important;
-        white-space: pre !important;
-        line-height: 1.25 !important;
-    }
-}
-@media (min-width: 769px) {
-    .mobile-bottom-dock-container {
-        display: none !important;
-    }
+/* شريط التنقل العلوي */
+.top-navigation-shell {
+    position: sticky;
+    top: 0;
+    z-index: 999990;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.08);
+    direction: rtl;
 }
 
-.social-top-container { display: flex; gap: 10px; align-items: center; margin-top: 8px; justify-content: center; }
-.social-btn-top { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; text-decoration: none !important; box-shadow: 0 3px 8px rgba(0,0,0,0.2); transition: transform 0.2s ease; }
-.social-btn-top:hover { transform: scale(1.1); }
-.social-btn-top svg { width: 18px; height: 18px; fill: #ffffff; }
+.top-navigation-title { font-size: 13px; font-weight: 900; color: #0f172a; white-space: nowrap; }
+.top-navigation-subtitle { font-size: 11px; color: #64748b; white-space: nowrap; }
+.top-navigation-collapsed { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 16px; background: rgba(255, 255, 255, 0.95); border: 1px solid rgba(148, 163, 184, 0.25); box-shadow: 0 8px 22px rgba(15, 23, 42, 0.10); }
+
+div[data-testid="stPills"] { width: 100% !important; }
+div[data-testid="stPills"] > div { gap: 7px !important; overflow-x: auto !important; scrollbar-width: thin !important; padding: 2px 2px 7px !important; }
+div[data-testid="stPills"] button { white-space: nowrap !important; border-radius: 13px !important; min-height: 38px !important; padding: 6px 13px !important; font-weight: 850 !important; border: 1px solid rgba(148, 163, 184, 0.22) !important; transition: all 0.18s ease !important; }
+div[data-testid="stPills"] button:hover { transform: translateY(-1px) !important; box-shadow: 0 7px 18px rgba(15, 23, 42, 0.10) !important; }
+
+/* بانرات الصفحة الرئيسية ولوحة التحكم */
+.modern-topbar, .brandbar { background: #ffffff !important; border: 1px solid #e1ebf6 !important; border-radius: 18px !important; box-shadow: 0 8px 25px rgba(16, 58, 104, 0.07) !important; }
+.modern-hero { background: linear-gradient(115deg, #062b63 0%, #0b56ad 62%, #1684ff 100%) !important; border: 0 !important; border-radius: 26px !important; color: #ffffff !important; min-height: 215px !important; box-shadow: 0 16px 38px rgba(6, 43, 99, 0.20) !important; position: relative; overflow: hidden; }
+.modern-hero:after { content: '✦  ✧  ∙  ✦  ∙  ✧'; position: absolute; left: 4%; top: 12%; font-size: 55px; color: rgba(255, 255, 255, 0.08); letter-spacing: 22px; transform: rotate(-12deg); }
+.modern-hero h1, .modern-hero p { color: #ffffff !important; position: relative; z-index: 2; }
+.hero-art { position: relative; z-index: 2 !important; }
+
+.modern-stat { background: #ffffff !important; border: 1px solid #e1ebf6 !important; min-height: 105px !important; box-shadow: 0 8px 22px rgba(20, 58, 100, 0.06) !important; border-radius: 18px !important; padding: 16px !important; }
+.modern-stat .num { color: #125cc9 !important; font-size: 26px !important; font-weight: 900 !important; }
+.modern-stat .label { color: #64748b !important; font-size: 13px !important; font-weight: 800 !important; }
+.stat-green { background: linear-gradient(180deg, #ffffff, #effcf7) !important; }
+.stat-blue { background: linear-gradient(180deg, #ffffff, #eef6ff) !important; }
+.stat-purple { background: linear-gradient(180deg, #ffffff, #f5f1ff) !important; }
+.stat-yellow { background: linear-gradient(180deg, #ffffff, #fff8e8) !important; }
+
+.vertical-section-header { background: linear-gradient(135deg, #062b63, #1677ff) !important; border-radius: 14px !important; box-shadow: 0 8px 20px rgba(22, 119, 255, 0.14) !important; color: #ffffff !important; padding: 14px 20px; font-weight: 900; font-size: 18px; margin: 18px 0 14px; direction: rtl; }
+.about-panel { background: linear-gradient(180deg, #ffffff, #f5faff); border: 1px solid #dce8f6; border-radius: 22px; padding: 22px; text-align: right; box-shadow: 0 8px 25px rgba(20, 58, 100, 0.05); }
+
+/* landing */
+.landing-wrap { background: #ffffff; border: 1px solid #dce8f6; border-radius: 28px; overflow: hidden; box-shadow: 0 18px 50px rgba(6, 43, 99, 0.12); margin: 5px 0 25px; width: 100%; }
+.landing-hero { background: linear-gradient(120deg, #041f4a 0%, #073c7c 55%, #0d70df 100%); min-height: 410px; padding: 38px; display: flex; align-items: center; direction: rtl; color: #ffffff; position: relative; overflow: hidden; }
+.landing-hero:before { content: ''; position: absolute; width: 560px; height: 560px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.09); left: -180px; top: -260px; box-shadow: 0 0 0 35px rgba(255, 255, 255, 0.025), 0 0 0 70px rgba(255, 255, 255, 0.018); }
+.landing-copy { flex: 1; position: relative; z-index: 2; text-align: right; padding: 10px 20px; }
+.landing-copy .brand-pill { display: inline-block; background: rgba(38, 137, 255, 0.25); border: 1px solid rgba(147, 197, 253, 0.35); padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 900; margin-bottom: 13px; }
+.landing-copy h1 { font-size: 38px; line-height: 1.35; margin: 0 0 10px; color: #ffffff !important; font-weight: 900; }
+.landing-copy h1 span { color: #49a0ff !important; }
+.landing-copy p { font-size: 16px; line-height: 1.9; color: #dbeafe !important; max-width: 650px; }
+.landing-features { display: flex; gap: 14px; margin-top: 22px; flex-wrap: wrap; }
+.landing-feature { width: 120px; text-align: center; }
+.landing-feature .i { width: 48px; height: 48px; margin: auto; border-radius: 14px; background: #1677ff; display: flex; align-items: center; justify-content: center; font-size: 23px; }
+.landing-feature div:last-child { font-size: 11px; font-weight: 800; color: #ffffff; margin-top: 7px; }
+.landing-photo { width: 280px; height: 320px; object-fit: cover; border-radius: 26px; object-position: center top; border: 4px solid rgba(255, 255, 255, 0.25); box-shadow: 0 20px 45px rgba(0,0,0,0.25); background: #0a3d7d; }
+.landing-login { width: 420px; background: rgba(255, 255, 255, 0.98); border-radius: 22px; padding: 25px; box-shadow: 0 20px 50px rgba(0,0,0,0.18); color: #0b2145; position: relative; z-index: 3; margin: 0 0 0 15px; }
+
+@media(max-width: 950px) {
+    .landing-hero { flex-direction: column; gap: 25px; padding: 24px; }
+    .landing-login { width: 100%; margin: 0; }
+    .landing-photo { width: 200px; height: 230px; }
+    .landing-copy { text-align: center; }
+    .landing-copy h1 { font-size: 28px; }
+    .landing-features { justify-content: center; }
+    .social-login-grid { grid-template-columns: 1fr; }
+}
+
+.social-top-container { display: flex; gap: 12px; align-items: center; margin-top: 10px; justify-content: center; }
+.social-btn-top { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; text-decoration: none !important; box-shadow: 0 3px 8px rgba(0,0,0,0.25); transition: transform 0.2s ease; }
+.social-btn-top:hover { transform: scale(1.12); }
+.social-btn-top svg { width: 20px; height: 20px; fill: #ffffff; }
 
 .facebook-bg { background-color: #1877F2; }
 .whatsapp-bg { background-color: #25D366; }
@@ -3083,34 +3193,128 @@ input, textarea, div[data-baseweb="select"]>div {
 .tiktok-bg   { background-color: #000000; border: 1px solid #444; }
 .youtube-bg  { background-color: #FF0000; }
 
-.call-btn-container { display: flex; justify-content: center; margin-top: 14px; margin-bottom: 8px; width: 100%; }
-.call-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff !important; padding: 10px 22px; border-radius: 50px; font-size: 15px; font-weight: 900; text-decoration: none !important; border: 2px solid #ffffff; box-shadow: 0 4px 16px rgba(5, 150, 105, 0.25); }
-.social-footer-box { margin-top: 16px; padding: 12px 0; border-top: 1px solid rgba(150, 150, 150, 0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
-.rights-text { font-size: 13px; font-weight: 900; margin-top: 8px; text-align: center; color: #64748b; }
+.call-btn-container { display: flex; justify-content: center; margin-top: 25px; margin-bottom: 15px; width: 100%; }
+.call-btn { display: inline-flex; align-items: center; justify-content: center; gap: 12px; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff !important; padding: 14px 28px; border-radius: 50px; font-size: 18px; font-weight: 900; text-decoration: none !important; border: 2px solid #ffffff; box-shadow: 0 6px 20px rgba(5, 150, 105, 0.3); }
+.social-footer-box { margin-top: 25px; padding: 20px 0; border-top: 1px solid rgba(150, 150, 150, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
+.rights-text { font-size: 15px; font-weight: 900; margin-top: 12px; text-align: center; color: #64748b; }
+
+/* لون بطاقة اسأل حمصا البرتقالي المتوهج (المعتمد للكمبيوتر والموبايل) */
+.hamza-hero-gradient {
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 50%, #c2410c 100%) !important;
+    border-radius: 22px !important;
+    padding: 24px 26px !important;
+    color: #ffffff !important;
+    direction: rtl !important;
+    box-shadow: 0 14px 35px rgba(234, 88, 12, 0.30) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.30) !important;
+    margin-bottom: 18px !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+.hamza-hero-gradient h2, .hamza-hero-gradient h3, .hamza-hero-gradient p, .hamza-hero-gradient span {
+    color: #ffffff !important;
+}
+
+/* هيدر التطبيق الثابت والحديث */
+.sticky-app-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 99990 !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(226, 232, 240, 0.85) !important;
+    border-radius: 18px !important;
+    padding: 10px 18px !important;
+    margin-bottom: 14px !important;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* بطاقة الحصة المباشرة وزوم التفاعلية */
+.live-zoom-pulse-card {
+    background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%) !important;
+    border: 1.5px solid #86efac !important;
+    border-radius: 20px !important;
+    padding: 20px !important;
+    box-shadow: 0 8px 24px rgba(22, 163, 74, 0.09) !important;
+    margin-bottom: 16px !important;
+    direction: rtl !important;
+}
+
+/* شريط التنقل السفلي الثابت لشاشات الموبايل (Native Bottom Dock) */
+@media (max-width: 768px) {
+    .mobile-bottom-dock-container {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        background: rgba(255, 255, 255, 0.97) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        border-top: 1.5px solid rgba(226, 232, 240, 0.95) !important;
+        z-index: 999999 !important;
+        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08) !important;
+        padding: 5px 8px 8px !important;
+    }
+    .mobile-bottom-dock-container div[data-testid="column"] button {
+        min-height: 42px !important;
+        font-size: 11px !important;
+        padding: 4px 5px !important;
+        border-radius: 10px !important;
+        white-space: pre !important;
+        line-height: 1.3 !important;
+    }
+    .main .block-container {
+        padding-bottom: 95px !important;
+    }
+}
+@media (min-width: 769px) {
+    .mobile-bottom-dock-container {
+        display: none !important;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
 if st.session_state.dark_mode:
     _theme_css = """
-    .stApp, html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { background:#090d16 !important; color:#f1f5f9 !important; }
+    .stApp, html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { background:#0b1220 !important; color:#e5e7eb !important; }
     .main .block-container { background:transparent !important; }
-    .modern-topbar, .about-panel, .quick-card, .modern-course-card, .course-card, .subscription-card, [data-testid="stMetric"], .student-service-card, .independent-page-header, .sticky-app-header, .console-card, .console-ribbon { background:#111827 !important; border-color:rgba(99, 102, 241, 0.3) !important; color:#f1f5f9 !important; box-shadow:0 8px 25px rgba(0,0,0,.4) !important; }
-    .modern-topbar *, .about-panel *, .quick-card *, .modern-course-card *, .course-card *, .subscription-card *, [data-testid="stMetric"] *, .student-service-card *, .independent-page-header *, .sticky-app-header *, .console-card *, .console-ribbon * { color:#f1f5f9 !important; }
-    .modern-stat { background:#111827 !important; border-color:rgba(99, 102, 241, 0.3) !important; }
-    .modern-stat .num, .modern-stat .label, .student-service-card-title, .independent-page-title { color:#f8fafc !important; }
-    .stat-green { background:#06261c !important; } .stat-blue { background:#0c1e3d !important; } .stat-purple { background:#1c1438 !important; } .stat-yellow { background:#2c2007 !important; }
-    .live-zoom-pulse-card { background:#092218 !important; border-color:#059669 !important; }
-    .mobile-bottom-dock-container { background:rgba(17, 24, 39, 0.98) !important; border-top-color:rgba(99, 102, 241, 0.35) !important; }
-    .google-direct-btn { background:#1f2937 !important; color:#f8fafc !important; border-color:#374151 !important; }
+    .modern-topbar, .about-panel, .quick-card, .modern-course-card, .course-card, .subscription-card, [data-testid="stMetric"], .student-service-card, .independent-page-header, .sticky-app-header { background:#111827 !important; border-color:#273449 !important; color:#e5e7eb !important; box-shadow:0 8px 24px rgba(0,0,0,.25) !important; }
+    .modern-topbar *, .about-panel *, .quick-card *, .modern-course-card *, .course-card *, .subscription-card *, [data-testid="stMetric"] *, .student-service-card *, .independent-page-header *, .sticky-app-header * { color:#e5e7eb !important; }
+    .modern-topbar div[style*="color:#0f172a"], .modern-topbar div[style*="color: #0f172a"] { color:#f8fafc !important; }
+    .modern-hero { background:linear-gradient(135deg,#0f2a52,#123f78,#145bb3) !important; border-color:#1e3a5f !important; }
+    .modern-stat { background:#111827 !important; border-color:#273449 !important; }
+    .modern-stat .num, .modern-stat .label, .modern-section-title h3, .modern-course-card h4, .course-title, .student-service-card-title, .independent-page-title { color:#f8fafc !important; }
+    .stat-green { background:#102b24 !important; } .stat-blue { background:#10243d !important; } .stat-purple { background:#221b3d !important; } .stat-yellow { background:#332a12 !important; }
+    .live-zoom-pulse-card { background:#0f251d !important; border-color:#166534 !important; }
+    .mobile-bottom-dock-container { background:rgba(17, 24, 39, 0.97) !important; border-top-color:#334155 !important; }
+    .landing-wrap { background:#0f172a !important; border-color:#24324a !important; }
+    .about-panel { background:linear-gradient(180deg,#111827,#0f172a) !important; }
+    .about-panel h3 { color:#93c5fd !important; } .about-panel p { color:#cbd5e1 !important; }
+    .landing-login { background:#111827 !important; color:#f8fafc !important; border:1px solid #334155 !important; }
+    .landing-login h2 { color:#f8fafc !important; } .landing-login p { color:#cbd5e1 !important; }
+    .login-tab { background:#172554 !important; color:#93c5fd !important; border:1px solid #1e40af !important; }
+    .landing-auth-title { color:#cbd5e1 !important; }
+    .landing-auth-title + div [data-testid="stButton"] button { background:#172554 !important; color:#93c5fd !important; border-color:#1e40af !important; }
+    .landing-photo, .landing-welcome-photo { border-color:#60a5fa !important; }
+    .subscription-title { color:#f8fafc !important; } .subscription-features { color:#d1d5db !important; }
+    .subscription-badge { background:#052e2b !important; color:#6ee7b7 !important; border-color:#065f46 !important; }
     input, textarea, div[data-baseweb="select"] > div, div[data-baseweb="input"] > div { background:#111827 !important; color:#f8fafc !important; border-color:#374151 !important; -webkit-text-fill-color:#f8fafc !important; }
     input::placeholder, textarea::placeholder { color:#94a3b8 !important; }
     label, .stMarkdown, .stText, p, span { color:#e5e7eb !important; }
-    [data-testid="stMetricValue"] { color:#818cf8 !important; } [data-testid="stMetricLabel"] { color:#cbd5e1 !important; }
+    [data-testid="stMetricValue"] { color:#93c5fd !important; } [data-testid="stMetricLabel"] { color:#cbd5e1 !important; }
+    .stSelectbox label, .stTextInput label, .stNumberInput label, .stDateInput label, .stTextArea label { color:#e5e7eb !important; }
     div[data-baseweb="popover"], div[role="dialog"], div[data-baseweb="calendar"] { background:#111827 !important; color:#f8fafc !important; border-color:#374151 !important; }
     div[data-baseweb="popover"] *, div[role="dialog"] *, div[data-baseweb="calendar"] * { color:#f8fafc !important; }
-    .stTabs [data-baseweb="tab-list"] { background:#0b0f19 !important; } .stTabs [data-baseweb="tab"] { color:#cbd5e1 !important; }
+    .stTabs [data-baseweb="tab-list"] { background:#0f172a !important; } .stTabs [data-baseweb="tab"] { color:#cbd5e1 !important; }
     .stDataFrame, [data-testid="stDataFrame"] { background:#111827 !important; }
-    .stExpander { background:#111827 !important; border-color:#374151 !important; }
+    .stExpander { background:#111827 !important; border-color:#334155 !important; }
+    .stExpander summary, .stExpander summary span { color:#f8fafc !important; }
+    .student-service-card-icon { background:linear-gradient(135deg, #1e3a8a, #172554) !important; border-color:#3b82f6 !important; }
+    .student-service-card-badge { background:#1e3a8a !important; color:#93c5fd !important; border-color:#3b82f6 !important; }
+    .google-auth-btn { background:#1e293b !important; color:#f8fafc !important; border-color:#475569 !important; }
     .rights-text { color:#94a3b8 !important; }
     """
 else:
@@ -3480,75 +3684,78 @@ if is_student_mode:
             """, unsafe_allow_html=True)
             
             with st.container(border=True):
-                st.markdown("<div style='font-size:16px;font-weight:900;color:#1e3a5f;margin-bottom:14px;text-align:center;'>🚀 تسجيل الدخول المباشر لحساب Google أو Facebook دون كتابة</div>", unsafe_allow_html=True)
+                st.markdown("<div style='font-size:16px;font-weight:900;color:#1e3a5f;margin-bottom:12px;text-align:center;'>🚀 تسجيل الدخول السريع عبر الحسابات الاجتماعية</div>", unsafe_allow_html=True)
                 
-                # أزرار Google: تحويل مباشر + دخول فوري بنقرة واحدة
-                col_g1, col_g2 = st.columns(2)
-                with col_g1:
-                    st.link_button("🌐 فتح وتحويل مباشر لحساب Google (Gmail)", "https://accounts.google.com/AccountChooser?service=lso", use_container_width=True)
-                with col_g2:
-                    if st.button("⚡ تسجيل الدخول الفوري بـ Google (ضغطة واحدة دون كتابة)", key="btn_direct_instant_google_v3", use_container_width=True, type="primary"):
-                        default_google_user = "طالب Google المعتمد"
-                        google_id = "google_verified_student"
-                        matched = st.session_state.users_df[
-                            (st.session_state.users_df["رقم الهاتف"].astype(str).str.strip() == google_id) |
-                            (st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == default_google_user)
-                        ]
-                        if not matched.empty:
-                            u_info = matched.iloc[0].to_dict()
-                        else:
-                            u_info = {
-                                "اسم الطالب": default_google_user,
-                                "رقم الهاتف": google_id,
-                                "كلمة المرور": "google_oauth_instant",
-                                "المنهج/الدولة": "المناهج المصرية",
-                                "المجموعة/الصف": "الصف الثالث الثانوي",
-                                "تاريخ التسجيل": str(date.today()),
-                                "الحالة_حظر": "نشط",
-                                "حالة_الاشتراك_البنك": "غير مشترك"
-                            }
-                            st.session_state.users_df = pd.concat([st.session_state.users_df, pd.DataFrame([u_info])], ignore_index=True)
-                            save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
-                        st.session_state.logged_student = u_info
-                        st.query_params["role"] = "student"
-                        st.query_params["st_phone"] = u_info.get("رقم الهاتف", google_id)
-                        st.success("✓ تم تسجيل دخولك بنجاح وبسرعة عبر Google!")
-                        st.rerun()
-
-                # أزرار Facebook: تحويل مباشر + دخول فوري بنقرة واحدة
-                col_f1, col_f2 = st.columns(2)
-                with col_f1:
-                    st.link_button("📘 فتح وتحويل مباشر لحساب Facebook", "https://www.facebook.com/login", use_container_width=True)
-                with col_f2:
-                    if st.button("🚀 تسجيل الدخول الفوري بـ Facebook (ضغطة واحدة دون كتابة)", key="btn_direct_instant_fb_v3", use_container_width=True):
-                        default_fb_user = "طالب Facebook المعتمد"
-                        fb_id = "fb_verified_student"
-                        matched = st.session_state.users_df[
-                            (st.session_state.users_df["رقم الهاتف"].astype(str).str.strip() == fb_id) |
-                            (st.session_state.users_df["اسم الطالب"].astype(str).str.strip() == default_fb_user)
-                        ]
-                        if not matched.empty:
-                            u_info = matched.iloc[0].to_dict()
-                        else:
-                            u_info = {
-                                "اسم الطالب": default_fb_user,
-                                "رقم الهاتف": fb_id,
-                                "كلمة المرور": "fb_oauth_instant",
-                                "المنهج/الدولة": "المناهج المصرية",
-                                "المجموعة/الصف": "الصف الثالث الثانوي",
-                                "تاريخ التسجيل": str(date.today()),
-                                "الحالة_حظر": "نشط",
-                                "حالة_الاشتراك_البنك": "غير مشترك"
-                            }
-                            st.session_state.users_df = pd.concat([st.session_state.users_df, pd.DataFrame([u_info])], ignore_index=True)
-                            save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
-                        st.session_state.logged_student = u_info
-                        st.query_params["role"] = "student"
-                        st.query_params["st_phone"] = u_info.get("رقم الهاتف", fb_id)
-                        st.success("✓ تم تسجيل دخولك بنجاح وبسرعة عبر Facebook!")
-                        st.rerun()
-
-                st.markdown("<div style='text-align:center;margin:14px 0 10px;color:#94a3b8;font-weight:900;'>─── أو باستخدام رقم الهاتف والرقم السري ───</div>", unsafe_allow_html=True)
+                if "student_social_provider" not in st.session_state:
+                    st.session_state.student_social_provider = None
+                
+                c_soc1, c_soc2 = st.columns(2)
+                with c_soc1:
+                    if st.button("🌐 تسجيل الدخول عبر Google", key="btn_student_google_login", use_container_width=True):
+                        st.session_state.student_social_provider = "google"
+                with c_soc2:
+                    if st.button("📘 تسجيل الدخول عبر Facebook", key="btn_student_facebook_login", use_container_width=True):
+                        st.session_state.student_social_provider = "facebook"
+                
+                # نافذة التفاعل لتسجيل الدخول بحساب Google أو Facebook
+                if st.session_state.student_social_provider in ("google", "facebook"):
+                    prov_title = "Google" if st.session_state.student_social_provider == "google" else "Facebook"
+                    prov_icon = "🌐" if st.session_state.student_social_provider == "google" else "📘"
+                    with st.container(border=True):
+                        st.markdown(f"<div style='font-size:15px;font-weight:900;color:#0b5ed7;'>{prov_icon} متابعة التسجيل والدخول بحساب {prov_title}</div>", unsafe_allow_html=True)
+                        soc_account_input = st.text_input(f"البريد الإلكتروني أو اسم حسابك على {prov_title}:*", placeholder=f"مثال: student@{prov_title.lower()}.com (أو اتركه فارغاً للدخول الفوري)", key=f"soc_input_{prov_title}")
+                        soc_student_name = st.text_input("اسم الطالب بالكامل (في حال كان هذا أول دخول لك):", placeholder="مثال: أحمد محمد علي", key=f"soc_name_{prov_title}")
+                        
+                        col_s_go, col_s_can = st.columns([2, 1])
+                        with col_s_go:
+                            if st.button(f"🚀 تأكيد الدخول الفوري عبر {prov_title}", use_container_width=True, type="primary", key=f"soc_submit_{prov_title}"):
+                                acc_clean = soc_account_input.strip()
+                                if not acc_clean:
+                                    acc_clean = f"student_{prov_title.lower()}@edu.com"
+                                
+                                # البحث عن الطالب برقم الهاتف أو الحساب أو الاسم
+                                matched = st.session_state.users_df[
+                                    (st.session_state.users_df["رقم الهاتف"].astype(str).str.strip() == acc_clean) |
+                                    (st.session_state.users_df["اسم الطالب"].astype(str).str.strip().str.lower() == acc_clean.lower())
+                                ]
+                                if not matched.empty:
+                                    u_info = matched.iloc[0].to_dict()
+                                    if u_info.get("الحالة_حظر") == "محظور":
+                                        st.error("🚫 تم حظر هذا الحساب من قبل المعلم.")
+                                    else:
+                                        st.session_state.logged_student = u_info
+                                        st.query_params["role"] = "student"
+                                        st.query_params["st_phone"] = u_info.get("رقم الهاتف", acc_clean)
+                                        st.session_state.student_social_provider = None
+                                        st.success(f"مرحباً بك مجدداً يا {u_info['اسم الطالب']}! تم تسجيل دخولك بنجاح عبر {prov_title}.")
+                                        st.rerun()
+                                else:
+                                    # تسجيل الطالب تلقائياً في أول دخول له بالحساب الاجتماعي
+                                    st_name_to_use = soc_student_name.strip() if soc_student_name.strip() else acc_clean.split("@")[0].replace(".", " ").capitalize()
+                                    new_user_soc = {
+                                        "اسم الطالب": st_name_to_use,
+                                        "رقم الهاتف": acc_clean,
+                                        "كلمة المرور": f"soc_{prov_title.lower()}_{hashlib.md5(acc_clean.encode()).hexdigest()[:6]}",
+                                        "المنهج/الدولة": "المناهج المصرية",
+                                        "المجموعة/الصف": "الصف الثالث الثانوي",
+                                        "تاريخ التسجيل": str(date.today()),
+                                        "الحالة_حظر": "نشط",
+                                        "حالة_الاشتراك_البنك": "غير مشترك"
+                                    }
+                                    st.session_state.users_df = pd.concat([st.session_state.users_df, pd.DataFrame([new_user_soc])], ignore_index=True)
+                                    save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                                    st.session_state.logged_student = new_user_soc
+                                    st.query_params["role"] = "student"
+                                    st.query_params["st_phone"] = acc_clean
+                                    st.session_state.student_social_provider = None
+                                    st.success(f"أهلاً بك يا {st_name_to_use}! تم إنشاء حسابك وتسجيل دخولك بنجاح عبر {prov_title}.")
+                                    st.rerun()
+                        with col_s_can:
+                            if st.button("إلغاء", use_container_width=True, key=f"soc_cancel_{prov_title}"):
+                                st.session_state.student_social_provider = None
+                                st.rerun()
+                
+                st.markdown("<div style='text-align:center;margin:16px 0 10px;color:#94a3b8;font-weight:900;'>─── أو باستخدام رقم الهاتف والرقم السري ───</div>", unsafe_allow_html=True)
                 
                 with st.form("student_login_form"):
                     login_phone = st.text_input("رقم الهاتف المحمول المسجل:")
@@ -3587,35 +3794,54 @@ if is_student_mode:
                 ac_role = st.radio("اختر صفة الدخول للأكاديمية:*", ["رئيس الأكاديمية", "مشرف أكاديمية"], horizontal=True, key="academy_role_selection_radio")
                 _role_clean = "رئيس الأكاديمية" if ac_role == "رئيس الأكاديمية" else "مشرف أكاديمي"
                 
-                st.markdown("<div style='font-size:15px;font-weight:900;color:#1e3a5f;margin:14px 0 10px;text-align:center;'>⚡ الدخول المباشر السريع عبر Google أو Facebook</div>", unsafe_allow_html=True)
+                st.markdown("<div style='font-size:15px;font-weight:900;color:#1e3a5f;margin:14px 0 10px;text-align:center;'>🚀 الدخول السريع عبر Google أو Facebook</div>", unsafe_allow_html=True)
+                
+                if "academy_social_provider" not in st.session_state:
+                    st.session_state.academy_social_provider = None
                 
                 col_ac_s1, col_ac_s2 = st.columns(2)
                 with col_ac_s1:
-                    st.link_button("🌐 فتح وتحويل مباشر لحساب Google للأكاديمية", "https://accounts.google.com/AccountChooser?service=lso", use_container_width=True)
+                    if st.button("🌐 دخول الأكاديمية عبر Google", key="btn_acad_google_login", use_container_width=True):
+                        st.session_state.academy_social_provider = "google"
                 with col_ac_s2:
-                    if st.button(f"⚡ دخول فوري بنقرة واحدة كـ ({ac_role}) عبر Google", key="btn_acad_google_instant", use_container_width=True, type="primary"):
+                    if st.button("📘 دخول الأكاديمية عبر Facebook", key="btn_acad_facebook_login", use_container_width=True):
+                        st.session_state.academy_social_provider = "facebook"
+                
+                if st.session_state.academy_social_provider in ("google", "facebook"):
+                    ac_prov_title = "Google" if st.session_state.academy_social_provider == "google" else "Facebook"
+                    ac_prov_icon = "🌐" if st.session_state.academy_social_provider == "google" else "📘"
+                    with st.container(border=True):
+                        st.markdown(f"<div style='font-size:15px;font-weight:900;color:#0b5ed7;'>{ac_prov_icon} تسجيل دخول {ac_role} بحساب {ac_prov_title}</div>", unsafe_allow_html=True)
+                        soc_acad_user = st.text_input(f"حساب {ac_prov_title} الخاص بك:*", placeholder=f"name@{ac_prov_title.lower()}.com", key="soc_acad_user_in")
+                        
                         aa = st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)).copy()
-                        acad_obj = aa.iloc[0].to_dict() if not aa.empty else {"اسم الأكاديمية": "أكاديمية البشمهندس في الرياضيات", "الحالة": "نشط"}
-                        st.session_state.logged_academy = acad_obj
-                        st.session_state.academy_login_role = _role_clean
-                        st.session_state.academy_page = "dashboard"
-                        st.query_params["role"] = "academy"
-                        st.success(f"تم الدخول الفوري بنجاح كـ {ac_role}!")
-                        st.rerun()
-
-                col_ac_f1, col_ac_f2 = st.columns(2)
-                with col_ac_f1:
-                    st.link_button("📘 فتح وتحويل مباشر لحساب Facebook للأكاديمية", "https://www.facebook.com/login", use_container_width=True)
-                with col_ac_f2:
-                    if st.button(f"⚡ دخول فوري بنقرة واحدة كـ ({ac_role}) عبر Facebook", key="btn_acad_fb_instant", use_container_width=True):
-                        aa = st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)).copy()
-                        acad_obj = aa.iloc[0].to_dict() if not aa.empty else {"اسم الأكاديمية": "أكاديمية البشمهندس في الرياضيات", "الحالة": "نشط"}
-                        st.session_state.logged_academy = acad_obj
-                        st.session_state.academy_login_role = _role_clean
-                        st.session_state.academy_page = "dashboard"
-                        st.query_params["role"] = "academy"
-                        st.success(f"تم الدخول الفوري بنجاح كـ {ac_role}!")
-                        st.rerun()
+                        acad_names = [str(x).strip() for x in aa["اسم الأكاديمية"].dropna().unique().tolist() if str(x).strip()] if not aa.empty and "اسم الأكاديمية" in aa.columns else []
+                        if not acad_names:
+                            acad_names = ["أكاديمية البشمهندس في الرياضيات"]
+                        selected_acad_for_soc = st.selectbox("اختر الأكاديمية التابع لها:*", acad_names, key="soc_acad_pick")
+                        
+                        col_ag1, col_ag2 = st.columns([2, 1])
+                        with col_ag1:
+                            if st.button(f"🔐 تأكيد الدخول كـ ({ac_role})", use_container_width=True, type="primary", key="btn_confirm_acad_soc"):
+                                if not soc_acad_user.strip():
+                                    st.error("يرجى إدخال اسم الحساب.")
+                                else:
+                                    matched_acad = aa[aa["اسم الأكاديمية"].astype(str).str.strip() == selected_acad_for_soc]
+                                    if matched_acad.empty:
+                                        acad_obj = {"اسم الأكاديمية": selected_acad_for_soc, "الحالة": "نشط"}
+                                    else:
+                                        acad_obj = matched_acad.iloc[0].to_dict()
+                                    st.session_state.logged_academy = acad_obj
+                                    st.session_state.academy_login_role = _role_clean
+                                    st.session_state.academy_page = "dashboard"
+                                    st.session_state.academy_social_provider = None
+                                    st.query_params["role"] = "academy"
+                                    st.success(f"تم الدخول بنجاح بصلاحية: {ac_role}")
+                                    st.rerun()
+                        with col_ag2:
+                            if st.button("إلغاء", use_container_width=True, key="btn_cancel_acad_soc"):
+                                st.session_state.academy_social_provider = None
+                                st.rerun()
                 
                 st.markdown("<div style='text-align:center;margin:16px 0 10px;color:#94a3b8;font-weight:900;'>─── أو الدخول ببيانات الحساب المعتمدة ───</div>", unsafe_allow_html=True)
                 
@@ -3801,123 +4027,104 @@ if is_student_mode:
                 </div>
             """, unsafe_allow_html=True)
 
-            # الصف العلوي المزدوج: اسأل حمصا وحصص زوم المباشرة جنباً إلى جنب
-            hero_c1, hero_c2 = st.columns([5, 5], gap="small")
-            with hero_c1:
-                # بطاقة اسأل حمصا البطل المتوهجة (Hero AI Solver Card)
-                st.markdown(f"""
-                    <div class="hamza-hero-gradient" style="min-height:200px; display:flex; flex-direction:column; justify-content:space-between; margin-bottom:8px;">
-                        <div>
-                            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-                                <div style="display:flex; align-items:center; gap:10px;">
-                                    <div style="font-size:32px; background:rgba(255,255,255,0.22); border-radius:14px; padding:4px 10px; border:1px solid rgba(255,255,255,0.4);">🤖</div>
-                                    <div>
-                                        <div style="display:inline-block; background:rgba(255,255,255,0.25); border:1px solid rgba(255,255,255,0.45); color:#ffffff !important; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:900;">⚡ الذكاء الاصطناعي 24/7</div>
-                                        <h3 style="margin:2px 0 0; font-size:19px; font-weight:950; color:#ffffff !important;">اسأل حمصا الذكي</h3>
-                                    </div>
-                                </div>
-                                <span style="font-size:11px; font-weight:800; background:rgba(0,0,0,0.2); padding:3px 10px; border-radius:12px; color:#ffffff !important;">📄 طباعة PDF</span>
+            # بطاقة اسأل حمصا البطل المتوهجة (Hero AI Solver Card باللون البرتقالي المعتمد للموبايل والكمبيوتر)
+            st.markdown(f"""
+                <div class="hamza-hero-gradient">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <div style="font-size:38px; background:rgba(255,255,255,0.22); border-radius:18px; padding:6px 12px; border:1px solid rgba(255,255,255,0.4); box-shadow:0 4px 12px rgba(0,0,0,0.1);">🤖</div>
+                            <div>
+                                <div style="display:inline-block; background:rgba(255,255,255,0.25); border:1px solid rgba(255,255,255,0.45); color:#ffffff !important; padding:3px 12px; border-radius:20px; font-size:12px; font-weight:900; margin-bottom:6px;">⚡ الذكاء الاصطناعي الفوري 24/7</div>
+                                <h2 style="margin:0; font-size:24px; font-weight:950; color:#ffffff !important; letter-spacing:-0.5px;">اسأل حمصا الذكي — معلمك الفوري</h2>
                             </div>
-                            <p style="margin:0 0 10px; font-size:13px; opacity:0.95; line-height:1.6; color:#ffffff !important; font-weight:600;">
-                                حل أي مسألة رياضية خطوة بخطوة بالتصوير أو الكتابة مع طباعة وتحميل ملف PDF مسمّى فوراً.
-                            </p>
+                        </div>
+                        <div style="background:rgba(0,0,0,0.18); border-radius:14px; padding:6px 14px; border:1px solid rgba(255,255,255,0.25); text-align:center;">
+                            <span style="font-size:12px; font-weight:800; color:#ffffff !important;">📄 طباعة وتحميل الحل PDF مسمّى</span>
                         </div>
                     </div>
-                """, unsafe_allow_html=True)
-                col_hz1, col_hz2 = st.columns([3, 2])
-                with col_hz1:
-                    if st.button("🚀 حل مسألة مع حمصا", key="btn_hero_open_hamza", use_container_width=True, type="primary"):
-                        st.session_state.student_sub_page = "hamza"
-                        st.rerun()
-                with col_hz2:
-                    if st.button("📸 تصوير مسألة", key="btn_hero_cam_hamza", use_container_width=True):
-                        st.session_state.student_sub_page = "hamza"
-                        st.rerun()
+                    <p style="margin:0 0 14px; font-size:15px; opacity:0.95; line-height:1.7; color:#ffffff !important; font-weight:600;">
+                        حل أي مسألة رياضية خطوة بخطوة بالذكاء الاصطناعي مع الشرح التفصيلي، عبر الكتابة المباشرة أو التصوير بالكاميرا أو رفع ملف.
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
 
-            with hero_c2:
-                # بطاقة حصة البث المباشر وزوم التفاعلية
-                student_name_str = str(st_user.get("اسم الطالب", "")).strip()
-                os_df = st.session_state.online_schedule_df
-                st_sched = os_df[os_df["اسم الطالب"].astype(str).str.strip().str.lower() == student_name_str.lower()]
+            col_hz1, col_hz2 = st.columns([3, 1])
+            with col_hz1:
+                if st.button("🚀 افتح منصة اسأل حمصا بالكامل (حل فوري + مسح بالكاميرا + طباعة PDF)", key="btn_hero_open_hamza", use_container_width=True, type="primary"):
+                    st.session_state.student_sub_page = "hamza"
+                    st.rerun()
+            with col_hz2:
+                if st.button("📸 تصوير مسألة بالكاميرا", key="btn_hero_cam_hamza", use_container_width=True):
+                    st.session_state.student_sub_page = "hamza"
+                    st.rerun()
 
-                if not st_sched.empty:
-                    next_session = st_sched.iloc[0]
-                    academy_name = next_session.get("اسم الأكاديمية", "أكاديمية البشمهندس")
-                    sched_grade = next_session.get("المجموعة/الصف", st_user.get("المجموعة/الصف", ""))
-                    sched_date = next_session.get("تاريخ الحصة", str(date.today()))
-                    sched_time = next_session.get("ساعة الحصة", "18:00")
-                    zoom_link = next_session.get("رابط زوم", "")
-                    zoom_status = next_session.get("حالة فتح الحصة", "مغلقة")
-                    sched_sup_phone = next_session.get("رقم مشرف الأكاديمية", "")
+            # بطاقة الحصة المباشرة وزوم التفاعلية ذات العد التنازلي الحي
+            student_name_str = str(st_user.get("اسم الطالب", "")).strip()
+            os_df = st.session_state.online_schedule_df
+            st_sched = os_df[os_df["اسم الطالب"].astype(str).str.strip().str.lower() == student_name_str.lower()]
 
-                    try:
-                        target_dt = datetime.strptime(f"{sched_date} {sched_time}", "%Y-%m-%d %H:%M")
-                        diff_seconds = int((target_dt - datetime.now()).total_seconds())
-                    except Exception:
-                        diff_seconds = -1
+            if not st_sched.empty:
+                next_session = st_sched.iloc[0]
+                academy_name = next_session.get("اسم الأكاديمية", "أكاديمية البشمهندس")
+                sched_grade = next_session.get("المجموعة/الصف", st_user.get("المجموعة/الصف", ""))
+                sched_date = next_session.get("تاريخ الحصة", str(date.today()))
+                sched_time = next_session.get("ساعة الحصة", "18:00")
+                zoom_link = next_session.get("رابط زوم", "")
+                zoom_status = next_session.get("حالة فتح الحصة", "مغلقة")
+                sched_sup_phone = next_session.get("رقم مشرف الأكاديمية", "")
 
-                    if diff_seconds > 0:
-                        d_days = diff_seconds // 86400
-                        d_hours = (diff_seconds % 86400) // 3600
-                        d_mins = (diff_seconds % 3600) // 60
-                        d_secs = diff_seconds % 60
-                        countdown_pill = f"{d_hours:02d}:{d_mins:02d}:{d_secs:02d}" if d_days == 0 else f"{d_days} يوم و {d_hours} س"
-                        status_badge = "⏳ الحصة القادمة"
-                        badge_bg = "#fef3c7"
-                        badge_color = "#b45309"
-                    elif diff_seconds == 0 or zoom_status == "مفتوحة":
-                        countdown_pill = "🟢 البث مباشر الآن!"
-                        status_badge = "🔴 مباشر (Live)"
-                        badge_bg = "#dcfce7"
-                        badge_color = "#15803d"
-                    else:
-                        countdown_pill = "📌 حان موعد الحصة"
-                        status_badge = "📅 حصة اليوم"
-                        badge_bg = "#e0f2fe"
-                        badge_color = "#0369a1"
+                try:
+                    target_dt = datetime.strptime(f"{sched_date} {sched_time}", "%Y-%m-%d %H:%M")
+                    diff_seconds = int((target_dt - datetime.now()).total_seconds())
+                except Exception:
+                    diff_seconds = -1
 
-                    st.markdown(f"""
-                    <div class="live-zoom-pulse-card" style="min-height:200px; display:flex; flex-direction:column; justify-content:space-between; margin-bottom:8px;">
-                        <div>
-                            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px;">
-                                <div style="display:flex; align-items:center; gap:6px;">
-                                    <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#16a34a; box-shadow:0 0 8px #16a34a;"></span>
-                                    <span style="background:{badge_bg}; color:{badge_color}; border-radius:20px; padding:2px 10px; font-size:11px; font-weight:900;">{status_badge}</span>
-                                </div>
-                                <div style="background:#0f172a; color:#38bdf8; font-family:monospace; font-size:13px; font-weight:900; padding:3px 10px; border-radius:10px; letter-spacing:1px; direction:ltr;">
-                                    {countdown_pill}
-                                </div>
-                            </div>
-                            <h3 style="margin:0 0 4px; font-size:17px; font-weight:900; color:{text_color};">💻 حصة البث المباشر — {sched_grade}</h3>
-                            <p style="margin:0; font-size:12px; color:{text_color}; opacity:0.85; line-height:1.6;">
-                                🏛️ {academy_name} • 📅 {sched_date} الساعة {sched_time}<br>
-                                📞 مشرف الأكاديمية: {sched_sup_phone}
-                            </p>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                    col_z_btn1, col_z_btn2 = st.columns([3, 2])
-                    with col_z_btn1:
-                        _zl = zoom_link if (zoom_link and zoom_link != "nan") else "https://us05web.zoom.us/j/83526892910?pwd=2jWRgATgBRPbXttdnm0QpLwBApsZL4.1"
-                        st.link_button("🚀 انضم لحصة Zoom", _zl, use_container_width=True)
-                    with col_z_btn2:
-                        if st.button("💻 جدول Zoom", key="btn_dash_open_zoom_page", use_container_width=True):
-                            st.session_state.student_sub_page = "online_zoom"
-                            st.rerun()
+                if diff_seconds > 0:
+                    d_days = diff_seconds // 86400
+                    d_hours = (diff_seconds % 86400) // 3600
+                    d_mins = (diff_seconds % 3600) // 60
+                    d_secs = diff_seconds % 60
+                    countdown_pill = f"{d_hours:02d} : {d_mins:02d} : {d_secs:02d}" if d_days == 0 else f"{d_days} يوم و {d_hours} س و {d_mins} د"
+                    status_badge = "⏳ الحصة المباشرة القادمة"
+                    badge_bg = "#fef3c7"
+                    badge_color = "#b45309"
+                elif diff_seconds == 0 or zoom_status == "مفتوحة":
+                    countdown_pill = "🟢 البث مباشر الآن!"
+                    status_badge = "🔴 مباشر الآن (Live)"
+                    badge_bg = "#dcfce7"
+                    badge_color = "#15803d"
                 else:
-                    st.markdown(f"""
-                    <div style="background:{card_bg}; border:1.5px solid {card_border}; border-right:5px solid #0284c7; border-radius:18px; padding:18px; min-height:200px; display:flex; flex-direction:column; justify-content:space-between; margin-bottom:8px; box-shadow:0 4px 14px rgba(0,0,0,0.03);">
-                        <div>
-                            <div style="font-size:28px; margin-bottom:6px;">💻</div>
-                            <h3 style="margin:0 0 6px; font-size:18px; font-weight:950; color:{text_color};">حصص البث المباشر وزوم</h3>
-                            <p style="margin:0; font-size:13px; color:{text_color}; opacity:0.85; line-height:1.6;">
-                                لا توجد حصة مباشرة نشطة لك اليوم. يمكنك متابعة جدول مواعيدك الأسبوعية أو الاطلاع على جدول Zoom الكامل.
-                            </p>
+                    countdown_pill = "📌 موعد الحصة قد حان"
+                    status_badge = "📅 حصة اليوم"
+                    badge_bg = "#e0f2fe"
+                    badge_color = "#0369a1"
+
+                st.markdown(f"""
+                <div class="live-zoom-pulse-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#16a34a; box-shadow:0 0 10px #16a34a;"></span>
+                            <span style="background:{badge_bg}; color:{badge_color}; border-radius:20px; padding:3px 12px; font-size:12px; font-weight:900;">{status_badge}</span>
+                        </div>
+                        <div style="background:#0f172a; color:#38bdf8; font-family:monospace; font-size:15px; font-weight:900; padding:4px 14px; border-radius:12px; letter-spacing:1px; direction:ltr;">
+                            {countdown_pill}
                         </div>
                     </div>
-                    """, unsafe_allow_html=True)
-                    if st.button("💻 فتح جدول زوم الكامل", key="btn_dash_open_zoom_page_empty", use_container_width=True):
+                    <div>
+                        <h3 style="margin:0 0 4px; font-size:18px; font-weight:900; color:{text_color};">💻 حصة البث المباشر — {sched_grade}</h3>
+                        <p style="margin:0; font-size:13px; color:{text_color}; opacity:0.85;">
+                            🏛️ {academy_name} • 📅 {sched_date} في تمام الساعة {sched_time} • 📞 المشرف: {sched_sup_phone}
+                        </p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                col_z_btn1, col_z_btn2 = st.columns([2, 1])
+                with col_z_btn1:
+                    _zl = zoom_link if (zoom_link and zoom_link != "nan") else "https://us05web.zoom.us/j/83526892910?pwd=2jWRgATgBRPbXttdnm0QpLwBApsZL4.1"
+                    st.link_button("🚀 انضم الآن إلى حصة زوم المباشرة", _zl, use_container_width=True)
+                with col_z_btn2:
+                    if st.button("💻 جدول حصص زوم الكامل", key="btn_dash_open_zoom_page", use_container_width=True):
                         st.session_state.student_sub_page = "online_zoom"
                         st.rerun()
 
@@ -3959,61 +4166,108 @@ if is_student_mode:
                             st.session_state.student_sub_page = srv['key']
                             st.rerun()
 
-            # التبويبات السفلية المدمجة: مواعيد الطالب واشتراكات درسلي
-            st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
-            tab_st_sched, tab_st_subs = st.tabs(["🗓️ مواعيدي الأسبوعية وحصص Zoom", "💎 باقات واشتراكات درسلي"])
+            # جدول الأونلاين وزوم السريع داخل لوحة التحكم
+            student_name_str = str(st_user.get("اسم الطالب", "")).strip()
+            os_df = st.session_state.online_schedule_df
+            st_sched = os_df[os_df["اسم الطالب"].astype(str).str.strip().str.lower() == student_name_str.lower()]
 
-            with tab_st_sched:
-                student_weekly = st.session_state.weekly_schedule_df[st.session_state.weekly_schedule_df["اسم الطالب"].astype(str).str.strip().str.lower() == student_name_str.lower()]
-                if not student_weekly.empty:
-                    st.markdown("<div style='font-size:15px; font-weight:900; margin-bottom:8px;'>🗓️ المواعيد الأسبوعية المسجلة</div>", unsafe_allow_html=True)
-                    for _, wr in student_weekly.iterrows():
-                        w_color = str(wr.get("اللون", "#2563eb"))
-                        st.markdown(f"""<div style='border-right:5px solid {w_color};background:{card_bg};border:1px solid {card_border};border-radius:12px;padding:12px 14px;margin-bottom:8px;'>
-                        <b>📅 {wr.get('اليوم','')} — ⏰ {wr.get('الموعد','')}</b> &nbsp;|&nbsp; 🏛️ الأكاديمية: {wr.get('اسم الأكاديمية','')}<br>
-                        📚 {wr.get('المنهج/الدولة','')} — {wr.get('المجموعة/الصف','')} &nbsp;|&nbsp; 💰 سعر الحصة: {wr.get('سعر الحصة',0)} جنيه &nbsp;|&nbsp; 📞 المشرف: {wr.get('رقم مشرف الأكاديمية','')}
-                        </div>""", unsafe_allow_html=True)
-                else:
-                    st.info("لم يتم تسجيل مواعيد أسبوعية خاصة بك حتى الآن.")
+            if not st_sched.empty:
+                st.markdown("<div class='vertical-section-header'>💻 حصص الأونلاين وجدول زوم الخاص بي</div>", unsafe_allow_html=True)
+                for _, s_row in st_sched.iterrows():
+                    academy_name = s_row.get("اسم الأكاديمية", "أكاديمية البشمهندس")
+                    sched_grade = s_row["المجموعة/الصف"]
+                    sched_sup_phone = s_row["رقم مشرف الأكاديمية"]
+                    sched_price = s_row["سعر الحصة"]
+                    sched_date = s_row.get("تاريخ الحصة", str(date.today()))
+                    sched_time = s_row.get("ساعة الحصة", "18:00")
+                    zoom_link = s_row["رابط زوم"]
+                    zoom_status = s_row["حالة فتح الحصة"]
 
-            with tab_st_subs:
-                # اشتراكات درسلي داخل لوحة التحكم
-                darssly_subscriptions = [
-                    {"badge": "باقة شهرية", "title": "باقة أولى إعدادي", "grade": "الصف الأول الإعدادي", "price": "200", "icon": "📘", "accent": "#f59e0b", "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim-3/plans"},
-                    {"badge": "باقة شهرية", "title": "باقة ثانية إعدادي", "grade": "الصف الثاني الإعدادي", "price": "200", "icon": "📗", "accent": "#10b981", "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim/plans"},
-                    {"badge": "باقة شهرية", "title": "باقة ثالثة إعدادي", "grade": "الصف الثالث الإعدادي", "price": "200", "icon": "📕", "accent": "#8b5cf6", "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim-2/plans"},
-                    {"badge": "باقة شهرية", "title": "إحصاء ثالثة ثانوي", "grade": "الصف الثالث الثانوي — إحصاء", "price": "250", "icon": "📊", "accent": "#ef4444", "link": "https://darssly.com/courses/mohamed-ghoneim-statistics/plans"},
-                ]
-                grade_for_package = str(user_grade_raw or user_grade_clean or "").strip().lower()
-                grade_aliases = {
-                    "باقة أولى إعدادي": ["الأول الإعدادي", "اول اعدادي", "أولى إعدادي", "اولى اعدادي", "1 اعدادي", "الأول اعدادي"],
-                    "باقة ثانية إعدادي": ["الثاني الإعدادي", "ثاني اعدادي", "ثانية إعدادي", "ثانيه اعدادي", "2 اعدادي", "الثاني اعدادي"],
-                    "باقة ثالثة إعدادي": ["الثالث الإعدادي", "ثالث اعدادي", "ثالثة إعدادي", "ثالثه اعدادي", "3 اعدادي", "الثالث اعدادي"],
-                    "إحصاء ثالثة ثانوي": ["ثالثة ثانوي", "ثالث ثانوي", "الثالث الثانوي", "إحصاء", "احصاء"],
-                }
-                matched_packages = []
-                for pkg in darssly_subscriptions:
-                    aliases = [str(x).lower() for x in grade_aliases.get(pkg["title"], [])]
-                    if any(a in grade_for_package for a in aliases) or any(grade_for_package in a for a in aliases if grade_for_package):
-                        matched_packages.append(pkg)
-                if not matched_packages: matched_packages = darssly_subscriptions
+                    try:
+                        target_dt = datetime.strptime(f"{sched_date} {sched_time}", "%Y-%m-%d %H:%M")
+                        diff_seconds = int((target_dt - datetime.now()).total_seconds())
+                    except Exception:
+                        diff_seconds = -1
 
-                package_cols = st.columns(len(matched_packages))
-                student_sub_b64 = str(si.get("صورة_الاشتراكات_base64", "") or "").strip() or STUDENT_FIXED_IMAGE_B64
-                student_sub_uri = teacher_image_data_uri(student_sub_b64) if student_sub_b64 else STUDENT_FIXED_IMAGE_URI
+                    timer_text = ""
+                    if diff_seconds > 0:
+                        d_days = diff_seconds // 86400; d_hours = (diff_seconds % 86400) // 3600; d_mins = (diff_seconds % 3600) // 60; d_secs = diff_seconds % 60
+                        timer_text = f"⏳ باقي على الحصة: {d_days} يوم و {d_hours} ساعة و {d_mins} دقيقة" if d_days > 0 else f"⏳ باقي على الحصة: {d_hours:02d}:{d_mins:02d}:{d_secs:02d}"
+                    elif diff_seconds == 0:
+                        timer_text = "🟢 وقت الحصة الآن!"
+                    else:
+                        timer_text = "📌 موعد الحصة قد حان أو انتهى."
 
-                for p_idx, pkg in enumerate(matched_packages):
-                    with package_cols[p_idx]:
-                        st.markdown(f"""
-                        <div style="background:{card_bg}; border:1.5px solid {pkg['accent']}; border-radius:18px; padding:16px 14px 12px; min-height:330px; box-shadow:0 6px 20px rgba(15,23,42,.06); direction:rtl; text-align:right; margin-bottom:8px;">
-                            <div style="display:inline-block; background:{pkg['accent']}18; color:{pkg['accent']}; border:1px solid {pkg['accent']}55; border-radius:20px; padding:4px 10px; font-size:12px; font-weight:900;">{pkg['badge']}</div>
-                            {f"<img src='{student_sub_uri}' style='width:88px;height:88px;border-radius:50%;object-fit:cover;display:block;margin:10px auto 8px;border:4px solid {pkg['accent']};box-shadow:0 6px 16px rgba(15,23,42,.15);'>" if student_sub_uri else f"<div style='font-size:38px; text-align:center; margin:10px 0 6px;'>{pkg['icon']}</div>"}
-                            <h4 style="color:{text_color}; text-align:center; font-size:18px; margin:4px 0 4px;">{pkg['title']}</h4>
-                            <p style="color:{text_color}; opacity:.8; text-align:center; font-weight:800; font-size:13px; margin-bottom:10px;">{pkg['grade']}</p>
-                            <div style="font-size:26px; font-weight:950; color:{pkg['accent']}; text-align:center; margin-bottom:10px;">{pkg['price']} جنيه <span style="font-size:12px; color:{text_color};">/ شهر</span></div>
+                    st.markdown(f"""
+                        <div style="background:{card_bg}; border:2px solid #0284c7; border-radius:14px; padding:18px; margin-bottom:12px;">
+                            <h4 style="color:#0284c7; margin-top:0;">🏛️ الأكاديمية: {academy_name} | المرحلة: {sched_grade}</h4>
+                            <p style="font-size:15px; margin:4px 0;"><b>📅 موعد الحصة:</b> {sched_date} في تمام الساعة {sched_time} | <b>💰 السعر:</b> {sched_price} جنيه</p>
+                            <p style="font-size:15px; margin:4px 0; color:#d97706;"><b>{timer_text}</b></p>
+                            <p style="font-size:15px; margin:4px 0;"><b>📞 مشرف الأكاديمية:</b> {sched_sup_phone}</p>
+                            <p style="font-size:15px; margin:4px 0;"><b>حالة الحصة:</b> <span style="color: {'#16a34a' if zoom_status == 'مفتوحة' else '#dc2626'};"><b>{zoom_status}</b></span></p>
                         </div>
-                        """, unsafe_allow_html=True)
-                        st.link_button("🔴 تفاصيل الباقة والاشتراك", pkg["link"], use_container_width=True)
+                    """, unsafe_allow_html=True)
+
+                    if zoom_status == "مفتوحة":
+                        _zl = zoom_link if (zoom_link and zoom_link != "nan") else "https://us05web.zoom.us/j/83526892910?pwd=2jWRgATgBRPbXttdnm0QpLwBApsZL4.1"
+                        st.link_button("🚀 انضم الآن إلى حصة زوم (الحصة مفتوحة) 🟢", _zl, use_container_width=True)
+
+            # موعد الطالب الأسبوعي المرتبط بملف الطالب
+            student_weekly = st.session_state.weekly_schedule_df[st.session_state.weekly_schedule_df["اسم الطالب"].astype(str).str.strip().str.lower() == student_name_str.lower()]
+            if not student_weekly.empty:
+                st.markdown("<div class='vertical-section-header'>🗓️ مواعيدي الأسبوعية</div>", unsafe_allow_html=True)
+                for _, wr in student_weekly.iterrows():
+                    w_color = str(wr.get("اللون", "#2563eb"))
+                    st.markdown(f"""<div style='border-right:6px solid {w_color};background:{card_bg};border:1px solid {card_border};border-radius:12px;padding:14px;margin-bottom:10px;'>
+                    <b>📅 {wr.get('اليوم','')} — ⏰ {wr.get('الموعد','')}</b><br>
+                    🏛️ الأكاديمية: {wr.get('اسم الأكاديمية','')} | 📚 {wr.get('المنهج/الدولة','')} — {wr.get('المجموعة/الصف','')}<br>
+                    💰 سعر الحصة: {wr.get('سعر الحصة',0)} جنيه | 📞 مشرف الأكاديمية: {wr.get('رقم مشرف الأكاديمية','')}
+                    </div>""", unsafe_allow_html=True)
+
+            # اشتراكات درسلي داخل لوحة التحكم
+            darssly_subscriptions = [
+                {"badge": "باقة شهرية", "title": "باقة أولى إعدادي", "grade": "الصف الأول الإعدادي", "price": "200", "icon": "📘", "accent": "#f59e0b", "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim-3/plans"},
+                {"badge": "باقة شهرية", "title": "باقة ثانية إعدادي", "grade": "الصف الثاني الإعدادي", "price": "200", "icon": "📗", "accent": "#10b981", "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim/plans"},
+                {"badge": "باقة شهرية", "title": "باقة ثالثة إعدادي", "grade": "الصف الثالث الإعدادي", "price": "200", "icon": "📕", "accent": "#8b5cf6", "link": "https://darssly.com/courses/mathematics-for-preparatory-stage-mr-mohamed-ghonaim-2/plans"},
+                {"badge": "باقة شهرية", "title": "إحصاء ثالثة ثانوي", "grade": "الصف الثالث الثانوي — إحصاء", "price": "250", "icon": "📊", "accent": "#ef4444", "link": "https://darssly.com/courses/mohamed-ghoneim-statistics/plans"},
+            ]
+            grade_for_package = str(user_grade_raw or user_grade_clean or "").strip().lower()
+            grade_aliases = {
+                "باقة أولى إعدادي": ["الأول الإعدادي", "اول اعدادي", "أولى إعدادي", "اولى اعدادي", "1 اعدادي", "الأول اعدادي"],
+                "باقة ثانية إعدادي": ["الثاني الإعدادي", "ثاني اعدادي", "ثانية إعدادي", "ثانيه اعدادي", "2 اعدادي", "الثاني اعدادي"],
+                "باقة ثالثة إعدادي": ["الثالث الإعدادي", "ثالث اعدادي", "ثالثة إعدادي", "ثالثه اعدادي", "3 اعدادي", "الثالث اعدادي"],
+                "إحصاء ثالثة ثانوي": ["ثالثة ثانوي", "ثالث ثانوي", "الثالث الثانوي", "إحصاء", "احصاء"],
+            }
+            matched_packages = []
+            for pkg in darssly_subscriptions:
+                aliases = [str(x).lower() for x in grade_aliases.get(pkg["title"], [])]
+                if any(a in grade_for_package for a in aliases) or any(grade_for_package in a for a in aliases if grade_for_package):
+                    matched_packages.append(pkg)
+            if not matched_packages: matched_packages = darssly_subscriptions
+
+            st.markdown("<div class='vertical-section-header'>💳 اشتراكات درسلي المتاحة</div>", unsafe_allow_html=True)
+            package_cols = st.columns(len(matched_packages))
+            student_sub_b64 = str(si.get("صورة_الاشتراكات_base64", "") or "").strip() or STUDENT_FIXED_IMAGE_B64
+            student_sub_uri = teacher_image_data_uri(student_sub_b64) if student_sub_b64 else STUDENT_FIXED_IMAGE_URI
+
+            for p_idx, pkg in enumerate(matched_packages):
+                with package_cols[p_idx]:
+                    st.markdown(f"""
+                    <div style="background:{card_bg}; border:1.5px solid {pkg['accent']}; border-radius:20px; padding:18px 16px 14px; min-height:365px; box-shadow:0 8px 24px rgba(15,23,42,.08); direction:rtl; text-align:right; margin-bottom:10px;">
+                        <div style="display:inline-block; background:{pkg['accent']}18; color:{pkg['accent']}; border:1px solid {pkg['accent']}55; border-radius:20px; padding:5px 12px; font-size:13px; font-weight:900;">{pkg['badge']}</div>
+                        {f"<img src='{student_sub_uri}' style='width:108px;height:108px;border-radius:50%;object-fit:cover;display:block;margin:14px auto 10px;border:5px solid {pkg['accent']};box-shadow:0 8px 20px rgba(15,23,42,.18);'>" if student_sub_uri else f"<div style='font-size:46px; text-align:center; margin:14px 0 8px;'>{pkg['icon']}</div>"}
+                        <h3 style="color:{text_color}; text-align:center; font-size:20px; margin:4px 0 6px;">{pkg['title']}</h3>
+                        <p style="color:{text_color}; opacity:.82; text-align:center; font-weight:800; font-size:14px; margin-bottom:16px;">{pkg['grade']}</p>
+                        <div style="font-size:30px; font-weight:950; color:{pkg['accent']}; text-align:center; margin-bottom:12px;">{pkg['price']} جنيه <span style="font-size:13px; color:{text_color};">/ شهر</span></div>
+                        <div style="background:{pkg['accent']}0d; border-radius:14px; padding:10px 12px; color:{text_color}; font-size:13px; line-height:1.9; font-weight:700;">
+                            ✓ فيديوهات شرح مسجلة<br>
+                            ✓ حصص Zoom مباشرة<br>
+                            ✓ متابعة مستمرة<br>
+                            ✓ حل وتدريب على الأسئلة
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.link_button("🔴 معرفة تفاصيل الباقة", pkg["link"], use_container_width=True)
 
         # -------------------------------------------------------------
         # 2. الصفحات المستقلة لكل خدمة (Independent Dedicated Pages)
@@ -6322,177 +6576,127 @@ elif t_page == "dashboard":
     _teacher_notifs = _app_notifications("teacher")
     _teacher_notif_count = len(_teacher_notifs)
 
-    # 1. كونسول الهيدر العلوي المدمج (Compact Sticky Header Bar)
-    _t_h1, _t_h2 = st.columns([7, 3], vertical_alignment="center")
-    with _t_h1:
-        st.markdown(f"""
-        <div style="background:{card_bg}; border:1px solid {card_border}; border-right:5px solid #6366f1; border-radius:16px; padding:10px 16px; display:flex; align-items:center; justify-content:space-between; direction:rtl; margin-bottom:8px; box-shadow:0 4px 15px rgba(0,0,0,0.04);">
-            <div style="display:flex; align-items:center; gap:12px;">
-                <img src="{profile_uri}" style="width:48px; height:48px; border-radius:50%; object-fit:cover; border:2.5px solid #6366f1; box-shadow:0 4px 10px rgba(99,102,241,0.25);">
+    # 1. بانر ترحيبي بطل (Hero Banner)
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg, #062b63 0%, #1e40af 55%, #2563eb 100%); border-radius:24px; padding:26px 28px; color:#ffffff; direction:rtl; box-shadow:0 12px 35px rgba(6,43,99,0.22); margin-bottom:18px; border:1px solid rgba(255,255,255,0.25);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div style="display:flex; align-items:center; gap:18px;">
+                <img src="{profile_uri}" style="width:72px; height:72px; border-radius:50%; object-fit:cover; border:3.5px solid #60a5fa; box-shadow:0 6px 18px rgba(0,0,0,0.3); flex-shrink:0;">
                 <div>
-                    <div style="font-size:17px; font-weight:950; color:{text_color}; line-height:1.2;">م/ محمد غنيم 👋 <span style="font-size:12px; font-weight:800; background:rgba(99,102,241,0.12); color:#6366f1; padding:2px 8px; border-radius:10px;">⚡ كونسول الإدارة الشامل</span></div>
-                    <div style="font-size:12px; color:{text_color}; opacity:0.8; font-weight:700;">البشمهندس في الرياضيات • لوحة التحكم المتطورة</div>
+                    <div style="display:inline-block; background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.35); color:#ffffff; padding:3px 12px; border-radius:20px; font-size:12px; font-weight:900; margin-bottom:6px;">
+                        ⚡ لوحة الإدارة والتحكم الشاملة
+                    </div>
+                    <h2 style="margin:0 0 4px; font-size:24px; font-weight:950; color:#ffffff !important;">مرحباً بك يا م/ محمد غنيم 👋</h2>
+                    <p style="margin:0; font-size:14px; opacity:0.92; color:#ffffff !important; font-weight:600;">إدارة كاملة للطلاب، الحصص، الامتحانات، زوم، الذكاء الاصطناعي، والتقارير المالية بدقة وسرعة فائقة.</p>
                 </div>
             </div>
-            <div style="text-align:left; font-size:13px; font-weight:800; color:{text_color}; opacity:0.85;">
-                📅 {date.today().strftime('%Y-%m-%d')}
+            <div style="background:rgba(255,255,255,0.15); border-radius:14px; padding:8px 16px; border:1px solid rgba(255,255,255,0.25); text-align:center;">
+                <div style="font-size:12px; font-weight:700; opacity:0.9; color:#ffffff;">تاريخ اليوم</div>
+                <div style="font-size:15px; font-weight:950; color:#ffffff;">📅 {date.today().strftime('%Y-%m-%d')}</div>
             </div>
         </div>
-        """, unsafe_allow_html=True)
-    with _t_h2:
-        _btn_c1, _btn_c2 = st.columns(2)
-        with _btn_c1:
-            _mode_lbl = "☀️ فاتح" if st.session_state.dark_mode else "🌙 ليلي"
-            if st.button(_mode_lbl, key="btn_teacher_dash_mode", use_container_width=True):
-                st.session_state.dark_mode = not st.session_state.dark_mode
-                st.rerun()
-        with _btn_c2:
-            if st.button("🚀 واجهة الطالب", key="btn_teacher_dash_preview_st", use_container_width=True, type="primary"):
-                st.query_params["role"] = "student"
-                st.rerun()
-
-    # 2. شريط المؤشرات الفوري المدمج (Compact 7-Metric KPI Ribbon)
-    st.markdown(f"""
-    <div class="console-ribbon" style="margin-bottom:12px;">
-        <div class="console-kpi-badge badge-purple"><span>♙ الطلاب</span><b>{len(dashboard_students)}</b></div>
-        <div class="console-kpi-badge badge-green"><span>▦ الأسبوعي</span><b>{len(st.session_state.weekly_schedule_df)}</b></div>
-        <div class="console-kpi-badge badge-blue"><span>💻 حصص Zoom</span><b>{len(st.session_state.online_schedule_df)}</b></div>
-        <div class="console-kpi-badge badge-amber"><span>📝 الحصص</span><b>{len(st.session_state.sessions_df)}</b></div>
-        <div class="console-kpi-badge badge-cyan"><span>💳 المستحق</span><b>{total_due_all:,.0f} ج</b></div>
-        <div class="console-kpi-badge badge-green"><span>✅ المدفوع</span><b>{total_paid_all:,.0f} ج</b></div>
-        <div class="console-kpi-badge badge-amber"><span>💰 المتبقي</span><b>{max(total_balance_all,0):,.0f} ج</b></div>
     </div>
     """, unsafe_allow_html=True)
 
-    # 3. شاشة التحكم المقسمة (Two-Column Split Console - No Endless Scroll)
-    dash_col_side, dash_col_main = st.columns([3.8, 6.2], gap="small")
+    # 2. مؤشرات الأداء السريعة (Academic & Financial KPI Strip - 7 Metrics)
+    st.markdown(f"""
+    <div class="modern-stats" style="margin-bottom:12px;">
+        <div class="modern-stat stat-purple"><div class="icon">♙</div><div class="num">{len(dashboard_students)}</div><div class="label">إجمالي الطلاب</div></div>
+        <div class="modern-stat stat-green"><div class="icon">▦</div><div class="num">{len(st.session_state.weekly_schedule_df)}</div><div class="label">المواعيد الأسبوعية</div></div>
+        <div class="modern-stat stat-blue"><div class="icon">💻</div><div class="num">{len(st.session_state.online_schedule_df)}</div><div class="label">مواعيد Zoom</div></div>
+        <div class="modern-stat stat-yellow"><div class="icon">📝</div><div class="num">{len(st.session_state.sessions_df)}</div><div class="label">الحصص المرصودة</div></div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # ----- الجانب الأيمن: رادار البث المباشر والمشاركة وإعداد الصورة -----
-    with dash_col_side:
-        # كارت رادار زوم وحصص اليوم وغداً
-        with st.container(border=True):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; direction:rtl;">
-                <div style="font-size:15px; font-weight:900; color:#0284c7;">🔔 رادار حصص اليوم وغداً</div>
-                <span style="font-size:11px; background:rgba(2,132,199,0.12); color:#0284c7; padding:2px 8px; border-radius:10px; font-weight:800;">بث مباشر</span>
-            </div>
-            """, unsafe_allow_html=True)
-            _render_teacher_today_lessons()
+    fc1, fc2, fc3 = st.columns(3)
+    with fc1:
+        st.markdown(f"""<div class="modern-stat stat-blue" style="text-align:center;"><div class="icon">💳</div><div class="num">{total_due_all:,.0f} <span style="font-size:14px;">جنيه</span></div><div class="label">إجمالي المستحق</div></div>""", unsafe_allow_html=True)
+    with fc2:
+        st.markdown(f"""<div class="modern-stat stat-green" style="text-align:center;"><div class="icon">✅</div><div class="num">{total_paid_all:,.0f} <span style="font-size:14px;">جنيه</span></div><div class="label">إجمالي المدفوع</div></div>""", unsafe_allow_html=True)
+    with fc3:
+        st.markdown(f"""<div class="modern-stat stat-yellow" style="text-align:center;"><div class="icon">💰</div><div class="num">{max(total_balance_all,0):,.0f} <span style="font-size:14px;">جنيه</span></div><div class="label">الرصيد المتبقي</div></div>""", unsafe_allow_html=True)
 
-        # كارت مشاركة رابط منصة الطالب
-        _student_public_url = "https://engmohamedghonaim.streamlit.app/?role=student"
-        with st.container(border=True):
-            st.markdown(f"""
-            <div style="direction:rtl; margin-bottom:6px;">
-                <div style="font-size:14px; font-weight:900; color:{text_color};">🔗 رابط دخول الطلاب والمشاركة السريعة</div>
-                <div style="font-size:12px; color:{text_color}; opacity:0.8;">انسخ الرابط لطلابك أو شاركه فوراً:</div>
-            </div>
-            """, unsafe_allow_html=True)
-            st.code(_student_public_url, language="text")
+    # 3. حصص اليوم وغداً مع عداد تنازلي حي
+    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown("### 🔔 حصص اليوم وغداً المباشرة")
+        st.caption("يتم رصد الحصص تلقائياً من جدول مواعيد الطلاب؛ العداد يتحدث لحظياً وعند حلول الموعد يظهر زر بدء حصة زوم.")
+        _render_teacher_today_lessons()
 
-        # إعداد وتغيير صورة المعلم داخل Expander أنيق مضغوط
-        with st.expander("📷 تعديل صورة المعلم الشخصية"):
-            st.markdown(f"<div style='text-align:center;margin:6px 0 10px;'><img src='{STUDENT_FIXED_IMAGE_URI}' style='width:90px;height:90px;border-radius:50%;object-fit:cover;border:3px solid #6366f1;box-shadow:0 6px 18px rgba(0,0,0,.15);'></div>", unsafe_allow_html=True)
-            teacher_photo = st.file_uploader("اختر صورة جديدة", type=["png","jpg","jpeg"], key="teacher_profile_upload_dash")
-            if teacher_photo is not None and st.button("💾 حفظ الصورة الجديدة", key="save_teacher_photo_dash", use_container_width=True):
-                b64 = base64.b64encode(teacher_photo.getvalue()).decode("utf-8")
-                st.session_state.teacher_profile_df = pd.DataFrame([{"اسم المعلم": "م/ محمد غنيم", "الصورة_base64": b64}])
-                save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
-                st.success("✓ تم حفظ الصورة الجديدة")
-                st.rerun()
+    # 4. كارت رابط دخول الطلاب والمشاركة
+    _student_public_url = "https://engmohamedghonaim.streamlit.app/?role=student"
+    with st.container(border=True):
+        st.markdown("### 🔗 رابط دخول الطلاب والمشاركة")
+        st.caption("انسخ هذا الرابط وأرسله لطلابك؛ يمكنهم تسجيل الدخول أو التسجيل الجديد فوراً برقم الهاتف أو Google أو Facebook.")
+        st.code(_student_public_url, language="text")
+        if st.button("🚀 فتح واجهة الطالب الآن للمعاينة والتجربة", key="btn_dash_preview_student", use_container_width=True):
+            st.query_params["role"] = "student"
+            st.rerun()
 
-    # ----- الجانب الأيسر: مركز الأدوات الـ 22 المنظم بـ 4 تبويبات سريعة -----
-    with dash_col_main:
-        with st.container(border=True):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; direction:rtl;">
-                <div style="font-size:16px; font-weight:950; color:{text_color};">⚡ أدوات الإدارة الشاملة (22 أداة)</div>
-                <span style="font-size:12px; color:{text_color}; opacity:0.8; font-weight:800;">تنقل فوري بدون سكرول</span>
-            </div>
-            """, unsafe_allow_html=True)
+    # 5. شبكة أدوات التحكم والإدارة الشاملة (All 22 SaaS Management Cards)
+    st.markdown("<div class='vertical-section-header' style='margin-top:20px;'>⚡ مركز أدوات الإدارة والتحكم الشاملة</div>", unsafe_allow_html=True)
+    
+    all_teacher_tools = [
+        ('♙', 'إدارة الطلاب', 'بيانات وبطاقات الطلاب والحظر وتعديل الصفوف', 'students', '#8b5cf6'),
+        ('💻', 'جداول Zoom', 'إدارة الحصص المباشرة وروابط زوم المخصصة', 'online_schedule', '#0284c7'),
+        ('📅', 'المواعيد الأسبوعية', 'جدول المجموعات والأيام ومتابعة المشرفين', 'weekly_schedule', '#10b981'),
+        ('✍️', 'الامتحانات الإلكترونية', 'إنشاء وإدارة الاختبارات التفاعلية وحفظها', 'exam_maker', '#f59e0b'),
+        ('🤖', 'استوديو الذكاء الاصطناعي', 'توليد الأسئلة والشروحات الرياضية بـ AI', 'ai_studio', '#6366f1'),
+        ('▤', 'بنك الأسئلة الشامل', 'تدريبات وتمارين بنك الأسئلة لجميع المراحل', 'question_bank', '#ef4444'),
+        ('🎥', 'المقررات والفيديوهات', 'إدارة شروحات ومقررات الفيديو التعليمية', 'videos', '#059669'),
+        ('🧠', 'اختبارات عبقري', 'إدارة ومتابعة اختبارات موقع عبقري والنتائج', 'abqary', '#7c3aed'),
+        ('📊', 'رصد الدرجات', 'درجات الكويزات والامتحانات والواجبات المنزلية', 'grades', '#ec4899'),
+        ('✎', 'تصحيح المقالي', 'استلام حلول الطلاب المقالية وتصحيحها', 'essays', '#d97706'),
+        ('💬', 'الرسائل والدعم', 'محادثات الطلاب المباشرة والدعم الفوري', 'chat', '#06b6d4'),
+        ('＋', 'رصد حصة جديدة', 'تسجيل حضور وتقييم الطلاب في الحصص المنفذة', 'add_session', '#16a34a'),
+        ('＋', 'إضافة واجب', 'نشر واجبات وتكليفات جديدة للطلاب', 'add_hw', '#2563eb'),
+        ('✏️', 'تعديل السجلات', 'تعديل أو حذف حصص وتقييمات مسجلة مسبقاً', 'edit_records', '#f97316'),
+        ('▥', 'السجلات الشاملة', 'كشف تفصيلي بجميع الحصص والحضور والغياب', 'all_records', '#64748b'),
+        ('📢', 'إدارة الإعلانات', 'نشر بوستات وفيديوهات وإعلانات تظهر للطلاب', 'ads', '#dc2626'),
+        ('👨‍👩‍👧', 'تقرير ولي الأمر', 'تقارير متابعة شاملة للطباعة والإرسال', 'parent_report', '#0284c7'),
+        ('💳', 'المدفوعات والحسابات', 'متابعة المستحق والمدفوع والتحصيل الشهري', 'payments', '#10b981'),
+        ('🏫', 'إدارة الأكاديميات', 'حسابات ومدرسي واشتراكات الأكاديميات', 'academies', '#8b5cf6'),
+        ('💎', 'تنظيم باقات درسلي', 'جدول مواعيد وباقات منصة درسلي التعليمية', 'darssly_schedule', '#f59e0b'),
+        ('💾', 'النسخ الاحتياطية', 'المزامنة السحابية واسترجاع Excel Online', 'online_backup', '#059669'),
+        ('◈', 'تخصيص واجهة الطالب', 'تخصيص صور وبنرات واشتراكات واجهة الطالب', 'student_interface', '#3b82f6'),
+    ]
 
-            tab_teach, tab_exams, tab_finance, tab_logs = st.tabs([
-                "♙ التدريس والطلاب",
-                "✍️ الامتحانات والـ AI",
-                "💳 المالية والأكاديميات",
-                "📋 السجلات والتواصل"
-            ])
-
-            # الأقسام الموزعة
-            tools_teach = [
-                ('♙', 'إدارة الطلاب', 'بيانات وبطاقات الطلاب والحظر وتعديل الصفوف', 'students', '#8b5cf6'),
-                ('💻', 'جداول Zoom', 'إدارة الحصص المباشرة وروابط زوم المخصصة', 'online_schedule', '#0284c7'),
-                ('📅', 'المواعيد الأسبوعية', 'جدول المجموعات والأيام ومتابعة المشرفين', 'weekly_schedule', '#10b981'),
-                ('＋', 'رصد حصة جديدة', 'تسجيل حضور وتقييم الطلاب في الحصص المنفذة', 'add_session', '#16a34a'),
-                ('＋', 'إضافة واجب', 'نشر واجبات وتكليفات جديدة للطلاب', 'add_hw', '#2563eb'),
-            ]
-
-            tools_exams = [
-                ('✍️', 'الامتحانات الإلكترونية', 'إنشاء وإدارة الاختبارات التفاعلية وحفظها', 'exam_maker', '#f59e0b'),
-                ('🤖', 'استوديو الذكاء الاصطناعي', 'توليد الأسئلة والشروحات الرياضية بـ AI', 'ai_studio', '#6366f1'),
-                ('▤', 'بنك الأسئلة الشامل', 'تدريبات وتمارين بنك الأسئلة لجميع المراحل', 'question_bank', '#ef4444'),
-                ('🧠', 'اختبارات عبقري', 'إدارة ومتابعة اختبارات موقع عبقري والنتائج', 'abqary', '#7c3aed'),
-                ('📊', 'رصد الدرجات', 'درجات الكويزات والامتحانات والواجبات', 'grades', '#ec4899'),
-                ('✎', 'تصحيح المقالي', 'استلام حلول الطلاب المقالية وتصحيحها', 'essays', '#d97706'),
-            ]
-
-            tools_finance = [
-                ('💳', 'المدفوعات والحسابات', 'متابعة المستحق والمدفوع والتحصيل الشهري', 'payments', '#10b981'),
-                ('🏫', 'إدارة الأكاديميات', 'حسابات ومدرسي واشتراكات الأكاديميات', 'academies', '#8b5cf6'),
-                ('💎', 'تنظيم باقات درسلي', 'جدول مواعيد وباقات منصة درسلي التعليمية', 'darssly_schedule', '#f59e0b'),
-                ('💾', 'النسخ الاحتياطية', 'المزامنة السحابية واسترجاع Excel Online', 'online_backup', '#059669'),
-            ]
-
-            tools_logs = [
-                ('▥', 'السجلات الشاملة', 'كشف تفصيلي بجميع الحصص والحضور والغياب', 'all_records', '#64748b'),
-                ('✏️', 'تعديل السجلات', 'تعديل أو حذف حصص وتقييمات مسجلة مسبقاً', 'edit_records', '#f97316'),
-                ('📢', 'إدارة الإعلانات', 'نشر بوستات وفيديوهات وإعلانات للطلاب', 'ads', '#dc2626'),
-                ('👨‍👩‍👧', 'تقرير ولي الأمر', 'تقارير متابعة شاملة للطباعة والإرسال', 'parent_report', '#0284c7'),
-                ('💬', 'الرسائل والدعم', 'محادثات الطلاب المباشرة والدعم الفوري', 'chat', '#06b6d4'),
-                ('🎥', 'المقررات والفيديوهات', 'إدارة شروحات ومقررات الفيديو التعليمية', 'videos', '#059669'),
-                ('◈', 'تخصيص واجهة الطالب', 'تخصيص صور وبنرات واشتراكات واجهة الطالب', 'student_interface', '#3b82f6'),
-            ]
-
-            def _render_tab_tools(tool_list, prefix_key):
-                for row_i in range(0, len(tool_list), 2):
-                    cols_t = st.columns(2)
-                    for col_i, item in enumerate(tool_list[row_i:row_i+2]):
-                        icon, title, desc, target_pg, accent_col = item
-                        with cols_t[col_i]:
-                            st.markdown(f"""
-                            <div style="background:{card_bg}; border:1px solid {card_border}; border-right:4px solid {accent_col}; border-radius:12px; padding:10px 12px; margin-bottom:8px; direction:rtl; min-height:82px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 3px 10px rgba(0,0,0,0.03);">
-                                <div>
-                                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">
-                                        <span style="font-size:18px;">{icon}</span>
-                                        <b style="font-size:14px; color:{text_color}; line-height:1.2;">{title}</b>
-                                    </div>
-                                    <div style="font-size:11px; color:{text_color}; opacity:0.8; line-height:1.4;">{desc}</div>
-                                </div>
+    for row_idx in range(0, len(all_teacher_tools), 4):
+        t_cols = st.columns(4)
+        for c_idx, item in enumerate(all_teacher_tools[row_idx:row_idx+4]):
+            icon, title, desc, target_pg, accent_col = item
+            with t_cols[c_idx]:
+                st.markdown(f"""
+                <div style="background:{card_bg}; border:1.5px solid {card_border}; border-top:4px solid {accent_col}; border-radius:16px; padding:16px 14px; min-height:165px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 6px 18px rgba(0,0,0,0.04); direction:rtl; margin-bottom:10px;">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                            <div style="width:38px; height:38px; border-radius:10px; background:{accent_col}18; color:{accent_col}; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:900;">
+                                {icon}
                             </div>
-                            """, unsafe_allow_html=True)
-                            if st.button(f"فتح {title} ↗", key=f"btn_tab_{prefix_key}_{target_pg}", use_container_width=True):
-                                st.session_state.teacher_page = target_pg
-                                st.rerun()
+                            <h4 style="margin:0; font-size:15px; font-weight:900; color:{text_color}; line-height:1.2;">{title}</h4>
+                        </div>
+                        <p style="margin:0 0 10px; font-size:12px; color:{text_color}; opacity:0.8; font-weight:600; line-height:1.5;">{desc}</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"فتح {title}", key=f"btn_alltools_{target_pg}_{row_idx}_{c_idx}", use_container_width=True):
+                    st.session_state.teacher_page = target_pg
+                    st.rerun()
 
-            with tab_teach:
-                _render_tab_tools(tools_teach, "teach")
-            with tab_exams:
-                _render_tab_tools(tools_exams, "exams")
-            with tab_finance:
-                _render_tab_tools(tools_finance, "fin")
-            with tab_logs:
-                _render_tab_tools(tools_logs, "logs")
-
-    # 4. شريط الفوتر الثابت لحالة المنصة (Persistent Footer Dock)
-    st.markdown(f"""
-    <div style="margin-top:14px; padding:9px 18px; background:{card_bg}; border:1px solid {card_border}; border-radius:12px; display:flex; justify-content:space-between; align-items:center; color:{text_color}; opacity:0.85; font-size:12px; direction:rtl; flex-wrap:wrap; gap:10px;">
-        <div style="display:flex; align-items:center; gap:8px;">
-            <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#10b981; box-shadow:0 0 8px #10b981;"></span>
-            <span>منصة البشمهندس في الرياضيات © 2026 • إصدار SaaS Pro v3.0</span>
-        </div>
-        <div>⚡ المزامنة السحابية: متصلة ونشطة</div>
-    </div>
-    """, unsafe_allow_html=True)
+    # 6. كارت تغيير صورة المعلم
+    st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown("### 📷 صورة المعلم")
+        st.markdown(f"<div style='text-align:center;margin:6px 0 14px;'><img src='{STUDENT_FIXED_IMAGE_URI}' style='width:130px;height:130px;border-radius:50%;object-fit:cover;border:4px solid #60a5fa;box-shadow:0 10px 25px rgba(0,0,0,.18);'></div>", unsafe_allow_html=True)
+        st.caption("صورتك محفوظة وتظهر في الواجهة والتقارير. يمكنك تغييرها من هنا دون التأثير على باقي البيانات.")
+        change_photo=st.checkbox("✏️ أريد تغيير الصورة",key="change_teacher_photo")
+        if change_photo:
+            teacher_photo=st.file_uploader("اختر صورة جديدة",type=["png","jpg","jpeg"],key="teacher_profile_upload")
+            if teacher_photo is not None and st.button("💾 حفظ صورتي الجديدة",key="save_teacher_photo",use_container_width=True):
+                b64=base64.b64encode(teacher_photo.getvalue()).decode("utf-8")
+                st.session_state.teacher_profile_df=pd.DataFrame([{"اسم المعلم":"م/ محمد غنيم","الصورة_base64":b64}])
+                save_all_data(st.session_state.users_df,st.session_state.sessions_df,st.session_state.assessments_df,st.session_state.messages_df,st.session_state.exams_df,st.session_state.essays_df,st.session_state.bookings_df,st.session_state.bank_requests_df,st.session_state.question_bank_df,st.session_state.videos_df,st.session_state.video_comments_df,st.session_state.abqary_df,st.session_state.online_schedule_df)
+                st.success("✓ تم حفظ الصورة الجديدة"); st.rerun()
 
 elif t_page == "payments":
     st.markdown("<div class='vertical-section-header'>▰  المدفوعات</div>", unsafe_allow_html=True)
