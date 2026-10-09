@@ -4601,20 +4601,43 @@ if is_academy_mode:
             st.info("لا يوجد مدرسون مسجلون في الأكاديمية بعد.")
     st.stop()
 
-# ==============================================================================# 2. قفل لوحة تحكم المعلم برقم سري ثابت
+# ==============================================================================# 2. بوابة دخول احترافية للوحة تحكم المعلم
 # ==============================================================================
 # لا يظهر أي جزء من لوحة التحكم قبل إدخال الرقم السري الصحيح.
 if not st.session_state.get("teacher_panel_unlocked", False):
     st.markdown("""
-    <div style="max-width:620px;margin:8vh auto 20px;padding:30px;border-radius:24px;background:linear-gradient(135deg,#071b3b,#1459a8);color:#fff;text-align:center;box-shadow:0 18px 50px rgba(7,27,59,.20);direction:rtl;">
-      <div style="font-size:42px;margin-bottom:8px;">🔐</div>
-      <h2 style="color:#fff;margin:0 0 8px;">لوحة التحكم محمية</h2>
-      <p style="color:#dbeafe;margin:0;">أدخل الرقم السري الثابت للمتابعة</p>
+    <style>
+    .stApp { background: radial-gradient(circle at 12% 8%, rgba(37,99,235,.12), transparent 30%), linear-gradient(135deg,#f4f7fc 0%,#edf3fb 55%,#f8fbff 100%); }
+    [data-testid="stHeader"] { background: transparent; }
+    .login-wrap { max-width: 510px; margin: 6vh auto 0; direction: rtl; text-align: center; }
+    .login-brand { color:#64748b; font-size:13px; font-weight:700; letter-spacing:1.5px; margin-bottom:16px; }
+    .login-card { background:rgba(255,255,255,.96); border:1px solid #e2eaf5; border-radius:28px; padding:34px 34px 28px; box-shadow:0 24px 70px rgba(15,40,85,.13); }
+    .login-mark { width:76px;height:76px;margin:0 auto 20px;border-radius:24px;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#0b1f44,#1769cf);box-shadow:0 12px 26px rgba(23,105,207,.25);font-size:34px;color:white; }
+    .login-title { color:#10264a;font-size:29px;font-weight:850;margin:0 0 10px; }
+    .login-desc { color:#64748b;font-size:15px;line-height:1.9;margin:0 auto 22px;max-width:340px; }
+    .login-secure { display:inline-flex;gap:7px;align-items:center;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:7px 13px;font-size:12px;font-weight:750;margin-bottom:18px; }
+    .login-foot { color:#94a3b8;font-size:12px;text-align:center;margin-top:18px; }
+    div[data-testid="stForm"] { max-width:510px;margin:0 auto;background:#fff;border:1px solid #e2eaf5;border-radius:0 0 28px 28px;padding:0 30px 26px;box-shadow:0 20px 45px rgba(15,40,85,.08); }
+    div[data-testid="stForm"] label { color:#263b5a;font-weight:700; }
+    div[data-testid="stForm"] input { border-radius:13px;min-height:48px;border-color:#d7e2f0;background:#f8fafc; }
+    div[data-testid="stForm"] button { border-radius:13px;min-height:48px;font-weight:800;background:linear-gradient(90deg,#123c83,#1769cf);border:0; }
+    div[data-testid="stAlert"] { max-width:510px;margin:12px auto 0; }
+    @media(max-width:640px){.login-wrap{margin:3vh 12px 0}.login-card{padding:27px 20px 22px}.login-title{font-size:25px}div[data-testid="stForm"]{margin:0 12px;padding:0 20px 22px}}
+    </style>
+    <div class="login-wrap">
+      <div class="login-brand">DARSLLY · EDUCATION PLATFORM</div>
+      <div class="login-card">
+        <div class="login-mark">🔐</div>
+        <div class="login-secure">✦ دخول آمن ومخصص للمعلم</div>
+        <h1 class="login-title">أهلاً بك في لوحة التحكم</h1>
+        <p class="login-desc">من فضلك أدخل الرقم السري للمتابعة إلى أدوات الإدارة وإدارة المنصة.</p>
+      </div>
     </div>
     """, unsafe_allow_html=True)
     with st.form("teacher_panel_password_form", clear_on_submit=False):
-        _teacher_panel_password = st.text_input("الرقم السري", type="password", placeholder="أدخل الرقم السري", max_chars=32)
-        _teacher_panel_submit = st.form_submit_button("🔓 فتح لوحة التحكم", use_container_width=True, type="primary")
+        _teacher_panel_password = st.text_input("الرقم السري", type="password", placeholder="اكتب الرقم السري هنا", max_chars=32, label_visibility="visible")
+        _teacher_panel_submit = st.form_submit_button("🔓  دخول إلى لوحة التحكم", use_container_width=True, type="primary")
+    st.markdown('<div class="login-foot">درسلي © بوابتك التعليمية · يرجى الحفاظ على سرية الرقم السري</div>', unsafe_allow_html=True)
     if _teacher_panel_submit:
         if _teacher_panel_password == "140140":
             st.session_state.teacher_panel_unlocked = True
