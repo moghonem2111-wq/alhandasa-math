@@ -4734,6 +4734,24 @@ def _render_teacher_today_lessons():
     today_name = day_names[today_date.weekday()]
     tomorrow_name = day_names[tomorrow_date.weekday()]
 
+    # عنوان جمالي للقسم مع اختيار عرض حصص اليوم أو الغد أو الكل.
+    st.markdown("""
+    <div style="direction:rtl;padding:18px 22px;margin:8px 0 12px;border-radius:20px;
+      background:linear-gradient(125deg,#0b1f42 0%,#124f91 58%,#1687c9 100%);
+      color:#fff;box-shadow:0 10px 28px rgba(12,58,112,.20);position:relative;overflow:hidden">
+      <div style="font-size:12px;font-weight:800;opacity:.85;letter-spacing:.4px">درسلي · لوحة المعلم</div>
+      <div style="font-size:25px;font-weight:900;margin-top:5px">📚 جدول الحصص</div>
+      <div style="font-size:13px;opacity:.92;margin-top:5px">تابع مواعيد طلابك، والوقت المتبقي، وروابط بدء الحصص من مكان واحد.</div>
+    </div>
+    """, unsafe_allow_html=True)
+    lesson_view = st.radio(
+        "عرض الحصص",
+        ["حصص اليوم", "حصص الغد", "كل الحصص"],
+        horizontal=True,
+        key="teacher_lessons_day_filter",
+        label_visibility="collapsed",
+    )
+
     ws = st.session_state.get("weekly_schedule_df", pd.DataFrame())
     if ws is None or ws.empty:
         st.info("📅 لا توجد حصص في جدول المواعيد.")
@@ -4769,6 +4787,12 @@ def _render_teacher_today_lessons():
     dismissed = st.session_state[dismissed_key]
     # نخفي فقط الحصة التي ضغط المعلم على «تمت الحصة» لها، ومفتاحها مرتبط بتاريخها.
     cards = [item for item in cards if f"{item[5]}_{item[2]}" not in dismissed]
+
+    # فلترة البطاقات حسب الاختيار دون تغيير جدول المواعيد الأصلي.
+    if lesson_view == "حصص اليوم":
+        cards = [item for item in cards if item[5] == today_date]
+    elif lesson_view == "حصص الغد":
+        cards = [item for item in cards if item[5] == tomorrow_date]
 
     st.caption(f"🕒 الوقت الحالي: {now.strftime('%I:%M:%S %p').lstrip('0')} — اليوم {today_name} {today_date} | غداً {tomorrow_name} {tomorrow_date}")
     if not cards:
