@@ -14,7 +14,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, time as dt_time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from html.parser import HTMLParser
 
 import streamlit as st
@@ -29,6 +30,37 @@ def _now():
 
 def _iso(value):
     return value.isoformat() if hasattr(value, "isoformat") else str(value or "")
+
+
+def _cairo_datetime(day, clock):
+    return datetime.combine(day, clock).replace(tzinfo=ZoneInfo("Africa/Cairo")).astimezone(timezone.utc).isoformat()
+
+
+def _exam_window(exam):
+    now = _now()
+    starts = datetime.fromisoformat(str(exam.get("starts_at") or "").replace("Z", "+00:00")) if exam.get("starts_at") else None
+    ends = datetime.fromisoformat(str(exam.get("ends_at") or "").replace("Z", "+00:00")) if exam.get("ends_at") else None
+    if starts and starts.tzinfo is None: starts = starts.replace(tzinfo=timezone.utc)
+    if ends and ends.tzinfo is None: ends = ends.replace(tzinfo=timezone.utc)
+    if starts and now < starts: return "upcoming", starts
+    if ends and now > ends: return "ended", ends
+    return "open", None
+
+
+def _report_html(exam, attempt):
+    answers = attempt.get("answers") or {}
+    details = []
+    review_count = 0
+    for i, q in enumerate(exam.get("questions") or [], 1):
+        student = str(answers.get(q.get("id", ""), "") or "—")
+        correct = str(q.get("answer", "") or "غير محددة")
+        ok = bool(q.get("answer", "").strip()) and student.strip().casefold() == correct.strip().casefold()
+        if not ok: review_count += 1
+        details.append("<section><h3>" + str(i) + ". " + html.escape(str(q.get("question", ""))) + "</h3><p><b>إجابة الطالب:</b> " + html.escape(student) + "</p><p><b>الإجابة النموذجية:</b> " + html.escape(correct) + "</p><p><b>التقييم:</b> " + ("صحيح" if ok else "يحتاج مراجعة") + "</p></section>")
+    score = float(attempt.get("score") or 0)
+    maximum = float(attempt.get("max_score") or 0)
+    pct = round(score / maximum * 100) if maximum else 0
+    return "<!doctype html><html lang='ar' dir='rtl'><meta charset='utf-8'><title>تقرير الطالب</title><style>body{font-family:Arial;margin:24px;color:#172033}header{background:#0b2b58;color:white;padding:20px;border-radius:12px}section,.meta div{border:1px solid #ccd6e3;padding:12px;border-radius:9px;margin:10px 0}.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media print{body{margin:10mm}}</style><header><h1>تقرير مستوى الطالب</h1><h2>" + html.escape(str(exam.get("title", ""))) + "</h2></header><div class='meta'><div><b>الطالب:</b> " + html.escape(str(attempt.get("student_name", ""))) + "</div><div><b>المرحلة:</b> " + html.escape(str(exam.get("stage", "—") or "—")) + "</div><div><b>المنهج:</b> " + html.escape(str(exam.get("curriculum", "—") or "—")) + "</div><div><b>الدرجة:</b> " + str(score) + " / " + str(maximum) + " (" + str(pct) + "%)</div><div><b>بدأ:</b> " + html.escape(str(attempt.get("started_at", "—"))) + "</div><div><b>سلّم:</b> " + html.escape(str(attempt.get("submitted_at", "—"))) + "</div><div><b>أسئلة تحتاج مراجعة:</b> " + str(review_count) + "</div></div>" + "".join(details) + "<script>window.onload=()=>window.print()</script></html>"
 
 
 def _api(url, key, method="GET", payload=None, query=""):
@@ -273,6 +305,13 @@ def _public_exam_page(url, key, exam_id, attempt_id_from_url=""):
     attempt_id_session = st.session_state.get("_hexam_verified_" + exam_id, "")
     attempt_id = attempt_id_from_url or attempt_id_session
     if not attempt_id:
+        window_state, boundary = _exam_window(exam)
+        if window_state == "upcoming":
+            st.info("الاختبار لم يبدأ بعد. موعد البدء بتوقيت القاهرة: " + boundary.astimezone(ZoneInfo("Africa/Cairo")).strftime("%Y-%m-%d %I:%M %p"))
+            return True
+        if window_state == "ended":
+            st.error("انتهت فترة إتاحة هذا الاختبار. تواصل مع المدرس.")
+            return True
         with st.form("html_exam_entry_form"):
             name = st.text_input("اسم الطالب الثلاثي", placeholder="اكتب اسمك الثلاثي")
             code = st.text_input("كود الاختبار", type="password")
@@ -456,8 +495,16 @@ def render_html_exam_admin(supabase_url, supabase_key, public_base_url):
                     st.error(str(exc))
         with st.form("hexam_create_form", clear_on_submit=False):
             title = st.text_input("اسم الاختبار", placeholder="اختبار النهايات")
-            access_code = st.text_input("كود دخول الاختبار", value=secrets.token_hex(3).upper())
+            stage = st.selectbox("المرحلة الدراسية", ["الصف الأول الثانوي", "الصف الثاني الثانوي", "الصف الثالث الثانوي", "الصف 12 قطري", "مرحلة أخرى"], key="hexam_stage")
+            curriculum = st.text_input("المنهج / الوحدة / الدرس", placeholder="مثال: الرياضيات — مفهوم النهايات")
+            access_code = st.text_input("الكود السري لدخول الطلاب", value=secrets.token_hex(3).upper(), key="hexam_access_code_input")
             duration = st.number_input("مدة الاختبار بالدقائق", min_value=1, max_value=300, value=30)
+            start_default = (datetime.now(ZoneInfo("Africa/Cairo")) + timedelta(minutes=5)).replace(second=0, microsecond=0)
+            start_day = st.date_input("تاريخ فتح الاختبار", value=start_default.date(), key="hexam_start_day")
+            start_clock = st.time_input("وقت بدء الاختبار — القاهرة", value=start_default.time(), key="hexam_start_clock")
+            end_default = start_default + timedelta(hours=3)
+            end_day = st.date_input("تاريخ إغلاق الاختبار", value=end_default.date(), key="hexam_end_day")
+            end_clock = st.time_input("وقت إغلاق الاختبار — القاهرة", value=end_default.time(), key="hexam_end_clock")
             if mode == "بناء الأسئلة داخل المنصة":
                 question_json = st.text_area("الأسئلة بصيغة JSON", value='[{"question":"نص السؤال؟","type":"mcq","options":["أ","ب","ج","د"],"answer":"أ","points":1}]', height=180)
                 html_code = ""
@@ -479,9 +526,16 @@ def render_html_exam_admin(supabase_url, supabase_key, public_base_url):
                     if not html_code.strip():
                         raise ValueError("الصق كود HTML أولاً.")
                     questions = _questions_from_html(html_code)
+                if not access_code.strip():
+                    raise ValueError("اكتب الكود السري للاختبار.")
+                starts_at = _cairo_datetime(start_day, start_clock)
+                ends_at = _cairo_datetime(end_day, end_clock)
+                if datetime.fromisoformat(ends_at) <= datetime.fromisoformat(starts_at):
+                    raise ValueError("موعد الإغلاق يجب أن يكون بعد موعد الفتح.")
                 exam_id = uuid.uuid4().hex[:16]
                 exam = {
                     "id": exam_id, "title": title.strip(), "access_code": access_code.strip(),
+                    "stage": stage, "curriculum": curriculum.strip(), "starts_at": starts_at, "ends_at": ends_at,
                     "duration_minutes": int(duration), "mode": "html" if mode == "كود HTML جاهز" else ("ai_images" if mode == "تحويل صور الأسئلة بالذكاء الاصطناعي" else "builder"),
                     "questions": questions, "html_code": html_code, "active": bool(active),
                     "created_at": _now().isoformat(),
@@ -504,7 +558,8 @@ def render_html_exam_admin(supabase_url, supabase_key, public_base_url):
             for exam in exams:
                 with st.container(border=True):
                     st.markdown(f"**{html.escape(exam['title'])}** — {'منشور' if exam.get('active') else 'متوقف'}")
-                    st.caption(f"المدة: {exam.get('duration_minutes')} دقيقة · عدد الأسئلة: {len(exam.get('questions') or [])}")
+                    st.caption(f"المرحلة: {exam.get('stage','—')} · المنهج: {exam.get('curriculum','—')} · المدة: {exam.get('duration_minutes')} دقيقة · عدد الأسئلة: {len(exam.get('questions') or [])}")
+                    st.caption(f"يفتح: {exam.get('starts_at','—')} · يغلق: {exam.get('ends_at','—')}")
                     st.code(_link("hexam", exam["id"]), language=None)
                     c1, c2 = st.columns(2)
                     with c1:
@@ -529,6 +584,11 @@ def render_html_exam_admin(supabase_url, supabase_key, public_base_url):
                 rows = []
                 for a in attempts:
                     rows.append({"اسم الطالب": a.get("student_name",""), "الدرجة": a.get("score",0), "الدرجة النهائية": a.get("max_score",0), "الحالة": "تم التسليم" if a.get("status")=="submitted" else "بدأ ولم يسلم", "بدأ في": a.get("started_at",""), "سلّم في": a.get("submitted_at",""), "رابط النتيجة": _link("hresult",a.get("result_token","")), "رابط الإجابات": _link("hreview",a.get("review_token",""))})
+                    if a.get("status") == "submitted":
+                        report_exam = next((e for e in exams if e["id"] == selected), {})
+                        report = _report_html(report_exam, a)
+                        report_name = re.sub(r"[^\\w\\-]+", "_", str(a.get("student_name", "طالب")))
+                        st.download_button("🖨️ طباعة تقرير: " + str(a.get("student_name", "طالب")), report.encode("utf-8"), file_name="تقرير_الطالب_" + report_name + ".html", mime="text/html", key="hexam_report_" + str(a.get("id", "")))
                 if rows:
                     import pandas as pd
                     df = pd.DataFrame(rows)
