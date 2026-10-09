@@ -4625,7 +4625,7 @@ if not st.session_state.get("teacher_panel_unlocked", False):
     @media(max-width:640px){.login-wrap{margin:3vh 12px 0}.login-card{padding:27px 20px 22px}.login-title{font-size:25px}div[data-testid="stForm"]{margin:0 12px;padding:0 20px 22px}}
     </style>
     <div class="login-wrap">
-      <div class="login-brand">DARSLLY · EDUCATION PLATFORM</div>
+      <div class="login-brand">البشمهندس X الرياضيات · المنصة التعليمية</div>
       <div class="login-card">
         <div class="login-mark">🔐</div>
         <div class="login-secure">✦ دخول آمن ومخصص للمعلم</div>
@@ -4637,7 +4637,7 @@ if not st.session_state.get("teacher_panel_unlocked", False):
     with st.form("teacher_panel_password_form", clear_on_submit=False):
         _teacher_panel_password = st.text_input("الرقم السري", type="password", placeholder="اكتب الرقم السري هنا", max_chars=32, label_visibility="visible")
         _teacher_panel_submit = st.form_submit_button("🔓  دخول إلى لوحة التحكم", use_container_width=True, type="primary")
-    st.markdown('<div class="login-foot">درسلي © بوابتك التعليمية · يرجى الحفاظ على سرية الرقم السري</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-foot">البشمهندس X الرياضيات © · يرجى الحفاظ على سرية الرقم السري</div>', unsafe_allow_html=True)
     if _teacher_panel_submit:
         if _teacher_panel_password == "140140":
             st.session_state.teacher_panel_unlocked = True
