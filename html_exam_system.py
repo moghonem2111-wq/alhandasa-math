@@ -297,16 +297,25 @@ def _public_exam_page(url, key, exam_id, attempt_id_from_url=""):
         safe = _safe_html(exam["html_code"])
         if safe.strip():
             st.components.v1.html("<div dir='rtl' style='font-family:Arial;'>" + safe + "</div>", height=180, scrolling=True)
-    st.markdown(f"**الطالب:** {html.escape(attempt['student_name'])}")
+    st.markdown(f"<div dir='rtl' style='margin:18px 0 12px;padding:12px 16px;border-radius:14px;background:#eff6ff;border:1px solid #bfdbfe;color:#12355f;font-weight:700'>👤 الطالب: {html.escape(attempt['student_name'])}<span style='float:left;color:#1769cf'>📘 {len(questions)} سؤال</span></div>", unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    div[data-testid="stVerticalBlockBorderWrapper"] {border-color:#dbe5f0!important;border-radius:16px!important}
+    .exam-q-label {font-size:12px;font-weight:800;color:#1769cf;letter-spacing:.2px}
+    </style>
+    """, unsafe_allow_html=True)
     for i, q in enumerate(questions, 1):
-        st.markdown(f"**{i}. {q['question']}**　({q.get('points',1)} درجة)")
-        widget_key = f"hexam_{exam_id}_{attempt_id}_{q['id']}"
-        if q.get("type") == "mcq" and q.get("options"):
-            st.radio("اختر الإجابة:", q["options"], index=None, key=widget_key, label_visibility="collapsed",
-                     on_change=_persist_one_answer, args=(url, key, attempt_id, q["id"], widget_key))
-        else:
-            st.text_input("إجابتك:", key=widget_key, on_change=_persist_one_answer,
-                          args=(url, key, attempt_id, q["id"], widget_key))
+        with st.container(border=True):
+            st.markdown(f"<div dir='rtl' class='exam-q-label'>السؤال {i} <span style='float:left'>{q.get('points',1)} درجة</span></div>", unsafe_allow_html=True)
+            st.markdown("---")
+            st.markdown(q["question"])
+            widget_key = f"hexam_{exam_id}_{attempt_id}_{q['id']}"
+            if q.get("type") == "mcq" and q.get("options"):
+                st.radio("اختر الإجابة:", q["options"], index=None, key=widget_key, label_visibility="collapsed",
+                         on_change=_persist_one_answer, args=(url, key, attempt_id, q["id"], widget_key))
+            else:
+                st.text_input("اكتب إجابتك هنا:", key=widget_key, on_change=_persist_one_answer,
+                              args=(url, key, attempt_id, q["id"], widget_key))
     _render_timer(url, key, exam, attempt)
     if st.button("📨 تسليم الاختبار", type="primary", use_container_width=True, key=f"hexam_submit_{attempt_id}"):
         latest = _get_attempt_by_token(url, key, attempt_id, "id") or attempt
