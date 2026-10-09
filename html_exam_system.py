@@ -122,6 +122,30 @@ def _questions_from_html(code):
     return _normalize_questions(questions)
 
 
+
+def _questions_from_images(files):
+    """Convert uploaded exam images to a reviewable question manifest using the platform AI helper."""
+    if not files:
+        raise ValueError("ارفع صورة واحدة على الأقل.")
+    try:
+        from ai_studio import call as _gemini_call
+        packed = []
+        for uploaded in files:
+            name = str(getattr(uploaded, "name", "") or "question.jpg")
+            kind = "pdf" if name.lower().endswith(".pdf") else "image"
+            packed.append((kind, name, uploaded.getvalue()))
+        prompt = """
+اقرأ صور ورقة امتحان الرياضيات واستخرج الأسئلة الموجودة فعلاً فقط. حافظ على نص الأسئلة والأرقام والرموز والاختيارات كما تظهر، ولا تخترع أسئلة. أعد JSON صالحاً فقط بالشكل:
+{"questions":[{"question":"نص السؤال مع LaTeX عند الحاجة","type":"mcq","options":["أ","ب","ج","د"],"answer":"","points":1}]}
+استخدم type=mcq للاختيار من متعدد وtype=short لغير ذلك. اكتب المعادلات بصيغة LaTeX بين $...$ عند الحاجة. إذا لم تكن الإجابة واضحة اترك answer فارغاً. رتّب الأسئلة حسب الصور ولا تكتب أي شرح خارج JSON.
+"""
+        parsed = _gemini_call(prompt, packed)
+        items = parsed.get("questions", parsed) if isinstance(parsed, dict) else parsed
+        return _normalize_questions(items)
+    except Exception as exc:
+        raise RuntimeError("تعذر استخراج الأسئلة بالذكاء الاصطناعي. تأكد من عمل GEMINI_API_KEY ثم حاول مجدداً. " + str(exc)[:250]) from exc
+
+
 def _normalize_questions(items):
     out = []
     for i, item in enumerate(items, 1):
@@ -297,16 +321,25 @@ def _public_exam_page(url, key, exam_id, attempt_id_from_url=""):
         safe = _safe_html(exam["html_code"])
         if safe.strip():
             st.components.v1.html("<div dir='rtl' style='font-family:Arial;'>" + safe + "</div>", height=180, scrolling=True)
-    st.markdown(f"**الطالب:** {html.escape(attempt['student_name'])}")
+    st.markdown(f"<div dir='rtl' style='margin:18px 0 12px;padding:12px 16px;border-radius:14px;background:#eff6ff;border:1px solid #bfdbfe;color:#12355f;font-weight:700'>👤 الطالب: {html.escape(attempt['student_name'])}<span style='float:left;color:#1769cf'>📘 {len(questions)} سؤال</span></div>", unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    div[data-testid="stVerticalBlockBorderWrapper"] {border-color:#dbe5f0!important;border-radius:16px!important}
+    .exam-q-label {font-size:12px;font-weight:800;color:#1769cf;letter-spacing:.2px}
+    </style>
+    """, unsafe_allow_html=True)
     for i, q in enumerate(questions, 1):
-        st.markdown(f"**{i}. {q['question']}**　({q.get('points',1)} درجة)")
-        widget_key = f"hexam_{exam_id}_{attempt_id}_{q['id']}"
-        if q.get("type") == "mcq" and q.get("options"):
-            st.radio("اختر الإجابة:", q["options"], index=None, key=widget_key, label_visibility="collapsed",
-                     on_change=_persist_one_answer, args=(url, key, attempt_id, q["id"], widget_key))
-        else:
-            st.text_input("إجابتك:", key=widget_key, on_change=_persist_one_answer,
-                          args=(url, key, attempt_id, q["id"], widget_key))
+        with st.container(border=True):
+            st.markdown(f"<div dir='rtl' class='exam-q-label'>السؤال {i} <span style='float:left'>{q.get('points',1)} درجة</span></div>", unsafe_allow_html=True)
+            st.markdown("---")
+            st.markdown(q["question"])
+            widget_key = f"hexam_{exam_id}_{attempt_id}_{q['id']}"
+            if q.get("type") == "mcq" and q.get("options"):
+                st.radio("اختر الإجابة:", q["options"], index=None, key=widget_key, label_visibility="collapsed",
+                         on_change=_persist_one_answer, args=(url, key, attempt_id, q["id"], widget_key))
+            else:
+                st.text_input("اكتب إجابتك هنا:", key=widget_key, on_change=_persist_one_answer,
+                              args=(url, key, attempt_id, q["id"], widget_key))
     _render_timer(url, key, exam, attempt)
     if st.button("📨 تسليم الاختبار", type="primary", use_container_width=True, key=f"hexam_submit_{attempt_id}"):
         latest = _get_attempt_by_token(url, key, attempt_id, "id") or attempt
@@ -408,13 +441,28 @@ def render_html_exam_admin(supabase_url, supabase_key, public_base_url):
         return
     tab_create, tab_manage, tab_results = st.tabs(["➕ إنشاء اختبار", "🔗 إدارة الروابط", "📊 كشف الدرجات"])
     with tab_create:
-        mode = st.radio("طريقة إنشاء الاختبار", ["بناء الأسئلة داخل المنصة", "كود HTML جاهز"], horizontal=True, key="hexam_mode")
+        mode = st.radio("طريقة إنشاء الاختبار", ["بناء الأسئلة داخل المنصة", "تحويل صور الأسئلة بالذكاء الاصطناعي", "كود HTML جاهز"], horizontal=True, key="hexam_mode")
+        if mode == "تحويل صور الأسئلة بالذكاء الاصطناعي":
+            image_files = st.file_uploader("📷 ارفع صور ورقة الأسئلة", type=["png", "jpg", "jpeg", "webp", "pdf"], accept_multiple_files=True, key="hexam_ai_images")
+            st.caption("سيحوّل Gemini الصور إلى أسئلة قابلة للتعديل. راجع النص والإجابات قبل النشر.")
+            if st.button("✨ استخراج الأسئلة من الصور", type="secondary", use_container_width=True, key="hexam_ai_extract"):
+                try:
+                    with st.spinner("جاري قراءة الصور وتحويلها إلى أسئلة..."):
+                        extracted = _questions_from_images(image_files or [])
+                    st.session_state["hexam_ai_questions_json"] = json.dumps(extracted, ensure_ascii=False, indent=2)
+                    st.success(f"تم استخراج {len(extracted)} سؤال. راجعها قبل الحفظ.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
         with st.form("hexam_create_form", clear_on_submit=False):
             title = st.text_input("اسم الاختبار", placeholder="اختبار النهايات")
             access_code = st.text_input("كود دخول الاختبار", value=secrets.token_hex(3).upper())
             duration = st.number_input("مدة الاختبار بالدقائق", min_value=1, max_value=300, value=30)
             if mode == "بناء الأسئلة داخل المنصة":
                 question_json = st.text_area("الأسئلة بصيغة JSON", value='[{"question":"نص السؤال؟","type":"mcq","options":["أ","ب","ج","د"],"answer":"أ","points":1}]', height=180)
+                html_code = ""
+            elif mode == "تحويل صور الأسئلة بالذكاء الاصطناعي":
+                question_json = st.text_area("الأسئلة المستخرجة — راجع وعدّل قبل النشر", value=st.session_state.get("hexam_ai_questions_json", '[{"question":"ارفع الصور ثم اضغط استخراج الأسئلة","type":"short","options":[],"answer":"","points":1}]'), height=260, key="hexam_ai_review_json")
                 html_code = ""
             else:
                 html_code = st.text_area("الصق كود HTML", height=260, placeholder="الصق كود HTML هنا. أضف script id='exam-questions' يحتوي JSON للأسئلة والتصحيح.")
@@ -425,7 +473,7 @@ def render_html_exam_admin(supabase_url, supabase_key, public_base_url):
             try:
                 if not title.strip():
                     raise ValueError("اكتب اسم الاختبار.")
-                if mode == "بناء الأسئلة داخل المنصة":
+                if mode in ("بناء الأسئلة داخل المنصة", "تحويل صور الأسئلة بالذكاء الاصطناعي"):
                     questions = _normalize_questions(json.loads(question_json))
                 else:
                     if not html_code.strip():
@@ -434,7 +482,7 @@ def render_html_exam_admin(supabase_url, supabase_key, public_base_url):
                 exam_id = uuid.uuid4().hex[:16]
                 exam = {
                     "id": exam_id, "title": title.strip(), "access_code": access_code.strip(),
-                    "duration_minutes": int(duration), "mode": "html" if mode == "كود HTML جاهز" else "builder",
+                    "duration_minutes": int(duration), "mode": "html" if mode == "كود HTML جاهز" else ("ai_images" if mode == "تحويل صور الأسئلة بالذكاء الاصطناعي" else "builder"),
                     "questions": questions, "html_code": html_code, "active": bool(active),
                     "created_at": _now().isoformat(),
                 }
