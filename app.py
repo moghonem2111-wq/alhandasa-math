@@ -17,6 +17,11 @@ import pandas as pd
 from PIL import Image
 import streamlit as st
 try:
+    from html_exam_system import render_html_exam_admin, render_html_exam_portal
+except Exception:
+    render_html_exam_admin = None
+    render_html_exam_portal = None
+try:
     from ai_studio import render_ai_studio
 except Exception:
     render_ai_studio = None
@@ -2129,6 +2134,16 @@ if "users_df" not in st.session_state:
         st.session_state["_last_autosave_signature"] = _autosave_signature() if "_autosave_signature" in globals() else None
     except Exception:
         st.session_state["_data_load_verified"] = False
+
+# بوابة الاختبارات المشتركة: روابط الامتحان والنتيجة ومراجعة الإجابات تعمل دون تسجيل دخول.
+if render_html_exam_portal is not None:
+    try:
+        if render_html_exam_portal(supabase_url=SUPABASE_URL, supabase_key=str(st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", SUPABASE_KEY)).strip(), query_params=st.query_params):
+            st.stop()
+    except Exception:
+        if any(k in st.query_params for k in ("hexam", "hresult", "hreview")):
+            st.error("تعذر فتح الاختبار أو النتيجة. راجع إعدادات تخزين الاختبارات في Supabase.")
+            st.stop()
 
 # تأكد من وجود جدول المواعيد حتى لو كانت جلسة Streamlit قديمة قبل إضافة الميزة
 if "weekly_schedule_df" not in st.session_state:
@@ -6329,6 +6344,9 @@ elif t_page == "online_schedule":
                         st.session_state.schedule_prefill_student=str(st_n); st.session_state.schedule_prefill_record=os_row.to_dict(); st.session_state.teacher_page="weekly_schedule"; st.rerun()
 
 elif t_page == "exam_maker":
+    # نظام الاختبارات القابل للمشاركة إضافة مستقلة؛ لا يستبدل محرر الاختبارات القديم.
+    if render_html_exam_admin is not None:
+        render_html_exam_admin(supabase_url=SUPABASE_URL, supabase_key=str(st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", SUPABASE_KEY)).strip(), public_base_url="https://engmohamedghonaim.streamlit.app/")
     st.markdown("<div class='exam-builder-header'>➕ إضافة امتحان جديد / محرر وقص الصور وميزة الطباعة PDF</div>", unsafe_allow_html=True)
 
     if "temp_questions" not in st.session_state: st.session_state.temp_questions = []
