@@ -4725,37 +4725,39 @@ def _render_zoom_copy_button(zoom_link, key):
 
 @st.fragment(run_every="1s")
 def _render_teacher_today_lessons():
-    """عرض حصص اليوم وغداً مع عداد تنازلي حي ورابط Zoom."""
+    """عرض حصص اليوم وغداً كبطاقات أفقية مع إمكانية إخفاء الحصة بعد إتمامها."""
     cairo = ZoneInfo("Africa/Cairo")
     now = datetime.now(cairo)
     day_names = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
-
     today_date = now.date()
     tomorrow_date = today_date + timedelta(days=1)
     today_name = day_names[today_date.weekday()]
     tomorrow_name = day_names[tomorrow_date.weekday()]
 
+    st.markdown("""
+    <div style="direction:rtl;padding:18px 22px;margin:8px 0 16px;border-radius:20px;
+      background:linear-gradient(120deg,#102a56,#1769aa);color:white;
+      box-shadow:0 8px 24px rgba(23,78,145,.18);">
+      <div style="font-size:12px;opacity:.85;font-weight:700;letter-spacing:.3px">لوحة متابعة المعلم</div>
+      <div style="font-size:25px;font-weight:900;margin-top:4px">📅 حصص اليوم وغداً</div>
+      <div style="font-size:14px;opacity:.92;margin-top:5px">تابع مواعيد طلابك، وافتح Zoom أو اضغط «تمت الحصة» لإخفائها من القائمة.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
     ws = st.session_state.get("weekly_schedule_df", pd.DataFrame())
     if ws is None or ws.empty:
         st.info("📅 لا توجد حصص في جدول المواعيد.")
         return
-
     work = ws.copy()
     if "اليوم" not in work.columns or "الموعد" not in work.columns:
         st.info("📅 جدول المواعيد لا يحتوي على بيانات اليوم والساعة.")
         return
-
     work["_day_clean"] = work["اليوم"].astype(str).str.strip()
     work["_time_clean"] = work["الموعد"].astype(str).str[:5]
     if "حالة الموعد" in work.columns:
         work = work[work["حالة الموعد"].astype(str).str.strip() != "متوقف"].copy()
 
-    # نعرض دائماً يوم اليوم + اليوم التالي فقط.
-    day_targets = {
-        today_name: today_date,
-        tomorrow_name: tomorrow_date,
-    }
-
+    day_targets = {today_name: today_date, tomorrow_name: tomorrow_date}
     cards = []
     for day_name, lesson_date in day_targets.items():
         day_work = work[work["_day_clean"] == day_name].copy()
@@ -4769,119 +4771,81 @@ def _render_teacher_today_lessons():
             except Exception:
                 continue
             cards.append((target, diff, idx, row, day_name, lesson_date))
-
     cards.sort(key=lambda x: x[0])
 
-    st.caption(
-        f"🕒 الوقت الحالي: {now.strftime('%I:%M:%S %p').lstrip('0')} — "
-        f"اليوم {today_name} {today_date} | غداً {tomorrow_name} {tomorrow_date}"
-    )
+    dismissed_key = "teacher_completed_lessons_hidden"
+    if dismissed_key not in st.session_state:
+        st.session_state[dismissed_key] = set()
+    dismissed = st.session_state[dismissed_key]
+    # نخفي فقط الحصة التي ضغط المعلم على «تمت الحصة» لها، ومفتاحها مرتبط بتاريخها.
+    cards = [item for item in cards if f"{item[5]}_{item[2]}" not in dismissed]
 
+    st.caption(f"🕒 الوقت الحالي: {now.strftime('%I:%M:%S %p').lstrip('0')} — اليوم {today_name} {today_date} | غداً {tomorrow_name} {tomorrow_date}")
     if not cards:
-        st.success(
-            f"🌤️ لا توجد حصص مجدولة اليوم أو غداً — "
-            f"{today_name} {today_date} و {tomorrow_name} {tomorrow_date}."
-        )
+        st.success("🎉 لا توجد حصص ظاهرة حالياً؛ إما لا توجد مواعيد أو تم إنهاء كل الحصص المعروضة.")
         return
 
-    for target, diff, idx, row, day_name, lesson_date in cards:
-        student = str(row.get("اسم الطالب", "")).strip()
-        grade = str(row.get("المجموعة/الصف", "")).strip()
-        academy = str(row.get("اسم الأكاديمية", "أكاديمية البشمهندس")).strip()
-        price = row.get("سعر الحصة", 0)
-
-        zoom_link = _teacher_zoom_link_for_student(student, lesson_date)
-
-        if diff > 0:
-            days_left = diff // 86400
-            hours_left = (diff % 86400) // 3600
-            mins_left = (diff % 3600) // 60
-            secs_left = diff % 60
-            if days_left:
-                countdown = f"⏳ فاضل {days_left} يوم و {hours_left} ساعة و {mins_left} دقيقة"
-            elif hours_left:
-                countdown = f"⏳ فاضل {hours_left} ساعة و {mins_left} دقيقة و {secs_left} ثانية"
-            elif mins_left:
-                countdown = f"⏳ فاضل {mins_left} دقيقة و {secs_left} ثانية"
+    # بطاقتان بجوار بعضهما على الكمبيوتر، وتتحولان تلقائياً لعمود واحد على الشاشات الصغيرة.
+    for offset in range(0, len(cards), 2):
+        row_items = cards[offset:offset + 2]
+        cols = st.columns(2, gap="medium")
+        for col, item in zip(cols, row_items):
+            target, diff, idx, row, day_name, lesson_date = item
+            student = str(row.get("اسم الطالب", "")).strip()
+            grade = str(row.get("المجموعة/الصف", "")).strip()
+            academy = str(row.get("اسم الأكاديمية", "أكاديمية البشمهندس")).strip()
+            price = row.get("سعر الحصة", 0)
+            zoom_link = _teacher_zoom_link_for_student(student, lesson_date)
+            if diff > 0:
+                days_left = diff // 86400
+                hours_left = (diff % 86400) // 3600
+                mins_left = (diff % 3600) // 60
+                secs_left = diff % 60
+                if days_left:
+                    countdown = f"⏳ فاضل {days_left} يوم و {hours_left} ساعة و {mins_left} دقيقة"
+                elif hours_left:
+                    countdown = f"⏳ فاضل {hours_left} ساعة و {mins_left} دقيقة و {secs_left} ثانية"
+                elif mins_left:
+                    countdown = f"⏳ فاضل {mins_left} دقيقة و {secs_left} ثانية"
+                else:
+                    countdown = f"⏳ فاضل {secs_left} ثانية"
+                border, bg, title_color, status = "#1677d2", "#f1f7ff", "#1557a6", "الحصة القادمة"
             else:
-                countdown = f"⏳ فاضل {secs_left} ثانية"
-
-            border = "#0284c7"
-            bg = "#eff6ff"
-            title_color = "#0369a1"
-            status = "الحصة القادمة"
-        else:
-            countdown = "🔴 ابدأ الحصة الآن"
-            border = "#dc2626"
-            bg = "#fef2f2"
-            title_color = "#b91c1c"
-            status = "حان موعد الحصة"
-
-        day_label = "اليوم" if lesson_date == today_date else "غداً"
-
-        st.markdown(
-            f"""
-            <div style="background:{bg};border:3px solid {border};border-radius:18px;
-                        padding:16px 18px;margin:10px 0 6px;box-shadow:0 5px 18px rgba(0,0,0,.08);">
-                <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
-                    <div>
-                        <div style="font-size:19px;font-weight:900;color:{title_color};">
-                            👨‍🎓 {html.escape(student)}
-                        </div>
-                        <div style="font-size:14px;margin-top:5px;">
-                            📚 {html.escape(grade)} &nbsp; | &nbsp; 🏛️ {html.escape(academy)}
-                        </div>
+                countdown = "🔴 حان موعد الحصة"
+                border, bg, title_color, status = "#dc2626", "#fff4f4", "#b91c1c", "موعد الحصة الآن / مرّ"
+            day_label = "اليوم" if lesson_date == today_date else "غداً"
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"""
+                    <div style="direction:rtl;background:{bg};border-right:5px solid {border};border-radius:14px;padding:15px;margin-bottom:8px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+                        <div style="font-size:19px;font-weight:900;color:{title_color}">👨‍🎓 {html.escape(student)}</div>
+                        <span style="font-size:12px;font-weight:800;background:white;border:1px solid {border};border-radius:20px;padding:5px 9px;color:{title_color}">{day_label}</span>
+                      </div>
+                      <div style="font-size:13px;color:#52657d;margin-top:9px">📚 {html.escape(grade)}<br>🏛️ {html.escape(academy)}</div>
+                      <div style="font-size:14px;font-weight:800;color:{title_color};margin-top:10px">⏰ {html.escape(target.strftime('%I:%M %p').lstrip('0'))}　|　📆 {html.escape(str(lesson_date))}</div>
+                      <div style="font-size:13px;margin-top:7px">💰 سعر الحصة: <b>{html.escape(str(price))} جنيه</b></div>
+                      <div style="font-size:13px;font-weight:800;color:{title_color};margin-top:9px">{html.escape(countdown)} · {status}</div>
                     </div>
-                    <div style="font-size:22px;font-weight:900;color:{title_color};">
-                        {html.escape(countdown)}
-                    </div>
-                </div>
-                <div style="margin-top:10px;font-size:15px;">
-                    📅 <b>{day_label}</b>: {html.escape(day_name)}
-                    &nbsp;&nbsp; 📆 التاريخ: <b>{html.escape(str(lesson_date))}</b>
-                    &nbsp;&nbsp; ⏰ موعد الحصة: <b>{html.escape(target.strftime('%I:%M %p').lstrip('0'))}</b>
-                    &nbsp;&nbsp; 💰 السعر: <b>{html.escape(str(price))} جنيه</b>
-                </div>
-                <div style="margin-top:8px;font-weight:800;color:{title_color};">
-                    {html.escape(status)}
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        _render_zoom_copy_button(zoom_link, f"{lesson_date}_{idx}")
-
-        _action_a, _action_b = st.columns(2)
-        with _action_a:
-            if st.button(
-                "✅ تحضير الحصة",
-                key=f"teacher_today_prepare_{lesson_date}_{idx}",
-                use_container_width=True,
-                type="primary",
-            ):
-                st.session_state.prefill_student = student
-                st.session_state.prefill_schedule_idx = idx
-                st.session_state.prefill_curriculum = str(row.get("المنهج/الدولة", "")).strip()
-                st.session_state.prefill_session_date = str(lesson_date)
-                st.session_state.teacher_page = "add_session"
-                st.rerun()
-
-        with _action_b:
-            if diff <= 0:
-                st.link_button(
-                    "🔴 ابدأ الحصة الآن — دخول Zoom",
-                    zoom_link,
-                    use_container_width=True,
-                    key=f"teacher_today_zoom_start_{lesson_date}_{idx}",
-                )
-            else:
-                st.link_button(
-                    "🔗 رابط Zoom للحصة",
-                    zoom_link,
-                    use_container_width=True,
-                    key=f"teacher_today_zoom_wait_{lesson_date}_{idx}",
-                )
+                    """, unsafe_allow_html=True)
+                    _render_zoom_copy_button(zoom_link, f"{lesson_date}_{idx}")
+                    act1, act2 = st.columns(2)
+                    with act1:
+                        if st.button("✅ تمّت الحصة — إخفاء", key=f"teacher_lesson_done_{lesson_date}_{idx}", use_container_width=True):
+                            st.session_state[dismissed_key].add(f"{lesson_date}_{idx}")
+                            st.rerun()
+                    with act2:
+                        if diff <= 0:
+                            st.link_button("🔴 دخول Zoom", zoom_link, use_container_width=True, key=f"teacher_today_zoom_start_{lesson_date}_{idx}")
+                        else:
+                            st.link_button("🔗 رابط Zoom", zoom_link, use_container_width=True, key=f"teacher_today_zoom_wait_{lesson_date}_{idx}")
+                    if st.button("📝 تحضير الحصة", key=f"teacher_today_prepare_{lesson_date}_{idx}", use_container_width=True, type="primary"):
+                        st.session_state.prefill_student = student
+                        st.session_state.prefill_schedule_idx = idx
+                        st.session_state.prefill_curriculum = str(row.get("المنهج/الدولة", "")).strip()
+                        st.session_state.prefill_session_date = str(lesson_date)
+                        st.session_state.teacher_page = "add_session"
+                        st.rerun()
 
 def _student_profiles_for_curriculum(curriculum):
     """إرجاع الطلاب المرتبطين بالمنهج المختار مع المرحلة من بيانات الطالب الأساسية.
