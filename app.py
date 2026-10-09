@@ -4734,16 +4734,6 @@ def _render_teacher_today_lessons():
     today_name = day_names[today_date.weekday()]
     tomorrow_name = day_names[tomorrow_date.weekday()]
 
-    st.markdown("""
-    <div style="direction:rtl;padding:18px 22px;margin:8px 0 16px;border-radius:20px;
-      background:linear-gradient(120deg,#102a56,#1769aa);color:white;
-      box-shadow:0 8px 24px rgba(23,78,145,.18);">
-      <div style="font-size:12px;opacity:.85;font-weight:700;letter-spacing:.3px">لوحة متابعة المعلم</div>
-      <div style="font-size:25px;font-weight:900;margin-top:4px">📅 حصص اليوم وغداً</div>
-      <div style="font-size:14px;opacity:.92;margin-top:5px">تابع مواعيد طلابك، وافتح Zoom أو اضغط «تمت الحصة» لإخفائها من القائمة.</div>
-    </div>
-    """, unsafe_allow_html=True)
-
     ws = st.session_state.get("weekly_schedule_df", pd.DataFrame())
     if ws is None or ws.empty:
         st.info("📅 لا توجد حصص في جدول المواعيد.")
@@ -4785,10 +4775,10 @@ def _render_teacher_today_lessons():
         st.success("🎉 لا توجد حصص ظاهرة حالياً؛ إما لا توجد مواعيد أو تم إنهاء كل الحصص المعروضة.")
         return
 
-    # بطاقتان بجوار بعضهما على الكمبيوتر، وتتحولان تلقائياً لعمود واحد على الشاشات الصغيرة.
-    for offset in range(0, len(cards), 2):
-        row_items = cards[offset:offset + 2]
-        cols = st.columns(2, gap="medium")
+    # بطاقات الحصص جنب بعض كشرائح أفقية؛ 3 بطاقات في الصف على الشاشات الواسعة.
+    for offset in range(0, len(cards), 3):
+        row_items = cards[offset:offset + 3]
+        cols = st.columns(3, gap="medium")
         for col, item in zip(cols, row_items):
             target, diff, idx, row, day_name, lesson_date = item
             student = str(row.get("اسم الطالب", "")).strip()
@@ -5405,8 +5395,6 @@ elif t_page == "dashboard":
 
 
 
-    st.markdown("### 🔔 حصص اليوم وغداً")
-    st.caption("يتم جلب الحصص تلقائياً من جدول مواعيد الطلاب، ويظهر دائماً اليوم واليوم التالي فقط. العداد يتحدث كل ثانية، وعند حلول الموعد تتحول البطاقة إلى الأحمر ويظهر زر بدء الحصة.")
     _render_teacher_today_lessons()
 
     st.markdown("### ⚡ أدوات سريعة")
