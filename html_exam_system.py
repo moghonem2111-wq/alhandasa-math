@@ -207,14 +207,8 @@ def _safe_html(code):
 
 
 def _base_url():
-    try:
-        qp = st.query_params
-        for key in ("hexam", "hresult", "hreview", "role", "st_phone"):
-            if key in qp:
-                del qp[key]
-        return "https://engmohamedghonaim.streamlit.app/"
-    except Exception:
-        return "https://engmohamedghonaim.streamlit.app/"
+    # Do not mutate the current query string: the student may be inside an active exam.
+    return "https://engmohamedghonaim.streamlit.app/"
 
 
 def _link(kind, token):
@@ -245,13 +239,16 @@ def _score(questions, answers):
     return round(score, 2), round(maximum, 2)
 
 
-def _public_exam_page(url, key, exam_id):
+def _public_exam_page(url, key, exam_id, attempt_id_from_url=""):
     exam = _get_exam(url, key, exam_id)
     if not exam or not exam.get("active", True):
         st.error("الاختبار غير موجود أو تم إيقافه من المعلم.")
         return True
     st.markdown(f"<div dir='rtl' style='background:linear-gradient(120deg,#0b1f42,#1769cf);padding:22px;border-radius:18px;color:white'><h1 style='margin:0'>{html.escape(exam['title'])}</h1><p>اختبار إلكتروني · المدة {int(exam.get('duration_minutes',30))} دقيقة</p></div>", unsafe_allow_html=True)
-    if not st.session_state.get("_hexam_verified_" + exam_id):
+    attempt_id_from_url = str(attempt_id_from_url or "").strip()
+    attempt_id_session = st.session_state.get("_hexam_verified_" + exam_id, "")
+    attempt_id = attempt_id_from_url or attempt_id_session
+    if not attempt_id:
         with st.form("html_exam_entry_form"):
             name = st.text_input("اسم الطالب الثلاثي", placeholder="اكتب اسمك الثلاثي")
             code = st.text_input("كود الاختبار", type="password")
@@ -277,10 +274,11 @@ def _public_exam_page(url, key, exam_id):
                     }
                     _save_attempt(url, key, attempt, insert=True)
                     st.session_state["_hexam_verified_" + exam_id] = attempt_id
+                    st.query_params["hattempt"] = attempt_id
                     st.rerun()
         return True
 
-    attempt_id = st.session_state.get("_hexam_verified_" + exam_id)
+    st.session_state["_hexam_verified_" + exam_id] = attempt_id
     attempts = _list_attempts(url, key, exam_id)
     attempt = next((a for a in attempts if a.get("id") == attempt_id), None)
     if not attempt:
@@ -289,33 +287,60 @@ def _public_exam_page(url, key, exam_id):
         return True
     if attempt.get("status") == "submitted":
         st.success("تم تسليم هذا الاختبار بالفعل.")
-        st.info("يمكنك استخدام رابط النتيجة الذي يظهر بعد التسليم.")
+        st.markdown("### رابط النتيجة")
+        st.code(_link("hresult", attempt["result_token"]), language=None)
+        st.markdown("### رابط مراجعة الإجابات")
+        st.code(_link("hreview", attempt["review_token"]), language=None)
         return True
-    elapsed = max(0, int((_now() - datetime.fromisoformat(attempt["started_at"].replace("Z","+00:00")).astimezone(timezone.utc)).total_seconds()))
-    duration = int(exam.get("duration_minutes", 30)) * 60
-    remaining = max(0, duration - elapsed)
-    st.markdown(f"**الطالب:** {html.escape(attempt['student_name'])}　 ·　 **الوقت المتبقي:** {remaining // 60:02d}:{remaining % 60:02d}")
-    if remaining <= 0:
-        _submit_current_attempt(url, key, exam, attempt, {})
-        st.rerun()
     questions = exam.get("questions", [])
     if exam.get("html_code"):
         safe = _safe_html(exam["html_code"])
         if safe.strip():
             st.components.v1.html("<div dir='rtl' style='font-family:Arial;'>" + safe + "</div>", height=180, scrolling=True)
-    answers = {}
-    with st.form("html_exam_answers_form"):
-        for i, q in enumerate(questions, 1):
-            st.markdown(f"**{i}. {q['question']}**　({q.get('points',1)} درجة)")
-            if q.get("type") == "mcq" and q.get("options"):
-                answers[q["id"]] = st.radio("اختر الإجابة:", q["options"], index=None, key=f"hexam_{exam_id}_{attempt_id}_{q['id']}", label_visibility="collapsed")
-            else:
-                answers[q["id"]] = st.text_input("إجابتك:", key=f"hexam_{exam_id}_{attempt_id}_{q['id']}")
-        submitted = st.form_submit_button("📨 تسليم الاختبار", type="primary", use_container_width=True)
-    if submitted:
-        _submit_current_attempt(url, key, exam, attempt, answers)
+    st.markdown(f"**الطالب:** {html.escape(attempt['student_name'])}")
+    for i, q in enumerate(questions, 1):
+        st.markdown(f"**{i}. {q['question']}**　({q.get('points',1)} درجة)")
+        widget_key = f"hexam_{exam_id}_{attempt_id}_{q['id']}"
+        if q.get("type") == "mcq" and q.get("options"):
+            st.radio("اختر الإجابة:", q["options"], index=None, key=widget_key, label_visibility="collapsed",
+                     on_change=_persist_one_answer, args=(url, key, attempt_id, q["id"], widget_key))
+        else:
+            st.text_input("إجابتك:", key=widget_key, on_change=_persist_one_answer,
+                          args=(url, key, attempt_id, q["id"], widget_key))
+    _render_timer(url, key, exam, attempt)
+    if st.button("📨 تسليم الاختبار", type="primary", use_container_width=True, key=f"hexam_submit_{attempt_id}"):
+        latest = _get_attempt_by_token(url, key, attempt_id, "id") or attempt
+        _submit_current_attempt(url, key, exam, latest, latest.get("answers") or {})
         st.rerun()
-    st.caption("يُحسب الوقت من وقت بدء المحاولة المسجّل على الخادم. لا تغلق الصفحة قبل التسليم.")
+    st.caption("تُحفظ الإجابات تلقائياً أثناء الحل. لا تغلق الصفحة قبل ظهور رسالة التسليم.")
+
+
+def _persist_one_answer(url, key, attempt_id, question_id, widget_key):
+    try:
+        attempt = _get_attempt_by_token(url, key, attempt_id, "id")
+        if not attempt or attempt.get("status") != "started":
+            return
+        answers = dict(attempt.get("answers") or {})
+        answers[str(question_id)] = st.session_state.get(widget_key, "")
+        attempt["answers"] = answers
+        _save_attempt(url, key, attempt, insert=False)
+    except Exception as exc:
+        st.session_state["_hexam_answer_save_error"] = str(exc)
+
+
+@st.fragment(run_every="1s")
+def _render_timer(url, key, exam, attempt):
+    current = _get_attempt_by_token(url, key, attempt["id"], "id") or attempt
+    if current.get("status") == "submitted":
+        st.success("تم تسليم الاختبار.")
+        return
+    started = datetime.fromisoformat(str(current["started_at"]).replace("Z", "+00:00")).astimezone(timezone.utc)
+    elapsed = max(0, int((_now() - started).total_seconds()))
+    remaining = max(0, int(exam.get("duration_minutes", 30)) * 60 - elapsed)
+    st.markdown(f"### ⏱️ الوقت المتبقي: {remaining // 60:02d}:{remaining % 60:02d}")
+    if remaining <= 0:
+        _submit_current_attempt(url, key, exam, current, current.get("answers") or {})
+        st.rerun()
 
 
 def _submit_current_attempt(url, key, exam, attempt, answers):
@@ -364,7 +389,7 @@ def _public_result_page(url, key, token, review=False):
 def render_html_exam_portal(supabase_url, supabase_key, query_params):
     """Returns True when a shared exam/result/review route owns the current page."""
     if "hexam" in query_params:
-        _public_exam_page(supabase_url, supabase_key, str(query_params["hexam"]))
+        _public_exam_page(supabase_url, supabase_key, str(query_params["hexam"]), str(query_params.get("hattempt", "")))
         return True
     if "hresult" in query_params:
         _public_result_page(supabase_url, supabase_key, str(query_params["hresult"]), False)
