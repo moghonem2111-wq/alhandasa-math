@@ -4734,23 +4734,34 @@ def _render_teacher_today_lessons():
     today_name = day_names[today_date.weekday()]
     tomorrow_name = day_names[tomorrow_date.weekday()]
 
-    # عنوان جمالي للقسم مع اختيار عرض حصص اليوم أو الغد أو الكل.
+    # هيدر احترافي مع أزرار اختيار واضحة أسفله.
     st.markdown("""
-    <div style="direction:rtl;padding:18px 22px;margin:8px 0 12px;border-radius:20px;
+    <div style="direction:rtl;padding:18px 22px;margin:8px 0 14px;border-radius:20px;
       background:linear-gradient(125deg,#0b1f42 0%,#124f91 58%,#1687c9 100%);
       color:#fff;box-shadow:0 10px 28px rgba(12,58,112,.20);position:relative;overflow:hidden">
       <div style="font-size:12px;font-weight:800;opacity:.85;letter-spacing:.4px">درسلي · لوحة المعلم</div>
       <div style="font-size:25px;font-weight:900;margin-top:5px">📚 جدول الحصص</div>
-      <div style="font-size:13px;opacity:.92;margin-top:5px">تابع مواعيد طلابك، والوقت المتبقي، وروابط بدء الحصص من مكان واحد.</div>
+      <div style="font-size:13px;opacity:.92;margin-top:5px">اختر الجدول الذي تريد متابعته، مع عدّاد الوقت وروابط بدء الحصص.</div>
     </div>
     """, unsafe_allow_html=True)
-    lesson_view = st.radio(
-        "عرض الحصص",
-        ["حصص اليوم", "حصص الغد", "كل الحصص"],
-        horizontal=True,
-        key="teacher_lessons_day_filter",
-        label_visibility="collapsed",
-    )
+
+    _lesson_views = ["حصص اليوم", "حصص الغد", "كل الحصص"]
+    if st.session_state.get("teacher_lessons_day_filter") not in _lesson_views:
+        st.session_state["teacher_lessons_day_filter"] = "حصص اليوم"
+    _view_cols = st.columns(3, gap="small")
+    _view_icons = {"حصص اليوم": "☀️", "حصص الغد": "🌙", "كل الحصص": "📅"}
+    for _view_col, _view_name in zip(_view_cols, _lesson_views):
+        with _view_col:
+            _is_selected = st.session_state["teacher_lessons_day_filter"] == _view_name
+            if st.button(
+                f"{_view_icons[_view_name]}  {_view_name}",
+                key=f"teacher_lessons_filter_btn_{_view_name}",
+                use_container_width=True,
+                type="primary" if _is_selected else "secondary",
+            ):
+                st.session_state["teacher_lessons_day_filter"] = _view_name
+                st.rerun()
+    lesson_view = st.session_state["teacher_lessons_day_filter"]
 
     ws = st.session_state.get("weekly_schedule_df", pd.DataFrame())
     if ws is None or ws.empty:
