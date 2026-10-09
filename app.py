@@ -5413,14 +5413,7 @@ elif t_page == "dashboard":
     if st.session_state.teacher_notifications_open:
         _render_notification_box("teacher")
 
-    st.markdown("### 🔔 حصص اليوم وغداً")
-    st.caption("يتم جلب الحصص تلقائياً من جدول مواعيد الطلاب، ويظهر دائماً اليوم واليوم التالي فقط. العداد يتحدث كل ثانية، وعند حلول الموعد تتحول البطاقة إلى الأحمر ويظهر زر بدء الحصة.")
-    _render_teacher_today_lessons()
-
-    st.markdown("<div style='height:14px'></div>",unsafe_allow_html=True)
-    s1,s2,s3,s4=st.columns(4)
-    for c,icon,num,label,cls in [(s1,'♙',len(dashboard_students),'إجمالي الطلاب','stat-purple'),(s2,'▣',len(st.session_state.weekly_schedule_df),'المواعيد الأسبوعية','stat-green'),(s3,'◉',len(st.session_state.online_schedule_df),'مواعيد Zoom','stat-blue'),(s4,'✎',len(st.session_state.sessions_df),'الحصص المرصودة','stat-yellow')]:
-        with c: st.markdown(f"<div class='modern-stat {cls}'><div class='icon'>{icon}</div><div class='num'>{num}</div><div class='label'>{label}</div></div>",unsafe_allow_html=True)
+    # إظهار ملخص الحسابات مباشرة أسفل رسالة الترحيب في الصفحة الرئيسية.
     # ملخص مالي بارز في الصفحة الرئيسية، بنفس أسلوب البطاقات الإحصائية المرجعية.
     st.markdown("""
     <style>
@@ -5439,6 +5432,16 @@ elif t_page == "dashboard":
       <div class="teacher-finance-card balance"><div class="teacher-finance-icon">💰</div><div class="teacher-finance-value">""" + f"{max(total_balance_all,0):,.0f}" + """ جنيه</div><div class="teacher-finance-label">الرصيد المتبقي</div></div>
     </div>
     """, unsafe_allow_html=True)
+
+
+    st.markdown("### 🔔 حصص اليوم وغداً")
+    st.caption("يتم جلب الحصص تلقائياً من جدول مواعيد الطلاب، ويظهر دائماً اليوم واليوم التالي فقط. العداد يتحدث كل ثانية، وعند حلول الموعد تتحول البطاقة إلى الأحمر ويظهر زر بدء الحصة.")
+    _render_teacher_today_lessons()
+
+    st.markdown("<div style='height:14px'></div>",unsafe_allow_html=True)
+    s1,s2,s3,s4=st.columns(4)
+    for c,icon,num,label,cls in [(s1,'♙',len(dashboard_students),'إجمالي الطلاب','stat-purple'),(s2,'▣',len(st.session_state.weekly_schedule_df),'المواعيد الأسبوعية','stat-green'),(s3,'◉',len(st.session_state.online_schedule_df),'مواعيد Zoom','stat-blue'),(s4,'✎',len(st.session_state.sessions_df),'الحصص المرصودة','stat-yellow')]:
+        with c: st.markdown(f"<div class='modern-stat {cls}'><div class='icon'>{icon}</div><div class='num'>{num}</div><div class='label'>{label}</div></div>",unsafe_allow_html=True)
     st.markdown("### ⚡ أدوات سريعة")
     quick=[('◉','إدارة الطلاب','بطاقات الطلاب والبيانات','students'),('◫','جداول Zoom','إدارة الحصص الأونلاين','online_schedule'),('▣','الامتحانات','إنشاء وإدارة الاختبارات','exam_maker'),('✦','عبقري','إدارة اختبارات عبقري','abqary'),('▤','الواجبات والحصص','رصد ومتابعة الطلاب','add_session'),('▰','المدفوعات','المستحق والمدفوع والرصيد','payments')]
     for row in range(0,len(quick),3):
