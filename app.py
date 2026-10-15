@@ -204,6 +204,62 @@ hr { border-color: rgba(36,91,232,.15) !important; }
 [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"] {
   animation: mathematicReveal .24s ease both;
 }
+/* إصلاح عرض واجهة Mathematic نفسها: ترتيب الهيرو والبطاقات على كل المقاسات */
+[data-testid="stMarkdownContainer"] > div[style*="radial-gradient(circle at 68% 42%"] {
+  border-radius: 0 0 28px 28px;
+}
+[data-testid="stMarkdownContainer"] > div[style*="radial-gradient(circle at 68% 42%"] a,
+[data-testid="stMarkdownContainer"] > div[style*="grid-template-columns:repeat(5, 1fr)"] > div {
+  transition: transform .22s ease, box-shadow .22s ease, filter .22s ease !important;
+}
+[data-testid="stMarkdownContainer"] > div[style*="grid-template-columns:repeat(5, 1fr)"] > div:hover {
+  transform: translateY(-4px);
+  filter: brightness(1.12);
+}
+[data-testid="stMarkdownContainer"] > div[style*="border:1.5px dashed"] {
+  transition: transform .22s ease, box-shadow .22s ease;
+}
+[data-testid="stMarkdownContainer"] > div[style*="border:1.5px dashed"]:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 34px rgba(7,26,54,.09) !important;
+}
+@media (max-width: 900px) {
+  [data-testid="stMarkdownContainer"] > div[style*="radial-gradient(circle at 68% 42%"] > div[dir="ltr"] {
+    flex-direction: column-reverse !important;
+    gap: 18px !important;
+    padding: 12px 0 0 !important;
+  }
+  [data-testid="stMarkdownContainer"] > div[style*="radial-gradient(circle at 68% 42%"] > div[dir="ltr"] > div[dir="rtl"] {
+    padding: 0 12px !important;
+    text-align: center !important;
+  }
+  [data-testid="stMarkdownContainer"] > div[style*="radial-gradient(circle at 68% 42%"] > div[dir="ltr"] h1 {
+    font-size: clamp(28px, 6vw, 42px) !important;
+  }
+  [data-testid="stMarkdownContainer"] > div[style*="radial-gradient(circle at 68% 42%"] img {
+    width: min(68vw, 280px) !important;
+    height: min(68vw, 280px) !important;
+  }
+  [data-testid="stMarkdownContainer"] > div[style*="radial-gradient(circle at 68% 42%"] div[style*="width:370px"],
+  [data-testid="stMarkdownContainer"] > div[style*="radial-gradient(circle at 68% 42%"] div[style*="width:340px"] {
+    width: min(72vw, 300px) !important;
+    height: min(72vw, 300px) !important;
+  }
+  [data-testid="stMarkdownContainer"] > div[style*="grid-template-columns:repeat(5, 1fr)"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    margin-top: -22px !important;
+    padding: 16px !important;
+  }
+}
+@media (max-width: 480px) {
+  [data-testid="stMarkdownContainer"] > div[style*="radial-gradient(circle at 68% 42%"] {
+    padding: 32px 14px 58px !important;
+  }
+  [data-testid="stMarkdownContainer"] > div[style*="grid-template-columns:repeat(5, 1fr)"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+}
 @media (max-width: 768px) {
   [data-testid="stAppViewContainer"] .main .block-container { padding: 1rem .75rem 2rem; }
   h1 { font-size: 1.8rem !important; }
