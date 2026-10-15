@@ -178,6 +178,52 @@ hr {
 """, unsafe_allow_html=True)
 
 
+# شريط هوية واضح يظهر في جميع واجهات المنصة، دون المساس بمحتوى الصفحات أو بياناتها.
+st.markdown("""
+<div class="math-brandbar" dir="rtl">
+  <div class="math-brandmark" aria-hidden="true">∑</div>
+  <div class="math-brandcopy">
+    <div class="math-brandname" dir="ltr">Mathematic<span class="math-brand-period">.</span></div>
+    <div class="math-brandtag">رحلتك في عالم الرياضيات تبدأ من هنا</div>
+    <div class="math-brandsub" dir="ltr">LEARN SMART · PRACTICE MORE · ACHIEVE YOUR GOALS</div>
+  </div>
+  <div class="math-brand-symbols" aria-hidden="true"><span>π</span><span>√x</span><span>f(x)</span></div>
+</div>
+<style>
+.math-brandbar {
+  position: relative; display: flex; align-items: center; gap: 18px;
+  width: 100%; box-sizing: border-box; overflow: hidden;
+  margin: 0 0 1.5rem; padding: 22px 26px; border-radius: 22px;
+  color: #fff; background: linear-gradient(115deg,#101d3a 0%,#173b78 58%,#2864e8 100%);
+  box-shadow: 0 12px 32px rgba(16,29,58,.18); isolation: isolate;
+}
+.math-brandbar:before { content: ""; position: absolute; width: 250px; height: 250px; border-radius: 50%;
+  background: rgba(53,196,232,.13); top: -150px; left: 20%; z-index: -1; }
+.math-brandbar:after { content: ""; position: absolute; width: 180px; height: 180px; border: 1px solid rgba(255,255,255,.14);
+  border-radius: 50%; bottom: -130px; right: 8%; z-index: -1; }
+.math-brandmark { flex: 0 0 68px; height: 68px; display: grid; place-items: center; border-radius: 19px;
+  background: linear-gradient(145deg,#fff,#dcecff); color: #1c4ca6; font-size: 43px; font-weight: 900;
+  box-shadow: 0 7px 18px rgba(0,0,0,.16); transition: transform .25s ease, box-shadow .25s ease; }
+.math-brandmark:hover { transform: rotate(-7deg) scale(1.06); box-shadow: 0 10px 24px rgba(0,0,0,.23); }
+.math-brandcopy { min-width: 0; }
+.math-brandname { font-size: clamp(25px,3vw,36px); line-height: 1.1; font-weight: 900; letter-spacing: -.7px; color: #fff; }
+.math-brand-period { color: #57dcf4; }
+.math-brandtag { margin-top: 7px; font-size: clamp(14px,1.6vw,19px); font-weight: 750; color: #fff; }
+.math-brandsub { margin-top: 5px; font-size: 10px; letter-spacing: 1.5px; color: #bdeeff; font-weight: 700; }
+.math-brand-symbols { display: flex; gap: 8px; margin-right: auto; align-items: center; }
+.math-brand-symbols span { display: grid; place-items: center; min-width: 42px; height: 42px; padding: 0 7px; box-sizing: border-box;
+  border: 1px solid rgba(255,255,255,.24); border-radius: 13px; background: rgba(255,255,255,.09);
+  color: #fff; font-weight: 800; font-size: 16px; transition: transform .2s ease, background .2s ease; }
+.math-brand-symbols span:hover { transform: translateY(-4px) rotate(3deg); background: rgba(255,255,255,.2); }
+@media (max-width: 640px) { .math-brandbar { gap: 12px; padding: 17px 15px; border-radius: 17px; }
+  .math-brandmark { flex-basis: 52px; height: 52px; border-radius: 15px; font-size: 34px; }
+  .math-brandsub { font-size: 8px; letter-spacing: .6px; }
+  .math-brand-symbols { display: none; } }
+@media (prefers-reduced-motion: reduce) { .math-brandmark, .math-brand-symbols span { transition: none; } }
+</style>
+""", unsafe_allow_html=True)
+
+
 try:
     from streamlit_paste_button import paste_image_button
 except ImportError:
