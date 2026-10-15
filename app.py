@@ -31,10 +31,152 @@ except Exception:
     WeasyHTML = None
 
 st.set_page_config(
-    page_title="البشمهندس x الرياضه | منصة تعليمية للرياضيات والإحصاء",
+    page_title="Mathematic | رحلتك في عالم الرياضيات",
     page_icon="📐",
     layout="wide",
 )
+
+# هوية Mathematic — طبقة تصميم فقط، دون تغيير منطق المنصة أو بياناتها.
+st.markdown("""
+<style>
+:root {
+  --math-navy: #101d3a;
+  --math-blue: #2864e8;
+  --math-cyan: #35c4e8;
+  --math-gold: #f4bd55;
+  --math-surface: #ffffff;
+}
+.stApp {
+  background:
+    radial-gradient(ellipse at 92% 0%, rgba(53,196,232,.09), transparent 34%),
+    radial-gradient(ellipse at 0% 18%, rgba(40,100,232,.07), transparent 32%),
+    var(--background-color);
+}
+[data-testid="stHeader"] {
+  background: rgba(255,255,255,.78);
+  backdrop-filter: blur(14px);
+}
+[data-testid="stAppViewContainer"] .main .block-container {
+  padding-top: 1.5rem;
+  padding-bottom: 3rem;
+  max-width: 1440px;
+}
+h1, h2, h3 {
+  color: var(--math-navy);
+  letter-spacing: -.025em;
+}
+h1 {
+  font-weight: 850 !important;
+}
+p, label, [data-testid="stCaptionContainer"] {
+  line-height: 1.75;
+}
+[data-testid="stButton"] > button,
+[data-testid="stDownloadButton"] > button,
+[data-testid="stFormSubmitButton"] > button {
+  border-radius: 13px !important;
+  border: 1px solid rgba(40,100,232,.20) !important;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease !important;
+  font-weight: 700 !important;
+}
+[data-testid="stButton"] > button:hover,
+[data-testid="stDownloadButton"] > button:hover,
+[data-testid="stFormSubmitButton"] > button:hover {
+  transform: translateY(-2px);
+  border-color: rgba(40,100,232,.65) !important;
+  box-shadow: 0 9px 24px rgba(40,100,232,.16) !important;
+}
+[data-testid="stButton"] > button:active,
+[data-testid="stDownloadButton"] > button:active {
+  transform: translateY(0) scale(.985);
+}
+[data-testid="stBaseButton-primary"] {
+  background: linear-gradient(115deg, #2457d6, #3289f4) !important;
+  color: #fff !important;
+  box-shadow: 0 5px 16px rgba(40,100,232,.18);
+}
+[data-testid="stMetric"],
+[data-testid="stExpander"],
+[data-testid="stContainer"] > div[data-testid="stVerticalBlockBorderWrapper"],
+div[data-testid="stAlert"] {
+  border-radius: 17px !important;
+}
+[data-testid="stMetric"] {
+  padding: 14px 16px;
+  border: 1px solid rgba(40,100,232,.12);
+  background: linear-gradient(145deg, rgba(255,255,255,.94), rgba(239,246,255,.78));
+  box-shadow: 0 5px 18px rgba(16,29,58,.045);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+[data-testid="stMetric"]:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 26px rgba(16,29,58,.09);
+}
+[data-testid="stExpander"] {
+  border-color: rgba(40,100,232,.18) !important;
+  overflow: hidden;
+}
+[data-testid="stExpander"] summary:hover {
+  background: rgba(40,100,232,.045);
+}
+[data-baseweb="tab-list"] {
+  gap: 7px;
+  border-bottom-color: rgba(40,100,232,.14) !important;
+}
+[data-baseweb="tab"] {
+  border-radius: 11px 11px 0 0;
+  transition: background .2s ease, color .2s ease;
+}
+[data-baseweb="tab"]:hover {
+  background: rgba(40,100,232,.07);
+}
+[data-baseweb="tab"][aria-selected="true"] {
+  font-weight: 800;
+}
+[data-testid="stSidebar"] {
+  border-right: 1px solid rgba(40,100,232,.12);
+}
+[data-testid="stSidebar"] [data-testid="stButton"] > button {
+  text-align: right;
+}
+input, textarea, [data-baseweb="select"] > div {
+  border-radius: 11px !important;
+}
+[data-testid="stDataFrame"], [data-testid="stTable"] {
+  border-radius: 13px;
+  overflow: hidden;
+}
+hr {
+  border-color: rgba(40,100,232,.15) !important;
+}
+@keyframes mathFadeIn {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+[data-testid="stVerticalBlock"] > [data-testid="stElementContainer"] {
+  animation: mathFadeIn .32s ease both;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+@media (max-width: 768px) {
+  [data-testid="stAppViewContainer"] .main .block-container {
+    padding: 1rem .8rem 2rem;
+  }
+  h1 { font-size: 1.8rem !important; }
+  [data-testid="stButton"] > button,
+  [data-testid="stDownloadButton"] > button {
+    min-height: 42px;
+  }
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 try:
     from streamlit_paste_button import paste_image_button
