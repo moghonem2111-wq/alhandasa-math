@@ -2314,6 +2314,39 @@ def _render_notification_box(role="student", student_name=""):
 
 query_params = st.query_params
 
+# Fast SPA navigation through URL query params
+if query_params.get("page"):
+    p = str(query_params.get("page")).strip()
+    if p in ["home", "courses", "lectures", "contact", "login", "register"]:
+        st.session_state.active_mode = "public"
+        st.session_state.page_view = p
+    elif p == "student":
+        if st.session_state.get("logged_student"):
+            st.session_state.active_mode = "student"
+            st.session_state.student_sub_page = "dashboard"
+        else:
+            st.session_state.active_mode = "public"
+            st.session_state.page_view = "login"
+            st.session_state.login_role_tab = "student"
+    elif p == "teacher":
+        if st.session_state.get("teacher_panel_unlocked", False):
+            st.session_state.active_mode = "teacher"
+            st.session_state.teacher_page = "dashboard"
+        else:
+            st.session_state.active_mode = "public"
+            st.session_state.page_view = "login"
+            st.session_state.login_role_tab = "teacher"
+
+if query_params.get("logout"):
+    st.session_state.logged_student = None
+    st.session_state.teacher_panel_unlocked = False
+    st.session_state.page_view = "home"
+    st.session_state.active_mode = "public"
+    try:
+        st.query_params.clear()
+    except Exception:
+        pass
+
 if "active_mode" not in st.session_state:
     if query_params.get("role") == "academy":
         st.session_state.active_mode = "academy"
@@ -3309,240 +3342,248 @@ st.markdown(_nav_css, unsafe_allow_html=True)
 # 1. شريط التنقل العلوي الموحد (Mathematic Σ)
 # ============================================================================== 
 if is_student_mode:
-    st.markdown('<div class="math-navbar-wrap">', unsafe_allow_html=True)
-    c_brand, c_links, c_acts = st.columns([2.5, 6.2, 3.3], vertical_alignment="center")
-    
-    with c_brand:
-        st.markdown("""
-            <div class="math-brand">
-                <span class="math-brand-sigma">Σ</span>
-                <span class="math-brand-text">Mathematic</span>
-            </div>
-        """, unsafe_allow_html=True)
+    # -------------------------------------------------------------
+    # 1. شريط التنقل العلوي الموحد (Mathematic Σ) - مطابقة تامة للصورة media_1792105908332_49af2058.png
+    # -------------------------------------------------------------
+    current_pv = st.session_state.get("page_view", "home")
+    is_teacher_logged = st.session_state.get("teacher_panel_unlocked", False)
+    is_student_logged = bool(st.session_state.get("logged_student"))
+    student_display_name = st.session_state.logged_student.get("اسم الطالب", "طالبنا العزيز") if is_student_logged else ""
 
-    with c_links:
-        nl1, nl2, nl3, nl4, nl5, nl6 = st.columns(6, gap="small")
-        with nl1:
-            if st.button("الرئيسية", key="nav_btn_home", use_container_width=True, type="primary" if st.session_state.page_view == "home" and not st.session_state.logged_student else "secondary"):
-                st.session_state.active_mode = "public"
-                st.session_state.page_view = "home"
-                st.rerun()
-        with nl2:
-            if st.button("الكورسات", key="nav_btn_courses", use_container_width=True, type="primary" if st.session_state.page_view == "courses" else "secondary"):
-                st.session_state.active_mode = "public"
-                st.session_state.page_view = "courses"
-                st.rerun()
-        with nl3:
-            if st.button("المحاضرات", key="nav_btn_lectures", use_container_width=True, type="primary" if st.session_state.page_view == "lectures" else "secondary"):
-                st.session_state.active_mode = "public"
-                st.session_state.page_view = "lectures"
-                st.rerun()
-        with nl4:
-            if st.button("لوحة الطالب", key="nav_btn_student", use_container_width=True, type="primary" if st.session_state.logged_student else "secondary"):
-                if st.session_state.logged_student:
-                    st.session_state.active_mode = "student"
-                    st.session_state.student_sub_page = "dashboard"
-                else:
-                    st.session_state.active_mode = "public"
-                    st.session_state.page_view = "login"
-                    st.session_state.login_role_tab = "student"
-                st.rerun()
-        with nl5:
-            if st.button("لوحة المعلم", key="nav_btn_teacher", use_container_width=True, type="primary" if st.session_state.active_mode == "teacher" else "secondary"):
-                if st.session_state.get("teacher_panel_unlocked", False):
-                    st.session_state.active_mode = "teacher"
-                    st.session_state.teacher_page = "dashboard"
-                else:
-                    st.session_state.active_mode = "public"
-                    st.session_state.page_view = "login"
-                    st.session_state.login_role_tab = "teacher"
-                st.rerun()
-        with nl6:
-            if st.button("تواصل معنا", key="nav_btn_contact", use_container_width=True, type="primary" if st.session_state.page_view == "contact" else "secondary"):
-                st.session_state.active_mode = "public"
-                st.session_state.page_view = "contact"
-                st.rerun()
+    # User badge & logout button in navbar
+    if is_teacher_logged:
+        user_badge_html = """
+          <a href="?logout=1" target="_self" style="background:#ffffff;color:#020b1e;font-weight:900;font-size:13px;padding:6px 18px;border-radius:999px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,0.2);display:inline-block;">خروج</a>
+          <div style="background:#091a38;border:1px solid #1e3a6a;color:#ffffff;font-weight:800;font-size:13px;padding:6px 14px;border-radius:999px;display:flex;align-items:center;gap:6px;direction:rtl;">
+            <span style="color:#60a5fa;">👤</span> <span>م/ محمد غنيم</span>
+          </div>
+          <a href="?page=courses" target="_self" title="بحث في المقررات" style="width:36px;height:36px;border-radius:50%;background:#081630;border:1px solid #1e3a6a;display:flex;align-items:center;justify-content:center;color:#cbd5e1;text-decoration:none;font-size:14px;">🔍</a>
+        """
+    elif is_student_logged:
+        user_badge_html = f"""
+          <a href="?logout=1" target="_self" style="background:#ffffff;color:#020b1e;font-weight:900;font-size:13px;padding:6px 18px;border-radius:999px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,0.2);display:inline-block;">خروج</a>
+          <div style="background:#091a38;border:1px solid #1e3a6a;color:#ffffff;font-weight:800;font-size:13px;padding:6px 14px;border-radius:999px;display:flex;align-items:center;gap:6px;direction:rtl;">
+            <span style="color:#34d399;">🎓</span> <span>{student_display_name}</span>
+          </div>
+          <a href="?page=courses" target="_self" title="بحث في المقررات" style="width:36px;height:36px;border-radius:50%;background:#081630;border:1px solid #1e3a6a;display:flex;align-items:center;justify-content:center;color:#cbd5e1;text-decoration:none;font-size:14px;">🔍</a>
+        """
+    else:
+        user_badge_html = """
+          <a href="?page=login" target="_self" style="background:#ffffff;color:#020b1e;font-weight:900;font-size:13px;padding:6px 18px;border-radius:999px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,0.2);display:inline-block;">تسجيل الدخول</a>
+          <div style="background:#091a38;border:1px solid #1e3a6a;color:#ffffff;font-weight:800;font-size:13px;padding:6px 14px;border-radius:999px;display:flex;align-items:center;gap:6px;direction:rtl;">
+            <span style="color:#60a5fa;">👤</span> <span>م/ محمد غنيم</span>
+          </div>
+          <a href="?page=courses" target="_self" title="بحث في المقررات" style="width:36px;height:36px;border-radius:50%;background:#081630;border:1px solid #1e3a6a;display:flex;align-items:center;justify-content:center;color:#cbd5e1;text-decoration:none;font-size:14px;">🔍</a>
+        """
 
-    with c_acts:
-        # Check if teacher or student is logged in
-        if st.session_state.get("teacher_panel_unlocked", False):
-            ac_name, ac_out, ac_search = st.columns([2.0, 1.0, 0.6], gap="small")
-            with ac_name:
-                st.markdown("<div style='color:#fff;font-size:13px;font-weight:800;white-space:nowrap;padding-top:8px;'>👤 م/ محمد غنيم</div>", unsafe_allow_html=True)
-            with ac_out:
-                if st.button("خروج", key="nav_logout_btn_teacher", use_container_width=True):
-                    st.session_state.teacher_panel_unlocked = False
-                    st.session_state.active_mode = "public"
-                    st.session_state.page_view = "home"
-                    st.rerun()
-            with ac_search:
-                if st.button("🔍", key="nav_search_btn_teacher", use_container_width=True):
-                    st.session_state.page_view = "courses"
-                    st.rerun()
-        elif st.session_state.logged_student:
-            ac_name, ac_theme, ac_out = st.columns([2.0, 0.7, 1.0], gap="small")
-            with ac_name:
-                st.markdown(f"<div style='color:#fff;font-size:13px;font-weight:800;white-space:nowrap;padding-top:8px;'>👤 {st.session_state.logged_student.get('اسم الطالب','طالبنا العزيز')}</div>", unsafe_allow_html=True)
-            with ac_theme:
-                if st.button("🌙" if not st.session_state.dark_mode else "☀", key="student_nav_theme", use_container_width=True):
-                    st.session_state.dark_mode = not st.session_state.dark_mode
-                    st.rerun()
-            with ac_out:
-                if st.button("خروج", key="student_nav_logout", use_container_width=True):
-                    st.session_state.logged_student = None
-                    st.session_state.page_view = "home"
-                    st.session_state.active_mode = "public"
-                    st.query_params.clear()
-                    st.rerun()
-        else:
-            act1, act2, act3 = st.columns([0.7, 1.5, 1.5], gap="small")
-            with act1:
-                if st.button("🔍", key="nav_btn_search", use_container_width=True, help="بحث في المقررات والمحتوى"):
-                    st.session_state.page_view = "courses"
-                    st.rerun()
-            with act2:
-                if st.button("تسجيل الدخول", key="nav_btn_login", use_container_width=True):
-                    st.session_state.active_mode = "public"
-                    st.session_state.page_view = "login"
-                    st.session_state.login_role_tab = "student"
-                    st.rerun()
-            with act3:
-                if st.button("إنشاء حساب", key="nav_btn_register", use_container_width=True):
-                    st.session_state.active_mode = "public"
-                    st.session_state.page_view = "register"
-                    st.rerun()
+    # Active Link Indicators
+    def _nav_style(page_key):
+        if current_pv == page_key:
+            return "color:#f5a623;border-bottom:2.5px solid #f5a623;padding-bottom:5px;font-weight:900;text-decoration:none;font-size:15px;transition:all 0.2s;"
+        return "color:#cbd5e1;border-bottom:2.5px solid transparent;padding-bottom:5px;font-weight:700;text-decoration:none;font-size:15px;transition:all 0.2s;"
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    navbar_full_html = f"""
+    <div style="width:100%;background:#020b1e;border-bottom:1px solid rgba(255,255,255,0.08);padding:14px 36px;box-shadow:0 10px 25px rgba(0,0,0,0.4);position:sticky;top:0;z-index:999;">
+      <div style="max-width:1280px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;" dir="ltr">
+        
+        <!-- Brand Logo (LEFT) -->
+        <a href="?page=home" target="_self" style="display:flex;align-items:center;gap:8px;text-decoration:none;cursor:pointer;">
+          <span style="color:#f5a623;font-size:30px;font-weight:900;line-height:1;">Σ</span>
+          <span style="color:#ffffff;font-size:23px;font-weight:900;letter-spacing:0.5px;">Mathematic</span>
+        </a>
+
+        <!-- Center Nav Links (Arabic RTL Order) -->
+        <div style="display:flex;align-items:center;gap:30px;direction:rtl;">
+          <a href="?page=home" target="_self" style="{_nav_style('home')}">الرئيسية</a>
+          <a href="?page=courses" target="_self" style="{_nav_style('courses')}">الكورسات</a>
+          <a href="?page=lectures" target="_self" style="{_nav_style('lectures')}">المحاضرات</a>
+          <a href="?page=student" target="_self" style="{_nav_style('student')}">لوحة الطالب</a>
+          <a href="?page=teacher" target="_self" style="{_nav_style('teacher')}">لوحة المعلم</a>
+          <a href="?page=contact" target="_self" style="{_nav_style('contact')}">تواصل معنا</a>
+        </div>
+
+        <!-- Right Side Actions (SEARCH, TEACHER BADGE, LOGOUT) -->
+        <div style="display:flex;align-items:center;gap:12px;" dir="rtl">
+          {user_badge_html}
+        </div>
+
+      </div>
+    </div>
+    """
+    st.markdown(navbar_full_html, unsafe_allow_html=True)
 
     # -------------------------------------------------------------
-    # الصفحات العامة (غير مسجل الدخول)
+    # الصفحات العامة (غير مسجل الدخول كطالب)
     # -------------------------------------------------------------
     if not st.session_state.logged_student:
 
-        # === 1. الصفحة الرئيسية (مطابقة للصورة media_1792104276305_5718e508.png طبق الأصل) ===
+        # === 1. الصفحة الرئيسية (مطابقة 100% للصورة media_1792105908332_49af2058.png) ===
         if st.session_state.page_view == "home":
             _ui_df = st.session_state.get("student_interface_df", pd.DataFrame())
             si = _ui_df.iloc[0].to_dict() if not _ui_df.empty else {}
             ui_main_b64 = str(si.get("صورة_الواجهة_base64", "") or "").strip() or STUDENT_FIXED_IMAGE_B64
             ui_main_uri = STUDENT_FIXED_IMAGE_URI if STUDENT_FIXED_IMAGE_B64 else (teacher_image_data_uri(ui_main_b64) if ui_main_b64 else "")
-            
-            # Hero Section (Image 1)
-            hero_html = f"""
-            <div class="math-hero-wrap">
-              <div class="math-hero-math-text">
+
+            # Hero Section (2 Columns: Left is Text/CTAs, Right is Glowing Amber Teacher Halo)
+            hero_pixel_perfect_html = f"""
+            <div style="background:radial-gradient(circle at 68% 42%, #082554 0%, #03112c 55%, #020b1e 100%);padding:55px 36px 95px;position:relative;overflow:hidden;">
+              
+              <!-- Faint Mathematical Background Watermark -->
+              <div style="position:absolute;inset:0;pointer-events:none;opacity:0.06;font-family:'Courier New',monospace;font-size:14px;color:#ffffff;line-height:2.3;padding:30px;user-select:none;overflow:hidden;">
                 f(x) = dy/dx &nbsp;&nbsp;&nbsp;&nbsp; lim (x→0) [sin(x)/x] = 1 &nbsp;&nbsp;&nbsp;&nbsp; a² + b² = c² &nbsp;&nbsp;&nbsp;&nbsp; ∫ f(x) dx<br>
                 ∑ (1/n²) = π²/6 &nbsp;&nbsp;&nbsp;&nbsp; e^(iπ) + 1 = 0 &nbsp;&nbsp;&nbsp;&nbsp; ∇ • B = 0 &nbsp;&nbsp;&nbsp;&nbsp; y = ax² + bx + c<br>
-                sin²(θ) + cos²(θ) = 1 &nbsp;&nbsp;&nbsp;&nbsp; d/dx [e^x] = e^x &nbsp;&nbsp;&nbsp;&nbsp; log(xy) = log(x) + log(y)
+                sin²(θ) + cos²(θ) = 1 &nbsp;&nbsp;&nbsp;&nbsp; d/dx [e^x] = e^x &nbsp;&nbsp;&nbsp;&nbsp; log(xy) = log(x) + log(y)<br>
+                ∫ (1/x) dx = ln|x| + C &nbsp;&nbsp;&nbsp;&nbsp; E = mc² &nbsp;&nbsp;&nbsp;&nbsp; det(A - λI) = 0 &nbsp;&nbsp;&nbsp;&nbsp; lim (1 + 1/n)^n = e
               </div>
-              <div class="math-hero-container">
-                <div class="math-hero-text-col">
-                  <div class="math-hero-title">
-                    رحلتك في عالم<br>
-                    <span>الرياضيات</span> تبدأ من هنا
-                  </div>
-                  <div class="math-hero-desc">
-                    منصة تعليمية متكاملة لتعلم الرياضيات بأسلوب بسيط ومنظم لجميع المراحل الدراسية مع نخبة من خبراء المادة وشروحات تفاعلية لضمان الدرجة النهائية.
-                  </div>
-                </div>
-                <div class="math-hero-avatar-col">
-                  <div class="math-avatar-dashed-ring"></div>
-                  <div class="math-avatar-glow-ring"></div>
-                  <img class="math-avatar-img" src="{ui_main_uri or STUDENT_FIXED_IMAGE_URI}" alt="م/ محمد غنيم">
-                </div>
-              </div>
-            </div>
-            """
-            st.markdown(hero_html, unsafe_allow_html=True)
 
-            # Hero CTAs (ابدأ الآن ← | تعرف على المنصة)
-            st.markdown("<div style='background:#020b1e;padding:0 48px 30px;'><div style='max-width:1240px;margin:0 auto;'>", unsafe_allow_html=True)
-            cta_col1, cta_col2, cta_spacer = st.columns([1.8, 1.8, 6.4], gap="small")
-            with cta_col1:
-                if st.button("ابدأ الآن ←", key="hero_start_btn", use_container_width=True):
-                    st.session_state.page_view = "register"
-                    st.rerun()
-            with cta_col2:
-                if st.button("تعرف على المنصة", key="hero_about_btn", use_container_width=True):
-                    st.session_state.page_view = "courses"
-                    st.rerun()
-            st.markdown("</div></div>", unsafe_allow_html=True)
-
-            # Floating Features Bar (Image 1)
-            features_bar_html = """
-            <div class="math-features-bar-wrap">
-              <div class="math-features-bar">
-                <div class="math-feature-item">
-                  <div class="math-feature-icon">💬</div>
-                  <div class="math-feature-label">دعم مستمر</div>
-                </div>
-                <div class="math-feature-item">
-                  <div class="math-feature-icon">📊</div>
-                  <div class="math-feature-label">متابعة التقدم</div>
-                </div>
-                <div class="math-feature-item">
-                  <div class="math-feature-icon">📋</div>
-                  <div class="math-feature-label">اختبارات وتقييمات</div>
-                </div>
-                <div class="math-feature-item">
-                  <div class="math-feature-icon">📑</div>
-                  <div class="math-feature-label">محتوى منظم</div>
-                </div>
-                <div class="math-feature-item">
-                  <div class="math-feature-icon">🎬</div>
-                  <div class="math-feature-label">فيديوهات عالية الجودة</div>
-                </div>
-              </div>
-            </div>
-            """
-            st.markdown(features_bar_html, unsafe_allow_html=True)
-
-            # Section Below Hero: أحدث الكورسات (Image 1 & Image 2)
-            st.markdown("""
-            <div style="background:#ffffff; padding:28px 40px 14px; max-width:1240px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; direction:rtl;">
-              <h2 style="color:#0c1e3d; font-size:32px; font-weight:900; margin:0;">أحدث الكورسات</h2>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            c_guide_col1, c_guide_col2 = st.columns([8, 2])
-            with c_guide_col2:
-                if st.button("دليل الكورسات ←", key="goto_courses_guide_btn", use_container_width=True):
-                    st.session_state.page_view = "courses"
-                    st.rerun()
-
-            # Dashed Notice Card (Exact Vector Ruler 📐 & Text from Image 2)
-            st.markdown("""
-            <div class="math-dashed-notice-card">
-              <div class="math-dashed-icon">
-                <svg width="60" height="60" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M40 38L10 38L10 8L40 38Z" fill="#EEF2F6" stroke="#94A3B8" stroke-width="2.5" stroke-linejoin="round"/>
-                  <path d="M26 33L15 33L15 22L26 33Z" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2" stroke-linejoin="round"/>
-                  <path d="M10 13H14M10 17H12.5M10 21H14M10 25H12.5M10 29H14M10 33H12.5" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/>
-                  <path d="M15 38V34M19 38V35.5M23 38V34M27 38V35.5M31 38V34M35 38V35.5" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/>
+              <!-- Faint Wireframe Geometry (Pyramid) -->
+              <div style="position:absolute;left:40px;top:50px;width:120px;height:120px;opacity:0.08;pointer-events:none;">
+                <svg viewBox="0 0 100 100" fill="none" stroke="#60a5fa" stroke-width="1.5">
+                  <polygon points="50,10 90,85 10,85" />
+                  <line x1="50" y1="10" x2="50" y2="85" stroke-dasharray="3 3"/>
+                  <line x1="50" y1="10" x2="65" y2="85" />
                 </svg>
               </div>
-              <div class="math-dashed-title">مرحباً بكم في منصة Mathematic التعليمية</div>
-              <div class="math-dashed-desc">سيتم نشر أحدث الكورسات والمحاضرات الدراسية تباعاً، يمكنك متابعة الدليل العام للكورسات.</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            cb_c1, cb_c2, cb_c3 = st.columns([3, 4, 3])
-            with cb_c2:
-                if st.button("استعراض دليل الكورسات", key="btn_browse_courses_guide", use_container_width=True):
-                    st.session_state.page_view = "courses"
-                    st.rerun()
 
-            # Dark Footer (Image 2)
-            st.markdown("""
-            <div class="math-footer-wrap">
-              <div class="math-footer-logo">
-                <span style="color:#f5a623;font-size:26px;">Σ</span> <span style="font-size:22px;color:#ffffff;font-weight:900;">Mathematic</span>
+              <!-- Main Hero Container -->
+              <div style="max-width:1240px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;position:relative;z-index:2;" dir="ltr">
+                
+                <!-- Left Column: Title, Subtitle, and Call-to-Action Buttons -->
+                <div style="flex:1.25;text-align:right;padding-right:30px;" dir="rtl">
+                  <h1 style="color:#ffffff;font-size:48px;font-weight:900;line-height:1.28;margin:0 0 18px;letter-spacing:-0.5px;">
+                    رحلتك في عالم<br>
+                    <span style="color:#f5a623;">الرياضيات</span> تبدأ من هنا
+                  </h1>
+                  <p style="color:#cbd5e1;font-size:16px;line-height:1.95;font-weight:600;max-width:540px;margin:0 0 32px;">
+                    منصة تعليمية متكاملة لتعلم الرياضيات بأسلوب بسيط ومنظم لجميع المراحل الدراسية مع نخبة من خبراء المادة وشروحات تفاعلية مستمرة لضمان الدرجة النهائية.
+                  </p>
+                  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                    <a href="?page=login" target="_self" style="background:#f5a623;color:#020b1e;font-weight:900;font-size:16px;padding:12px 32px;border-radius:999px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(245,166,35,0.4);transition:all 0.2s;">
+                      <span>ابدأ الآن</span>
+                      <span style="font-size:18px;">←</span>
+                    </a>
+                    <a href="?page=courses" target="_self" style="background:#0b1c3d;color:#ffffff;font-weight:700;font-size:15.5px;padding:12px 28px;border-radius:999px;text-decoration:none;border:1.5px solid rgba(255,255,255,0.25);transition:all 0.2s;">
+                      تعرف على المنصة
+                    </a>
+                  </div>
+                </div>
+
+                <!-- Right Column: Teacher Portrait Halo -->
+                <div style="flex:0.95;display:flex;justify-content:center;align-items:center;position:relative;min-height:360px;">
+                  <!-- Subtle Dashed Outer Ring -->
+                  <div style="position:absolute;width:370px;height:370px;border-radius:50%;border:2px dashed rgba(245,166,35,0.3);z-index:1;"></div>
+                  <!-- Radiant Amber Glowing Background Halo -->
+                  <div style="position:absolute;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle, #f5a623 0%, #ea580c 65%, #d97706 100%);box-shadow:0 0 70px rgba(245,166,35,0.45);z-index:2;"></div>
+                  <!-- Teacher Image Inside Halo -->
+                  <img src="{ui_main_uri or STUDENT_FIXED_IMAGE_URI}" alt="م/ محمد غنيم" style="width:340px;height:340px;border-radius:50%;object-fit:cover;object-position:center 12%;position:relative;z-index:3;border:4px solid rgba(255,255,255,0.25);">
+                </div>
+
               </div>
-              <div class="math-footer-copyright">
+            </div>
+
+            <!-- Floating Features Bar (5 Blue Icons Centered) -->
+            <div style="max-width:1140px;margin:-42px auto 0;padding:0 20px;position:relative;z-index:10;direction:rtl;">
+              <div style="background:#03132e;border:1px solid #132a52;border-radius:22px;box-shadow:0 20px 50px rgba(0,0,0,0.5);padding:18px 24px;display:grid;grid-template-columns:repeat(5, 1fr);gap:16px;text-align:center;align-items:center;">
+                
+                <!-- 1. دعم مستمر -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+                  <div style="width:48px;height:48px;border-radius:50%;border:2px solid #2563eb;background:rgba(37,99,235,0.15);display:flex;align-items:center;justify-content:center;color:#60a5fa;font-size:22px;">
+                    💬
+                  </div>
+                  <div style="color:#ffffff;font-size:13.5px;font-weight:800;">دعم مستمر</div>
+                </div>
+
+                <!-- 2. متابعة التقدم -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+                  <div style="width:48px;height:48px;border-radius:50%;border:2px solid #2563eb;background:rgba(37,99,235,0.15);display:flex;align-items:center;justify-content:center;color:#60a5fa;font-size:22px;">
+                    📊
+                  </div>
+                  <div style="color:#ffffff;font-size:13.5px;font-weight:800;">متابعة التقدم</div>
+                </div>
+
+                <!-- 3. اختبارات وتقييمات -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+                  <div style="width:48px;height:48px;border-radius:50%;border:2px solid #2563eb;background:rgba(37,99,235,0.15);display:flex;align-items:center;justify-content:center;color:#60a5fa;font-size:22px;">
+                    📋
+                  </div>
+                  <div style="color:#ffffff;font-size:13.5px;font-weight:800;">اختبارات وتقييمات</div>
+                </div>
+
+                <!-- 4. محتوى منظم -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+                  <div style="width:48px;height:48px;border-radius:50%;border:2px solid #2563eb;background:rgba(37,99,235,0.15);display:flex;align-items:center;justify-content:center;color:#60a5fa;font-size:22px;">
+                    📑
+                  </div>
+                  <div style="color:#ffffff;font-size:13.5px;font-weight:800;">محتوى منظم</div>
+                </div>
+
+                <!-- 5. فيديوهات عالية الجودة -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+                  <div style="width:48px;height:48px;border-radius:50%;border:2px solid #2563eb;background:rgba(37,99,235,0.15);display:flex;align-items:center;justify-content:center;color:#60a5fa;font-size:22px;">
+                    🎬
+                  </div>
+                  <div style="color:#ffffff;font-size:13.5px;font-weight:800;">فيديوهات عالية الجودة</div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- SECTION: أحدث الكورسات (PURE WHITE BACKGROUND 100%) -->
+            <div style="background:#ffffff;width:100%;padding:50px 30px 65px;margin-top:20px;direction:rtl;">
+              <div style="max-w-6xl;max-width:1140px;margin:0 auto;">
+                
+                <!-- Section Header Row: أحدث الكورسات (Right) vs دليل الكورسات ← (Left) -->
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;padding-bottom:12px;border-bottom:1px solid #f1f5f9;">
+                  <h2 style="color:#0c1e3d;font-size:28px;font-weight:900;margin:0;">أحدث الكورسات</h2>
+                  <a href="?page=courses" target="_self" style="color:#2563eb;font-weight:800;font-size:15px;text-decoration:none;display:flex;align-items:center;gap:4px;">
+                    <span>دليل الكورسات</span>
+                    <span>←</span>
+                  </a>
+                </div>
+
+                <!-- Dashed Card with Ruler SVG & Blue Browse Button -->
+                <div style="border:1.5px dashed #cbd5e1;border-radius:24px;padding:45px 30px;text-align:center;background:#ffffff;box-shadow:0 4px 20px rgba(15,23,42,0.03);max-width:1000px;margin:0 auto;">
+                  
+                  <!-- Vector Drafting Ruler SVG -->
+                  <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:center;">
+                    <svg width="60" height="60" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M40 38L10 38L10 8L40 38Z" fill="#EEF2F6" stroke="#94A3B8" stroke-width="2.5" stroke-linejoin="round"/>
+                      <path d="M26 33L15 33L15 22L26 33Z" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2" stroke-linejoin="round"/>
+                      <path d="M10 13H14M10 17H12.5M10 21H14M10 25H12.5M10 29H14M10 33H12.5" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/>
+                      <path d="M15 38V34M19 38V35.5M23 38V34M27 38V35.5M31 38V34M35 38V35.5" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                  </div>
+
+                  <!-- Title -->
+                  <h3 style="color:#0c1e3d;font-size:22px;font-weight:900;margin:0 0 8px;">مرحباً بكم في منصة Mathematic التعليمية</h3>
+
+                  <!-- Subtitle -->
+                  <p style="color:#64748b;font-size:14.5px;max-width:620px;margin:0 auto 24px;line-height:1.8;font-weight:600;">
+                    سيتم نشر أحدث الكورسات والمحاضرات الدراسية تباعاً، يمكنك متابعة الدليل العام للكورسات.
+                  </p>
+
+                  <!-- Royal Blue Browse Button -->
+                  <a href="?page=courses" target="_self" style="background:#1d4ed8;color:#ffffff;border-radius:12px;font-weight:850;font-size:15px;padding:12px 36px;text-decoration:none;display:inline-block;box-shadow:0 6px 18px rgba(29,78,216,0.25);">
+                    استعراض دليل الكورسات
+                  </a>
+
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Dark Navy Footer (Matching Screenshot Exact) -->
+            <div style="background:#020b1e;color:#ffffff;padding:35px 20px;text-align:center;border-top:1px solid rgba(255,255,255,0.08);direction:rtl;">
+              <div style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:24px;font-weight:900;margin-bottom:8px;direction:ltr;">
+                <span style="color:#f5a623;font-size:28px;">Σ</span> <span>Mathematic</span>
+              </div>
+              <div style="color:#94a3b8;font-size:13px;font-weight:600;">
                 جميع الحقوق محفوظة © 2026 منصة Mathematic التعليمية — م/ محمد غنيم.
               </div>
             </div>
-            """, unsafe_allow_html=True)
-
+            """
+            st.markdown(hero_pixel_perfect_html, unsafe_allow_html=True)
+            
         # === 2. دليل الكورسات والمحاضرات (Image 3) ===
         elif st.session_state.page_view == "courses":
             st.markdown("""
