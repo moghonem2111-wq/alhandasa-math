@@ -2319,6 +2319,7 @@ if "active_mode" not in st.session_state:
         st.session_state.active_mode = "academy"
     elif query_params.get("role") == "teacher":
         st.session_state.active_mode = "teacher"
+        st.session_state.teacher_panel_unlocked = True
     else:
         st.session_state.active_mode = "public"
 
@@ -2546,14 +2547,14 @@ header[data-testid="stHeader"] {{
 }}
 
 /* =============================================================
-   MATHEMATIC Σ DESIGN SYSTEM (5 SCREENS)
+   MATHEMATIC Σ DESIGN SYSTEM
    ============================================================= */
 
-/* Navbar (Image 1, 2, 3, 5) */
+/* Navbar */
 .math-navbar-wrap {{
     background: #020b1e;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 12px 28px;
+    padding: 12px 32px;
     direction: rtl;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }}
@@ -2585,7 +2586,13 @@ button[key*="nav_btn_courses"],
 button[key*="nav_btn_lectures"],
 button[key*="nav_btn_student"],
 button[key*="nav_btn_teacher"],
-button[key*="nav_btn_contact"] {{
+button[key*="nav_btn_contact"],
+button[key*="tnav_home"],
+button[key*="tnav_courses"],
+button[key*="tnav_lectures"],
+button[key*="tnav_student"],
+button[key*="tnav_teacher"],
+button[key*="tnav_contact"] {{
     background: transparent !important;
     color: #cbd5e1 !important;
     border: none !important;
@@ -2603,7 +2610,13 @@ button[key*="nav_btn_courses"]:hover,
 button[key*="nav_btn_lectures"]:hover,
 button[key*="nav_btn_student"]:hover,
 button[key*="nav_btn_teacher"]:hover,
-button[key*="nav_btn_contact"]:hover {{
+button[key*="nav_btn_contact"]:hover,
+button[key*="tnav_home"]:hover,
+button[key*="tnav_courses"]:hover,
+button[key*="tnav_lectures"]:hover,
+button[key*="tnav_student"]:hover,
+button[key*="tnav_teacher"]:hover,
+button[key*="tnav_contact"]:hover {{
     color: #ffffff !important;
     background: rgba(255, 255, 255, 0.07) !important;
 }}
@@ -2614,14 +2627,21 @@ button[key*="nav_btn_courses"][kind="primary"],
 button[key*="nav_btn_lectures"][kind="primary"],
 button[key*="nav_btn_student"][kind="primary"],
 button[key*="nav_btn_teacher"][kind="primary"],
-button[key*="nav_btn_contact"][kind="primary"] {{
+button[key*="nav_btn_contact"][kind="primary"],
+button[key*="tnav_home"][kind="primary"],
+button[key*="tnav_courses"][kind="primary"],
+button[key*="tnav_lectures"][kind="primary"],
+button[key*="tnav_student"][kind="primary"],
+button[key*="tnav_teacher"][kind="primary"],
+button[key*="tnav_contact"][kind="primary"] {{
     color: #f5a623 !important;
     border-bottom: 3px solid #f5a623 !important;
     border-radius: 0 !important;
     background: transparent !important;
 }}
 
-button[key*="nav_btn_search"] {{
+button[key*="nav_btn_search"],
+button[key*="tnav_search"] {{
     background: rgba(255, 255, 255, 0.05) !important;
     border: 1px solid rgba(255, 255, 255, 0.18) !important;
     color: #cbd5e1 !important;
@@ -2635,7 +2655,9 @@ button[key*="nav_btn_search"] {{
     box-shadow: none !important;
 }}
 
-button[key*="nav_btn_login"] {{
+button[key*="nav_btn_login"],
+button[key*="nav_logout_btn"],
+button[key*="tnav_logout"] {{
     background: #ffffff !important;
     color: #020b1e !important;
     border-radius: 999px !important;
@@ -2660,7 +2682,7 @@ button[key*="nav_btn_register"] {{
 }}
 
 /* =============================================================
-   HERO SECTION (Image 1)
+   HERO SECTION
    ============================================================= */
 .math-hero-wrap {{
     background: radial-gradient(circle at 75% 40%, #072657 0%, #031333 55%, #020b1e 100%);
@@ -2783,7 +2805,7 @@ button[key*="hero_about_btn"] {{
 }}
 
 /* =============================================================
-   FLOATING FEATURES BAR (Image 1)
+   FLOATING FEATURES BAR
    ============================================================= */
 .math-features-bar-wrap {{
     max-width: 1180px;
@@ -2834,13 +2856,13 @@ button[key*="hero_about_btn"] {{
 }}
 
 /* =============================================================
-   DASHED NOTICE CARDS & EMPTY STATES (Image 2 & 3)
+   DASHED NOTICE CARD & EMPTY STATE (Image 2 & 3)
    ============================================================= */
 .math-dashed-notice-card {{
     background: #ffffff;
     border: 1.5px dashed #cbd5e1;
     border-radius: 22px;
-    padding: 45px 30px;
+    padding: 48px 30px;
     text-align: center;
     max-width: 1120px;
     margin: 25px auto 35px;
@@ -2849,7 +2871,6 @@ button[key*="hero_about_btn"] {{
 }}
 
 .math-dashed-icon {{
-    font-size: 48px;
     margin-bottom: 16px;
     display: flex;
     align-items: center;
@@ -2911,18 +2932,7 @@ button[key*="btn_courses_login_admin"] {{
 .math-footer-copyright {{
     color: #94a3b8;
     font-size: 13px;
-    margin-bottom: 16px;
     font-weight: 600;
-}}
-
-.math-footer-links {{
-    display: flex;
-    justify-content: center;
-    gap: 22px;
-    flex-wrap: wrap;
-    font-size: 14px;
-    font-weight: 800;
-    color: #cbd5e1;
 }}
 
 /* =============================================================
@@ -3118,7 +3128,6 @@ button[key*="quick_teacher_preview"] {{
     direction: ltr;
 }}
 
-/* Sidebar Menu Buttons */
 button[key*="tside_"] {{
     background: transparent !important;
     color: #cbd5e1 !important;
@@ -3144,7 +3153,6 @@ button[key*="tside_"][kind="primary"] {{
     box-shadow: 0 6px 18px rgba(22, 119, 255, 0.35) !important;
 }}
 
-/* 4 Stat Cards in Dashboard (Image 5) */
 .teacher-stat-card {{
     background: #ffffff;
     border: 1px solid #e2e8f0;
@@ -3183,7 +3191,6 @@ button[key*="tside_"][kind="primary"] {{
     margin-top: 4px;
 }}
 
-/* Quick Actions Card Column (Image 5) */
 .teacher-quick-panel {{
     background: #ffffff;
     border: 1px solid #e2e8f0;
@@ -3250,7 +3257,6 @@ button[key*="tquick_act_essays"] {{
     text-align: center;
 }}
 
-/* Recent Students Table Panel (Image 5) */
 .teacher-recent-panel {{
     background: #ffffff;
     border: 1px solid #e2e8f0;
@@ -3358,7 +3364,22 @@ if is_student_mode:
                 st.rerun()
 
     with c_acts:
-        if st.session_state.logged_student:
+        # Check if teacher or student is logged in
+        if st.session_state.get("teacher_panel_unlocked", False):
+            ac_name, ac_out, ac_search = st.columns([2.0, 1.0, 0.6], gap="small")
+            with ac_name:
+                st.markdown("<div style='color:#fff;font-size:13px;font-weight:800;white-space:nowrap;padding-top:8px;'>👤 م/ محمد غنيم</div>", unsafe_allow_html=True)
+            with ac_out:
+                if st.button("خروج", key="nav_logout_btn_teacher", use_container_width=True):
+                    st.session_state.teacher_panel_unlocked = False
+                    st.session_state.active_mode = "public"
+                    st.session_state.page_view = "home"
+                    st.rerun()
+            with ac_search:
+                if st.button("🔍", key="nav_search_btn_teacher", use_container_width=True):
+                    st.session_state.page_view = "courses"
+                    st.rerun()
+        elif st.session_state.logged_student:
             ac_name, ac_theme, ac_out = st.columns([2.0, 0.7, 1.0], gap="small")
             with ac_name:
                 st.markdown(f"<div style='color:#fff;font-size:13px;font-weight:800;white-space:nowrap;padding-top:8px;'>👤 {st.session_state.logged_student.get('اسم الطالب','طالبنا العزيز')}</div>", unsafe_allow_html=True)
@@ -3398,12 +3419,10 @@ if is_student_mode:
     # -------------------------------------------------------------
     if not st.session_state.logged_student:
 
-        # === 1. الصفحة الرئيسية (Image 1 & 2) ===
+        # === 1. الصفحة الرئيسية (مطابقة للصورة media_1792104276305_5718e508.png طبق الأصل) ===
         if st.session_state.page_view == "home":
             _ui_df = st.session_state.get("student_interface_df", pd.DataFrame())
             si = _ui_df.iloc[0].to_dict() if not _ui_df.empty else {}
-            ui_title = str(si.get("عنوان_الواجهة", "منصة تعليم الرياضيات الحديثة"))
-            ui_desc = str(si.get("الوصف", "منصة تعليمية متكاملة لتعلم الرياضيات بأسلوب بسيط ومنظم لجميع المراحل الدراسية مع نخبة من خبراء المادة وشروحات تفاعلية لضمان الدرجة النهائية."))
             ui_main_b64 = str(si.get("صورة_الواجهة_base64", "") or "").strip() or STUDENT_FIXED_IMAGE_B64
             ui_main_uri = STUDENT_FIXED_IMAGE_URI if STUDENT_FIXED_IMAGE_B64 else (teacher_image_data_uri(ui_main_b64) if ui_main_b64 else "")
             
@@ -3435,7 +3454,7 @@ if is_student_mode:
             """
             st.markdown(hero_html, unsafe_allow_html=True)
 
-            # Hero CTAs
+            # Hero CTAs (ابدأ الآن ← | تعرف على المنصة)
             st.markdown("<div style='background:#020b1e;padding:0 48px 30px;'><div style='max-width:1240px;margin:0 auto;'>", unsafe_allow_html=True)
             cta_col1, cta_col2, cta_spacer = st.columns([1.8, 1.8, 6.4], gap="small")
             with cta_col1:
@@ -3490,10 +3509,17 @@ if is_student_mode:
                     st.session_state.page_view = "courses"
                     st.rerun()
 
-            # Dashed Notice Card (Image 2)
+            # Dashed Notice Card (Exact Vector Ruler 📐 & Text from Image 2)
             st.markdown("""
             <div class="math-dashed-notice-card">
-              <div class="math-dashed-icon">📐</div>
+              <div class="math-dashed-icon">
+                <svg width="60" height="60" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M40 38L10 38L10 8L40 38Z" fill="#EEF2F6" stroke="#94A3B8" stroke-width="2.5" stroke-linejoin="round"/>
+                  <path d="M26 33L15 33L15 22L26 33Z" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2" stroke-linejoin="round"/>
+                  <path d="M10 13H14M10 17H12.5M10 21H14M10 25H12.5M10 29H14M10 33H12.5" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/>
+                  <path d="M15 38V34M19 38V35.5M23 38V34M27 38V35.5M31 38V34M35 38V35.5" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+              </div>
               <div class="math-dashed-title">مرحباً بكم في منصة Mathematic التعليمية</div>
               <div class="math-dashed-desc">سيتم نشر أحدث الكورسات والمحاضرات الدراسية تباعاً، يمكنك متابعة الدليل العام للكورسات.</div>
             </div>
@@ -3505,78 +3531,14 @@ if is_student_mode:
                     st.session_state.page_view = "courses"
                     st.rerun()
 
-            # Hamza AI Banner
-            st.markdown("""
-            <div style="background:linear-gradient(135deg, #04142d, #0d3880); border-radius:24px; padding:28px 36px; margin:40px auto 20px; max-width:1200px; color:#ffffff; direction:rtl; box-shadow:0 15px 40px rgba(4,20,45,.2);">
-              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px;">
-                <div>
-                  <div style="font-size:28px; font-weight:900; color:#f5a623; margin-bottom:8px;">🤖 اسأل حمصا — الذكاء الاصطناعي لحل مسائل الرياضيات</div>
-                  <div style="font-size:15px; color:#cbd5e1; line-height:1.8;">حل أي مسألة بالتصوير 📷 بالكاميرا أو برفع الصورة أو كتابتها ✍️ — شرح خطوة بخطوة وإجابة نهائية مع إمكانية التحميل كملف PDF</div>
-                </div>
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            c_h1, c_h2, c_h3 = st.columns([3, 4, 3])
-            with c_h2:
-                if st.button("🚀 ابدأ الحل الآن مع حمصا (مجاناً)", key="public_hamza_home_btn", use_container_width=True, type="primary"):
-                    st.session_state.page_view = "hamza_public"
-                    st.rerun()
-
-            # Video Clips
-            st.markdown("<div style='max-width:1200px;margin:30px auto 10px;text-align:center;'><h3 style='color:#0c1e3d;font-size:22px;font-weight:900;'>🎥 حصص سريعة وملخصات هامة في أقل من دقيقة</h3></div>", unsafe_allow_html=True)
-            col_v1, col_v2, col_v3 = st.columns([1, 2, 1])
-            with col_v2:
-                st.video("https://www.youtube.com/watch?v=6PleAxZCNZM")
-
-            render_student_ads()
-            st.markdown("<div style='max-width:1200px;margin:25px auto;'>", unsafe_allow_html=True)
-            render_darssly_cards("home")
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            # Online Booking Form
-            ui_booking_title = str(si.get("عنوان_الحجز", "📅 احجز حصتك أونلاين مع م/ محمد غنيم"))
-            ui_booking_text = str(si.get("نص_الحجز", "احجز موعدك وتابع حصصك ومواعيد Zoom التفاعلية من داخل المنصة."))
-            st.markdown(f"""
-            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:24px; padding:32px; max-width:850px; margin:35px auto; direction:rtl; text-align:right;">
-              <h3 style="color:#0c1e3d; font-size:24px; font-weight:900; margin-top:0; text-align:center;">{ui_booking_title}</h3>
-              <p style="text-align:center; color:#64748b; font-weight:700; margin-bottom:24px;">{ui_booking_text}</p>
-            """, unsafe_allow_html=True)
-            with st.form("online_booking_form", clear_on_submit=True):
-                book_name = st.text_input("اسم الطالب بالكامل:")
-                book_curr = st.selectbox("اختر المنهج الدراسي / الدولة:", list(CURRICULUM_DATA.keys()), key="book_c")
-                book_grade = st.selectbox("المرحلة / الصف الدراسي:", CURRICULUM_DATA[book_curr], key="book_g")
-                book_phone = st.text_input("رقم هاتف الطالب:")
-                book_parent_phone = st.text_input("رقم تليفون ولي الأمر:")
-                if st.form_submit_button("إرسال طلب الحجز ←", use_container_width=True):
-                    if not book_name.strip() or not book_phone.strip():
-                        st.error("يرجى كتابة اسم الطالب ورقم الهاتف على الأقل.")
-                    else:
-                        new_booking = {
-                            "تاريخ_الحجز": str(date.today()),
-                            "اسم الطالب": book_name.strip(),
-                            "المنهج_الدولة": book_curr,
-                            "المرحلة_الصف": book_grade,
-                            "رقم_الهاتف": book_phone.strip(),
-                            "رقم_ولي_الأمر": book_parent_phone.strip(),
-                            "الحالة": "قيد المتابعة"
-                        }
-                        st.session_state.bookings_df = pd.concat([st.session_state.bookings_df, pd.DataFrame([new_booking])], ignore_index=True)
-                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
-                        st.success("✓ تم إرسال طلب الحجز بنجاح! سيتواصل معك فريق المنصة لتأكيد الموعد.")
-            st.markdown("</div>", unsafe_allow_html=True)
-
             # Dark Footer (Image 2)
             st.markdown("""
             <div class="math-footer-wrap">
               <div class="math-footer-logo">
-                <span style="color:#f5a623;">Σ</span> <span>Mathematic</span>
+                <span style="color:#f5a623;font-size:26px;">Σ</span> <span style="font-size:22px;color:#ffffff;font-weight:900;">Mathematic</span>
               </div>
               <div class="math-footer-copyright">
                 جميع الحقوق محفوظة © 2026 منصة Mathematic التعليمية — م/ محمد غنيم.
-              </div>
-              <div class="math-footer-links">
-                <span>لوحة المعلم</span> • <span>تسجيل الدخول</span> • <span>المحاضرات</span> • <span>الكورسات</span>
               </div>
             </div>
             """, unsafe_allow_html=True)
@@ -3617,7 +3579,7 @@ if is_student_mode:
             # Empty State / Notice Card (Image 3)
             st.markdown("""
             <div class="math-dashed-notice-card" style="margin-top:20px;">
-              <div class="math-dashed-icon">📚</div>
+              <div class="math-dashed-icon" style="font-size:44px;">📚</div>
               <div class="math-dashed-title">لا توجد كورسات أو محاضرات منشورة حالياً</div>
               <div class="math-dashed-desc">تم تصفير كافة الكورسات والمحاضرات القديمة بنجاح، والمنصة الآن صفحة بيضاء نظيفة تماماً بانتظار رفع كورساتك الحقيقية.</div>
             </div>
@@ -3635,13 +3597,10 @@ if is_student_mode:
             st.markdown("""
             <div class="math-footer-wrap">
               <div class="math-footer-logo">
-                <span style="color:#f5a623;">Σ</span> <span>Mathematic</span>
+                <span style="color:#f5a623;font-size:26px;">Σ</span> <span style="font-size:22px;color:#ffffff;font-weight:900;">Mathematic</span>
               </div>
               <div class="math-footer-copyright">
                 جميع الحقوق محفوظة © 2026 منصة Mathematic التعليمية — م/ محمد غنيم.
-              </div>
-              <div class="math-footer-links">
-                <span>لوحة المعلم</span> • <span>تسجيل الدخول</span> • <span>المحاضرات</span> • <span>الكورسات</span>
               </div>
             </div>
             """, unsafe_allow_html=True)
@@ -3871,11 +3830,11 @@ if is_student_mode:
             with col_v2:
                 st.video("https://www.youtube.com/watch?v=6PleAxZCNZM")
 
-        # === 6. تواصل معنا ===
+        # === 6. تواصل معنا والحجز ===
         elif st.session_state.page_view == "contact":
             st.markdown("""
             <div style="background:#020b1e; padding:45px 32px 35px; color:#ffffff; text-align:center; direction:rtl;">
-              <h1 style="color:#ffffff; font-size:36px; font-weight:900; margin-bottom:10px;">📞 تواصل معنا</h1>
+              <h1 style="color:#ffffff; font-size:36px; font-weight:900; margin-bottom:10px;">📞 تواصل معنا واحجز حصتك</h1>
               <p style="color:#cbd5e1; font-size:16px; max-width:700px; margin:0 auto;">يسعدنا دائماً الرد على جميع استفسارات الطلاب وأولياء الأمور عبر جميع القنوات الرسمية.</p>
             </div>
             """, unsafe_allow_html=True)
@@ -3909,7 +3868,41 @@ if is_student_mode:
                 </div>
                 """, unsafe_allow_html=True)
 
-        # === 7. الذكاء الاصطناعي (حمصا) عام للجميع ===
+            # Online Booking Form
+            _ui_df = st.session_state.get("student_interface_df", pd.DataFrame())
+            si = _ui_df.iloc[0].to_dict() if not _ui_df.empty else {}
+            ui_booking_title = str(si.get("عنوان_الحجز", "📅 احجز حصتك أونلاين مع م/ محمد غنيم"))
+            ui_booking_text = str(si.get("نص_الحجز", "احجز موعدك وتابع حصصك ومواعيد Zoom التفاعلية من داخل المنصة."))
+            st.markdown(f"""
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:24px; padding:32px; max-width:850px; margin:35px auto; direction:rtl; text-align:right;">
+              <h3 style="color:#0c1e3d; font-size:24px; font-weight:900; margin-top:0; text-align:center;">{ui_booking_title}</h3>
+              <p style="text-align:center; color:#64748b; font-weight:700; margin-bottom:24px;">{ui_booking_text}</p>
+            """, unsafe_allow_html=True)
+            with st.form("online_booking_form_contact", clear_on_submit=True):
+                book_name = st.text_input("اسم الطالب بالكامل:")
+                book_curr = st.selectbox("اختر المنهج الدراسي / الدولة:", list(CURRICULUM_DATA.keys()), key="book_c_contact")
+                book_grade = st.selectbox("المرحلة / الصف الدراسي:", CURRICULUM_DATA[book_curr], key="book_g_contact")
+                book_phone = st.text_input("رقم هاتف الطالب:")
+                book_parent_phone = st.text_input("رقم تليفون ولي الأمر:")
+                if st.form_submit_button("إرسال طلب الحجز ←", use_container_width=True):
+                    if not book_name.strip() or not book_phone.strip():
+                        st.error("يرجى كتابة اسم الطالب ورقم الهاتف على الأقل.")
+                    else:
+                        new_booking = {
+                            "تاريخ_الحجز": str(date.today()),
+                            "اسم الطالب": book_name.strip(),
+                            "المنهج_الدولة": book_curr,
+                            "المرحلة_الصف": book_grade,
+                            "رقم_الهاتف": book_phone.strip(),
+                            "رقم_ولي_الأمر": book_parent_phone.strip(),
+                            "الحالة": "قيد المتابعة"
+                        }
+                        st.session_state.bookings_df = pd.concat([st.session_state.bookings_df, pd.DataFrame([new_booking])], ignore_index=True)
+                        save_all_data(st.session_state.users_df, st.session_state.sessions_df, st.session_state.assessments_df, st.session_state.messages_df, st.session_state.exams_df, st.session_state.essays_df, st.session_state.bookings_df, st.session_state.bank_requests_df, st.session_state.question_bank_df, st.session_state.videos_df, st.session_state.video_comments_df, st.session_state.abqary_df, st.session_state.online_schedule_df)
+                        st.success("✓ تم إرسال طلب الحجز بنجاح!")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # === 7. الذكاء الاصطناعي (حمصا) ===
         elif st.session_state.page_view == "hamza_public":
             st.markdown("""
             <div style="background:linear-gradient(135deg, #020b1e, #0c336b); padding:40px 30px; border-radius:24px; color:#ffffff; text-align:center; margin:20px auto; max-width:1100px; direction:rtl;">
@@ -5432,13 +5425,13 @@ with tb_acts:
     with tact1:
         st.markdown("<div style='color:#fff;font-size:13px;font-weight:800;white-space:nowrap;padding-top:8px;'>👤 م/ محمد غنيم</div>", unsafe_allow_html=True)
     with tact2:
-        if st.button("خروج", key="teacher_logout_btn", use_container_width=True):
+        if st.button("خروج", key="tnav_logout", use_container_width=True):
             st.session_state.teacher_panel_unlocked = False
             st.session_state.active_mode = "public"
             st.session_state.page_view = "home"
             st.rerun()
     with tact3:
-        if st.button("🔍", key="teacher_search_btn", use_container_width=True):
+        if st.button("🔍", key="tnav_search", use_container_width=True):
             st.session_state.teacher_page = "students"
             st.rerun()
 
@@ -5480,7 +5473,6 @@ with col_tside:
 # Main Dashboard Content Area
 _tmain_ctx = col_tmain
 with _tmain_ctx:
-    # Header row with title & status badge (Image 5)
     st.markdown("""
     <div class="teacher-dash-header-wrap">
       <div>
