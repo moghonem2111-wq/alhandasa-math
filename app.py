@@ -2314,7 +2314,6 @@ def _render_notification_box(role="student", student_name=""):
 
 query_params = st.query_params
 
-# Mode initialization: defaults to public platform ('home') unless explicitly requested
 if "active_mode" not in st.session_state:
     if query_params.get("role") == "academy":
         st.session_state.active_mode = "academy"
@@ -2329,8 +2328,14 @@ if "page_view" not in st.session_state:
 if "student_sub_page" not in st.session_state:
     st.session_state.student_sub_page = "dashboard"
 
+if "teacher_page" not in st.session_state:
+    st.session_state.teacher_page = "dashboard"
+
 if "login_role_tab" not in st.session_state:
     st.session_state.login_role_tab = "student"
+
+if "courses_filter_stage" not in st.session_state:
+    st.session_state.courses_filter_stage = "الكل"
 
 if "logged_student" not in st.session_state:
     st.session_state.logged_student = None
@@ -2541,10 +2546,10 @@ header[data-testid="stHeader"] {{
 }}
 
 /* =============================================================
-   MATHEMATIC Σ DESIGN SYSTEM
+   MATHEMATIC Σ DESIGN SYSTEM (5 SCREENS)
    ============================================================= */
 
-/* Brand & Navbar */
+/* Navbar (Image 1, 2, 3, 5) */
 .math-navbar-wrap {{
     background: #020b1e;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -2574,7 +2579,7 @@ header[data-testid="stHeader"] {{
     letter-spacing: 0.5px;
 }}
 
-/* Buttons in Top Navbar */
+/* Navbar links */
 button[key*="nav_btn_home"],
 button[key*="nav_btn_courses"],
 button[key*="nav_btn_lectures"],
@@ -2603,7 +2608,7 @@ button[key*="nav_btn_contact"]:hover {{
     background: rgba(255, 255, 255, 0.07) !important;
 }}
 
-/* Active link indicator (e.g. on الرئيسية) */
+/* Active Nav Links with gold indicator bar */
 button[key*="nav_btn_home"][kind="primary"],
 button[key*="nav_btn_courses"][kind="primary"],
 button[key*="nav_btn_lectures"][kind="primary"],
@@ -2616,7 +2621,6 @@ button[key*="nav_btn_contact"][kind="primary"] {{
     background: transparent !important;
 }}
 
-/* Navbar Search Button */
 button[key*="nav_btn_search"] {{
     background: rgba(255, 255, 255, 0.05) !important;
     border: 1px solid rgba(255, 255, 255, 0.18) !important;
@@ -2631,12 +2635,6 @@ button[key*="nav_btn_search"] {{
     box-shadow: none !important;
 }}
 
-button[key*="nav_btn_search"]:hover {{
-    border-color: #f5a623 !important;
-    color: #f5a623 !important;
-}}
-
-/* Navbar Login Pill (White Button) */
 button[key*="nav_btn_login"] {{
     background: #ffffff !important;
     color: #020b1e !important;
@@ -2649,12 +2647,6 @@ button[key*="nav_btn_login"] {{
     min-height: 40px !important;
 }}
 
-button[key*="nav_btn_login"]:hover {{
-    background: #f1f5f9 !important;
-    transform: translateY(-1px) !important;
-}}
-
-/* Navbar Register Pill (Gold Button) */
 button[key*="nav_btn_register"] {{
     background: #f5a623 !important;
     color: #ffffff !important;
@@ -2667,13 +2659,8 @@ button[key*="nav_btn_register"] {{
     min-height: 40px !important;
 }}
 
-button[key*="nav_btn_register"]:hover {{
-    background: #e0921a !important;
-    transform: translateY(-1px) !important;
-}}
-
 /* =============================================================
-   HERO SECTION (Image 2)
+   HERO SECTION (Image 1)
    ============================================================= */
 .math-hero-wrap {{
     background: radial-gradient(circle at 75% 40%, #072657 0%, #031333 55%, #020b1e 100%);
@@ -2735,7 +2722,6 @@ button[key*="nav_btn_register"]:hover {{
     margin: 0 0 32px;
 }}
 
-/* Teacher Avatar Frame (Glowing circular amber halo) */
 .math-hero-avatar-col {{
     flex: 0.95;
     display: flex;
@@ -2775,7 +2761,6 @@ button[key*="nav_btn_register"]:hover {{
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
 }}
 
-/* Hero CTA Buttons */
 button[key*="hero_start_btn"] {{
     background: #f5a623 !important;
     color: #020b1e !important;
@@ -2785,12 +2770,6 @@ button[key*="hero_start_btn"] {{
     min-height: 48px !important;
     border: none !important;
     box-shadow: 0 10px 25px rgba(245, 166, 35, 0.35) !important;
-    transition: all 0.2s ease !important;
-}}
-
-button[key*="hero_start_btn"]:hover {{
-    background: #e0921a !important;
-    transform: translateY(-2px) !important;
 }}
 
 button[key*="hero_about_btn"] {{
@@ -2801,17 +2780,10 @@ button[key*="hero_about_btn"] {{
     font-size: 15px !important;
     min-height: 48px !important;
     border: 1px solid rgba(255, 255, 255, 0.28) !important;
-    transition: all 0.2s ease !important;
-}}
-
-button[key*="hero_about_btn"]:hover {{
-    background: rgba(255, 255, 255, 0.1) !important;
-    border-color: #ffffff !important;
-    transform: translateY(-2px) !important;
 }}
 
 /* =============================================================
-   FLOATING FEATURES BAR (Image 2)
+   FLOATING FEATURES BAR (Image 1)
    ============================================================= */
 .math-features-bar-wrap {{
     max-width: 1180px;
@@ -2862,7 +2834,99 @@ button[key*="hero_about_btn"]:hover {{
 }}
 
 /* =============================================================
-   LOGIN CARD (Image 1)
+   DASHED NOTICE CARDS & EMPTY STATES (Image 2 & 3)
+   ============================================================= */
+.math-dashed-notice-card {{
+    background: #ffffff;
+    border: 1.5px dashed #cbd5e1;
+    border-radius: 22px;
+    padding: 45px 30px;
+    text-align: center;
+    max-width: 1120px;
+    margin: 25px auto 35px;
+    direction: rtl;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.03);
+}}
+
+.math-dashed-icon {{
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}}
+
+.math-dashed-title {{
+    color: #0c1e3d;
+    font-size: 23px;
+    font-weight: 900;
+    margin: 0 0 10px;
+}}
+
+.math-dashed-desc {{
+    color: #64748b;
+    font-size: 14px;
+    line-height: 1.85;
+    max-width: 650px;
+    margin: 0 auto 24px;
+    font-weight: 600;
+}}
+
+button[key*="btn_browse_courses_guide"],
+button[key*="btn_courses_login_admin"] {{
+    background: #1d4ed8 !important;
+    color: #ffffff !important;
+    border-radius: 12px !important;
+    font-weight: 850 !important;
+    font-size: 15px !important;
+    padding: 10px 28px !important;
+    border: none !important;
+    box-shadow: 0 6px 18px rgba(29, 78, 216, 0.25) !important;
+}}
+
+/* =============================================================
+   DARK FOOTER (Image 2)
+   ============================================================= */
+.math-footer-wrap {{
+    background: #020b1e;
+    color: #ffffff;
+    padding: 35px 40px;
+    text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    direction: rtl;
+    margin-top: 50px;
+}}
+
+.math-footer-logo {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 24px;
+    font-weight: 900;
+    margin-bottom: 10px;
+    direction: ltr;
+}}
+
+.math-footer-copyright {{
+    color: #94a3b8;
+    font-size: 13px;
+    margin-bottom: 16px;
+    font-weight: 600;
+}}
+
+.math-footer-links {{
+    display: flex;
+    justify-content: center;
+    gap: 22px;
+    flex-wrap: wrap;
+    font-size: 14px;
+    font-weight: 800;
+    color: #cbd5e1;
+}}
+
+/* =============================================================
+   LOGIN CARD (Image 4)
    ============================================================= */
 .math-login-container {{
     max-width: 500px;
@@ -2940,7 +3004,6 @@ button[key*="hero_about_btn"]:hover {{
     align-items: center;
 }}
 
-/* Login Role Switcher Buttons */
 button[key*="login_tab_student"],
 button[key*="login_tab_teacher"] {{
     border-radius: 12px !important;
@@ -2950,7 +3013,6 @@ button[key*="login_tab_teacher"] {{
     transition: all 0.2s ease !important;
 }}
 
-/* Form inputs styling */
 div[data-testid="stTextInput"] input {{
     background: #f8fafc !important;
     border: 1px solid #cbd5e1 !important;
@@ -2966,7 +3028,6 @@ div[data-testid="stTextInput"] input:focus {{
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
 }}
 
-/* Submit button on login form */
 form[data-testid="stForm"] button[kind="primary"],
 form[data-testid="stForm"] button[data-testid="baseButton-primary"],
 button[key*="submit_student_login"] {{
@@ -2979,29 +3040,6 @@ button[key*="submit_student_login"] {{
     border: none !important;
     box-shadow: 0 8px 24px rgba(29, 78, 216, 0.3) !important;
     width: 100% !important;
-    transition: all 0.2s ease !important;
-}}
-
-form[data-testid="stForm"] button[kind="primary"]:hover,
-button[key*="submit_student_login"]:hover {{
-    background: #1e40af !important;
-    transform: translateY(-1px) !important;
-}}
-
-.math-login-footer-links {{
-    margin-top: 22px;
-    font-size: 13px;
-    color: #64748b;
-    font-weight: 700;
-    line-height: 1.9;
-}}
-
-.math-quick-preview-title {{
-    margin-top: 18px;
-    margin-bottom: 8px;
-    font-size: 13px;
-    color: #94a3b8;
-    font-weight: 700;
 }}
 
 button[key*="quick_student_preview"],
@@ -3013,96 +3051,258 @@ button[key*="quick_teacher_preview"] {{
     border: 1px solid #dbeafe !important;
     border-radius: 10px !important;
     min-height: 38px !important;
-    transition: all 0.2s ease !important;
 }}
 
-button[key*="quick_student_preview"]:hover,
-button[key*="quick_teacher_preview"]:hover {{
-    background: #eff6ff !important;
-    color: #1d4ed8 !important;
+/* =============================================================
+   TEACHER DASHBOARD & SIDEBAR (Image 5)
+   ============================================================= */
+.teacher-dash-header-wrap {{
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    direction: rtl;
+    margin-bottom: 22px;
 }}
 
-/* Course Cards */
-.math-course-card {{
+.teacher-dash-title {{
+    font-size: 26px;
+    font-weight: 900;
+    color: #0c1e3d;
+    margin: 0;
+}}
+
+.teacher-dash-sub {{
+    font-size: 13px;
+    color: #64748b;
+    margin: 3px 0 0;
+    font-weight: 600;
+}}
+
+.teacher-status-pill {{
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #166534;
+    padding: 5px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}}
+
+.teacher-sidebar-container {{
+    background: #020b1e;
+    border-radius: 20px;
+    padding: 18px 12px;
+    border: 1px solid #132a52;
+    direction: rtl;
+    min-height: 850px;
+}}
+
+.teacher-sidebar-header {{
+    font-size: 20px;
+    font-weight: 900;
+    color: #ffffff;
+    text-align: center;
+    padding: 10px 0 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    direction: ltr;
+}}
+
+/* Sidebar Menu Buttons */
+button[key*="tside_"] {{
+    background: transparent !important;
+    color: #cbd5e1 !important;
+    border: none !important;
+    border-radius: 12px !important;
+    padding: 9px 14px !important;
+    font-size: 13.5px !important;
+    font-weight: 800 !important;
+    min-height: 42px !important;
+    margin-bottom: 3px !important;
+    width: 100% !important;
+    transition: all 0.18s ease !important;
+}}
+
+button[key*="tside_"]:hover {{
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #ffffff !important;
+}}
+
+button[key*="tside_"][kind="primary"] {{
+    background: #1677ff !important;
+    color: #ffffff !important;
+    box-shadow: 0 6px 18px rgba(22, 119, 255, 0.35) !important;
+}}
+
+/* 4 Stat Cards in Dashboard (Image 5) */
+.teacher-stat-card {{
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 18px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 15px rgba(15, 23, 42, 0.04);
+    direction: rtl;
+    text-align: right;
+    min-height: 100px;
+}}
+
+.teacher-stat-icon-wrap {{
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}}
+
+.teacher-stat-num {{
+    font-size: 24px;
+    font-weight: 900;
+    color: #0c1e3d;
+    line-height: 1.2;
+}}
+
+.teacher-stat-label {{
+    font-size: 12.5px;
+    color: #64748b;
+    font-weight: 750;
+    margin-top: 4px;
+}}
+
+/* Quick Actions Card Column (Image 5) */
+.teacher-quick-panel {{
     background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 18px;
     padding: 22px;
-    transition: all 0.25s ease;
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
     direction: rtl;
     text-align: right;
-    height: 100%;
 }}
 
-.math-course-card:hover {{
-    transform: translateY(-4px);
-    box-shadow: 0 16px 35px rgba(15, 23, 42, 0.1);
-    border-color: #f5a623;
-}}
-
-.math-course-badge {{
-    display: inline-block;
-    background: rgba(245, 166, 35, 0.12);
-    color: #d97706;
-    padding: 4px 12px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 850;
-    margin-bottom: 12px;
-}}
-
-.math-course-title {{
+.teacher-quick-panel-title {{
     font-size: 17px;
     font-weight: 900;
     color: #0c1e3d;
-    margin: 0 0 8px;
+    margin: 0 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }}
 
-.math-course-desc {{
-    font-size: 13px;
-    color: #64748b;
-    line-height: 1.8;
+button[key*="tquick_act_add_session"] {{
+    background: #1677ff !important;
+    color: #ffffff !important;
+    border-radius: 12px !important;
+    min-height: 48px !important;
+    font-weight: 850 !important;
+    font-size: 15px !important;
+    border: none !important;
+    box-shadow: 0 4px 14px rgba(22, 119, 255, 0.25) !important;
+}}
+
+button[key*="tquick_act_receipt"] {{
+    background: #f5a623 !important;
+    color: #020b1e !important;
+    border-radius: 12px !important;
+    min-height: 48px !important;
+    font-weight: 900 !important;
+    font-size: 15px !important;
+    border: none !important;
+    box-shadow: 0 4px 14px rgba(245, 166, 35, 0.3) !important;
+}}
+
+button[key*="tquick_act_add_student"],
+button[key*="tquick_act_essays"] {{
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 12px !important;
+    min-height: 48px !important;
+    font-weight: 850 !important;
+    font-size: 15px !important;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04) !important;
+}}
+
+.teacher-quick-hint-box {{
+    background: #f0f7ff;
+    border: 1px solid #bae0ff;
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: #0958d9;
+    font-size: 12px;
+    font-weight: 750;
+    margin-top: 14px;
+    text-align: center;
+}}
+
+/* Recent Students Table Panel (Image 5) */
+.teacher-recent-panel {{
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+    direction: rtl;
+    text-align: right;
+}}
+
+.teacher-recent-header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 14px;
 }}
 
-@media (max-width: 900px) {{
-    .math-hero-container {{
-        flex-direction: column-reverse;
-        gap: 30px;
-        text-align: center;
-    }}
-    .math-hero-text-col {{
-        text-align: center;
-    }}
-    .math-hero-title {{
-        font-size: 32px;
-    }}
-    .math-features-bar {{
-        grid-template-columns: repeat(2, 1fr);
-    }}
-    .math-avatar-img {{
-        width: 240px;
-        height: 240px;
-    }}
-    .math-avatar-glow-ring {{
-        width: 280px;
-        height: 280px;
-    }}
-    .math-avatar-dashed-ring {{
-        width: 300px;
-        height: 300px;
-    }}
+.teacher-recent-title {{
+    font-size: 17px;
+    font-weight: 900;
+    color: #0c1e3d;
+    margin: 0;
+}}
+
+.teacher-recent-table-head {{
+    display: grid;
+    grid-template-columns: 2fr 1.5fr 1.5fr 1.2fr;
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 800;
+    color: #475569;
+    margin-bottom: 10px;
+    border: 1px solid #e2e8f0;
+}}
+
+.teacher-recent-empty {{
+    padding: 40px 20px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 14px;
+    font-weight: 700;
 }}
 </style>
 """
 st.markdown(_nav_css, unsafe_allow_html=True)
 
 # ============================================================================== 
-# 1. شريط التنقل العلوي الموحد (Mathematic Σ) لجميع الزوار والطلاب
+# 1. شريط التنقل العلوي الموحد (Mathematic Σ)
 # ============================================================================== 
 if is_student_mode:
-    # Top Sticky Navbar
     st.markdown('<div class="math-navbar-wrap">', unsafe_allow_html=True)
     c_brand, c_links, c_acts = st.columns([2.5, 6.2, 3.3], vertical_alignment="center")
     
@@ -3194,11 +3394,11 @@ if is_student_mode:
     st.markdown('</div>', unsafe_allow_html=True)
 
     # -------------------------------------------------------------
-    # إذا لم يكن الطالب مسجلاً للدخول، يتم عرض الواجهة العامة المتوافقة مع الصور
+    # الصفحات العامة (غير مسجل الدخول)
     # -------------------------------------------------------------
     if not st.session_state.logged_student:
 
-        # === 1. الصفحة الرئيسية (Image 2) ===
+        # === 1. الصفحة الرئيسية (Image 1 & 2) ===
         if st.session_state.page_view == "home":
             _ui_df = st.session_state.get("student_interface_df", pd.DataFrame())
             si = _ui_df.iloc[0].to_dict() if not _ui_df.empty else {}
@@ -3207,7 +3407,7 @@ if is_student_mode:
             ui_main_b64 = str(si.get("صورة_الواجهة_base64", "") or "").strip() or STUDENT_FIXED_IMAGE_B64
             ui_main_uri = STUDENT_FIXED_IMAGE_URI if STUDENT_FIXED_IMAGE_B64 else (teacher_image_data_uri(ui_main_b64) if ui_main_b64 else "")
             
-            # Hero Section (Image 2)
+            # Hero Section (Image 1)
             hero_html = f"""
             <div class="math-hero-wrap">
               <div class="math-hero-math-text">
@@ -3235,7 +3435,7 @@ if is_student_mode:
             """
             st.markdown(hero_html, unsafe_allow_html=True)
 
-            # Hero CTAs (ابدأ الآن ← | تعرف على المنصة)
+            # Hero CTAs
             st.markdown("<div style='background:#020b1e;padding:0 48px 30px;'><div style='max-width:1240px;margin:0 auto;'>", unsafe_allow_html=True)
             cta_col1, cta_col2, cta_spacer = st.columns([1.8, 1.8, 6.4], gap="small")
             with cta_col1:
@@ -3248,7 +3448,7 @@ if is_student_mode:
                     st.rerun()
             st.markdown("</div></div>", unsafe_allow_html=True)
 
-            # Floating Features Bar (Image 2)
+            # Floating Features Bar (Image 1)
             features_bar_html = """
             <div class="math-features-bar-wrap">
               <div class="math-features-bar">
@@ -3277,7 +3477,7 @@ if is_student_mode:
             """
             st.markdown(features_bar_html, unsafe_allow_html=True)
 
-            # Section Below Hero: أحدث الكورسات (Image 2)
+            # Section Below Hero: أحدث الكورسات (Image 1 & Image 2)
             st.markdown("""
             <div style="background:#ffffff; padding:28px 40px 14px; max-width:1240px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; direction:rtl;">
               <h2 style="color:#0c1e3d; font-size:32px; font-weight:900; margin:0;">أحدث الكورسات</h2>
@@ -3290,29 +3490,22 @@ if is_student_mode:
                     st.session_state.page_view = "courses"
                     st.rerun()
 
-            # Course Cards Preview
-            courses_preview_cols = st.columns(4, gap="medium")
-            sample_curriculums = [
-                ("المنهج المصري 🇪🇬", "الصف الثالث الثانوي (علمي رياضة)", "تفاضل وتكامل وجبر وفراغية وإحصاء", "📐"),
-                ("المنهج الخليجي والسعودي 🇸🇦", "المرحلة الثانوية والمتوسطة", "مسارات الرياضيات المتقدمة والإحصاء", "📊"),
-                ("المنهج القطري والإماراتي 🇶🇦", "المسارات المتقدمة والتكنولوجية", "شروحات وتمارين ونماذج وزارية", "✦"),
-                ("المنهج الدولي واللغات 🌎", "IGCSE / SAT / ACT / IB", "Comprehensive Mathematics & Calculus", "🌐")
-            ]
-            for idx, (curr_name, grade_name, c_desc, c_icon) in enumerate(sample_curriculums):
-                with courses_preview_cols[idx]:
-                    st.markdown(f"""
-                    <div class="math-course-card">
-                      <div class="math-course-badge">{c_icon} {curr_name}</div>
-                      <div class="math-course-title">{grade_name}</div>
-                      <div class="math-course-desc">{c_desc}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    if st.button(f"استكشف المنهج ←", key=f"course_explore_{idx}", use_container_width=True):
-                        st.session_state.page_view = "courses"
-                        st.session_state.selected_curr_filter = curr_name
-                        st.rerun()
+            # Dashed Notice Card (Image 2)
+            st.markdown("""
+            <div class="math-dashed-notice-card">
+              <div class="math-dashed-icon">📐</div>
+              <div class="math-dashed-title">مرحباً بكم في منصة Mathematic التعليمية</div>
+              <div class="math-dashed-desc">سيتم نشر أحدث الكورسات والمحاضرات الدراسية تباعاً، يمكنك متابعة الدليل العام للكورسات.</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            cb_c1, cb_c2, cb_c3 = st.columns([3, 4, 3])
+            with cb_c2:
+                if st.button("استعراض دليل الكورسات", key="btn_browse_courses_guide", use_container_width=True):
+                    st.session_state.page_view = "courses"
+                    st.rerun()
 
-            # Smart Hamza AI Solver Banner
+            # Hamza AI Banner
             st.markdown("""
             <div style="background:linear-gradient(135deg, #04142d, #0d3880); border-radius:24px; padding:28px 36px; margin:40px auto 20px; max-width:1200px; color:#ffffff; direction:rtl; box-shadow:0 15px 40px rgba(4,20,45,.2);">
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px;">
@@ -3336,7 +3529,6 @@ if is_student_mode:
             with col_v2:
                 st.video("https://www.youtube.com/watch?v=6PleAxZCNZM")
 
-            # Darssly Cards
             render_student_ads()
             st.markdown("<div style='max-width:1200px;margin:25px auto;'>", unsafe_allow_html=True)
             render_darssly_cards("home")
@@ -3374,7 +3566,87 @@ if is_student_mode:
                         st.success("✓ تم إرسال طلب الحجز بنجاح! سيتواصل معك فريق المنصة لتأكيد الموعد.")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # === 2. صفحة تسجيل الدخول (Image 1) ===
+            # Dark Footer (Image 2)
+            st.markdown("""
+            <div class="math-footer-wrap">
+              <div class="math-footer-logo">
+                <span style="color:#f5a623;">Σ</span> <span>Mathematic</span>
+              </div>
+              <div class="math-footer-copyright">
+                جميع الحقوق محفوظة © 2026 منصة Mathematic التعليمية — م/ محمد غنيم.
+              </div>
+              <div class="math-footer-links">
+                <span>لوحة المعلم</span> • <span>تسجيل الدخول</span> • <span>المحاضرات</span> • <span>الكورسات</span>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # === 2. دليل الكورسات والمحاضرات (Image 3) ===
+        elif st.session_state.page_view == "courses":
+            st.markdown("""
+            <div style="background:#ffffff; padding:24px 32px 10px; max-width:1200px; margin:0 auto; direction:rtl;">
+              <div style="color:#3b82f6; font-size:13px; font-weight:700; margin-bottom:8px;">الرئيسية / الكورسات</div>
+              <h1 style="color:#0c1e3d; font-size:32px; font-weight:900; margin:0 0 20px;">دليل الكورسات والمحاضرات</h1>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Search & Filter Bar (Image 3)
+            fc1, fc2, fc3, fc4 = st.columns([4.5, 2.5, 2.5, 1.5], gap="small")
+            with fc1:
+                search_q = st.text_input("ابحث باسم الكورس، المادة، المرحلة، أو المنهج...", placeholder="🔍 ابحث باسم الكورس، المادة، المرحلة، أو المنهج...", label_visibility="collapsed")
+            with fc2:
+                filter_curr = st.selectbox("المنهج:", ["الكل 🌍"] + list(CURRICULUM_DATA.keys()), label_visibility="collapsed")
+            with fc3:
+                filter_grade = st.selectbox("المرحلة:", ["الكل 📚", "المرحلة الثانوية", "المرحلة الإعدادية", "المرحلة الابتدائية"], label_visibility="collapsed")
+            with fc4:
+                if st.button("عرض الكل 🔄", key="courses_reset_filter", use_container_width=True):
+                    st.session_state.courses_filter_stage = "الكل"
+                    st.rerun()
+
+            # Filter Pills Row (Image 3)
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+            p1, p2, p3, p4, p5, p6 = st.columns(6)
+            pills = [("الكل", p1), ("أزهري", p2), ("إبتدائي", p3), ("إعدادي", p4), ("ثانوي", p5), ("مراجعة نهائية", p6)]
+            for pill_label, p_col in pills:
+                with p_col:
+                    is_active_pill = (st.session_state.courses_filter_stage == pill_label)
+                    if st.button(pill_label, key=f"pill_stage_{pill_label}", use_container_width=True, type="primary" if is_active_pill else "secondary"):
+                        st.session_state.courses_filter_stage = pill_label
+                        st.rerun()
+
+            # Empty State / Notice Card (Image 3)
+            st.markdown("""
+            <div class="math-dashed-notice-card" style="margin-top:20px;">
+              <div class="math-dashed-icon">📚</div>
+              <div class="math-dashed-title">لا توجد كورسات أو محاضرات منشورة حالياً</div>
+              <div class="math-dashed-desc">تم تصفير كافة الكورسات والمحاضرات القديمة بنجاح، والمنصة الآن صفحة بيضاء نظيفة تماماً بانتظار رفع كورساتك الحقيقية.</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            adm_c1, adm_c2, adm_c3 = st.columns([3, 4, 3])
+            with adm_c2:
+                if st.button("تسجيل الدخول كمعلم للإدارة", key="btn_courses_login_admin", use_container_width=True):
+                    st.session_state.active_mode = "public"
+                    st.session_state.page_view = "login"
+                    st.session_state.login_role_tab = "teacher"
+                    st.rerun()
+
+            # Dark Footer (Image 3)
+            st.markdown("""
+            <div class="math-footer-wrap">
+              <div class="math-footer-logo">
+                <span style="color:#f5a623;">Σ</span> <span>Mathematic</span>
+              </div>
+              <div class="math-footer-copyright">
+                جميع الحقوق محفوظة © 2026 منصة Mathematic التعليمية — م/ محمد غنيم.
+              </div>
+              <div class="math-footer-links">
+                <span>لوحة المعلم</span> • <span>تسجيل الدخول</span> • <span>المحاضرات</span> • <span>الكورسات</span>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # === 3. صفحة تسجيل الدخول (Image 4) ===
         elif st.session_state.page_view == "login":
             st.markdown("""
             <div class="math-login-container">
@@ -3386,7 +3658,6 @@ if is_student_mode:
                 <p class="math-login-subtitle">سجل دخولك لمتابعة رحلتك التعليمية</p>
             """, unsafe_allow_html=True)
 
-            # Role Switcher Tabs (Image 1)
             is_tab_student = (st.session_state.login_role_tab == "student")
             tab_c1, tab_c2 = st.columns(2)
             with tab_c2:
@@ -3398,7 +3669,6 @@ if is_student_mode:
                     st.session_state.login_role_tab = "teacher"
                     st.rerun()
 
-            # When Student Tab is selected (Image 1)
             if is_tab_student:
                 st.markdown("""
                 <div class="math-alert-box">
@@ -3452,7 +3722,6 @@ if is_student_mode:
                     st.session_state.page_view = "register"
                     st.rerun()
 
-            # When Teacher & Admin Tab is selected
             else:
                 st.markdown("""
                 <div class="math-alert-box" style="background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8;">
@@ -3484,8 +3753,6 @@ if is_student_mode:
                         ac_pass = st.text_input("كلمة المرور:", type="password")
                         submit_ac = st.form_submit_button("دخول الأكاديمية ←", use_container_width=True)
                         if submit_ac:
-                            # academy authentication
-                            aa = st.session_state.get("academy_accounts_df", pd.DataFrame(columns=COL_ACADEMY_ACCOUNTS)).copy()
                             access = st.session_state.get("academy_access_df", pd.DataFrame(columns=COL_ACADEMY_ACCESS)).copy()
                             _phone, _pass = str(ac_phone).strip(), str(ac_pass).strip()
                             _role_clean = "رئيس الأكاديمية" if ac_role == "رئيس الأكاديمية" else "مشرف أكاديمي"
@@ -3507,7 +3774,6 @@ if is_student_mode:
                                 st.session_state.academy_page = "dashboard"
                                 st.rerun()
 
-            # Quick Preview Section (Image 1)
             st.markdown("""
             <div class="math-quick-preview-title">المعاينة السريعة:</div>
             """, unsafe_allow_html=True)
@@ -3535,7 +3801,7 @@ if is_student_mode:
 
             st.markdown("</div></div>", unsafe_allow_html=True)
 
-        # === 3. صفحة إنشاء حساب جديد ===
+        # === 4. صفحة إنشاء حساب جديد ===
         elif st.session_state.page_view == "register":
             st.markdown("""
             <div class="math-login-container">
@@ -3585,33 +3851,6 @@ if is_student_mode:
                 st.rerun()
             st.markdown("</div></div>", unsafe_allow_html=True)
 
-        # === 4. دليل الكورسات والمقررات ===
-        elif st.session_state.page_view == "courses":
-            st.markdown("""
-            <div style="background:#020b1e; padding:45px 32px 35px; color:#ffffff; text-align:center; direction:rtl;">
-              <h1 style="color:#ffffff; font-size:36px; font-weight:900; margin-bottom:10px;">📚 دليل المقررات والكورسات التعليمية</h1>
-              <p style="color:#cbd5e1; font-size:16px; max-width:700px; margin:0 auto;">استكشف مناهج الرياضيات والإحصاء لمختلف الدول والمراحل الدراسية مع نماذج امتحانات وشروحات تفاعلية.</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            selected_curr = st.selectbox("تصفية حسب الدولة / المنهج:", list(CURRICULUM_DATA.keys()), key="courses_page_curr_filter")
-            st.markdown(f"<div style='max-width:1200px;margin:25px auto;'><h3 style='color:#0c1e3d;font-weight:900;'>المراحل والصفوف المتاحة في: {selected_curr}</h3></div>", unsafe_allow_html=True)
-            
-            c_grid = st.columns(3, gap="medium")
-            grades_list = CURRICULUM_DATA[selected_curr]
-            for gi, g_name in enumerate(grades_list):
-                with c_grid[gi % 3]:
-                    st.markdown(f"""
-                    <div class="math-course-card" style="margin-bottom:20px;">
-                      <div class="math-course-badge">📐 مقرر معتمد</div>
-                      <div class="math-course-title">{g_name}</div>
-                      <div class="math-course-desc">شرح كامل للمنهج، حل جميع مسائل وتمارين الكتاب، اختبارات أسبوعية وشهرية مع متابعة الدرجات.</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    if st.button("تسجيل / بدء الكورس ←", key=f"course_enroll_{gi}", use_container_width=True):
-                        st.session_state.page_view = "register"
-                        st.rerun()
-
         # === 5. المحاضرات والفيديوهات ===
         elif st.session_state.page_view == "lectures":
             st.markdown("""
@@ -3623,12 +3862,11 @@ if is_student_mode:
             
             v_df = st.session_state.get("videos_df", pd.DataFrame(columns=COL_VIDEOS))
             if v_df.empty:
-                st.info("سيتم رفع المحاضرات الجديدة قريباً! تابع قناتنا على يوتيوب لمشاهدة أحدث الشروحات.")
+                st.info("سيتم نشر أحدث المحاضرات والشروحات تباعاً، يمكنك متابعة الدليل العام للكورسات.")
             else:
                 for idx, v_row in v_df.iterrows():
                     st.markdown(f"<div style='background:#ffffff;border:1px solid #e2e8f0;border-radius:18px;padding:20px;margin-bottom:18px;direction:rtl;'><h4>{v_row.get('عنوان_الفيديو','محاضرة')}</h4><p style='color:#64748b;'>{v_row.get('المنهج/الدولة','')} - {v_row.get('المجموعة/الصف','')}</p></div>", unsafe_allow_html=True)
 
-            st.markdown("<div style='max-width:850px;margin:30px auto;text-align:center;'><h3 style='color:#0c1e3d;'>حصص سريعة في أقل من دقيقة</h3></div>", unsafe_allow_html=True)
             col_v1, col_v2, col_v3 = st.columns([1, 2, 1])
             with col_v2:
                 st.video("https://www.youtube.com/watch?v=6PleAxZCNZM")
@@ -3734,11 +3972,7 @@ if is_student_mode:
                             }
                             st.session_state.hamza_public_history.append({"student": qtext.strip() or "حل المسألة من الصورة المرفقة", "assistant": answer})
                         except Exception as exc:
-                            code = str(exc)
-                            if "AI_KEY_MISSING" in code:
-                                st.error("⚠️ حمصا غير مفعّل حالياً.")
-                            else:
-                                st.error("❌ حمصا لم يستطع معالجة الطلب حالياً. أعد المحاولة بعد لحظات.")
+                            st.error("❌ حمصا لم يستطع معالجة الطلب حالياً. أعد المحاولة بعد لحظات.")
 
             last = st.session_state.get("hamza_public_last")
             if last:
@@ -3747,12 +3981,8 @@ if is_student_mode:
                 _hamza_render_solution(last.get('answer', ''))
                 st.markdown("<div style='background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:15px;margin-top:12px;direction:rtl;'><b>✅ الإجابة النهائية:</b></div>", unsafe_allow_html=True)
                 _hamza_render_solution(last.get('final_answer', ''))
-                phtml = _hamza_pdf_html(last.get("question", ""), last.get("answer", ""), last.get("final_answer", ""), "طالب")
-                ppdf = html_to_pdf_bytes(phtml)
-                if ppdf:
-                    st.download_button("🖨️ تحميل الحل PDF", ppdf, file_name="حل_مسألة_حمصا.pdf", mime="application/pdf", use_container_width=True, key="hamza_pdf_dl")
 
-        # === 8. تسجيل بيانات ضيف جديد ===
+        # === 8. تسجيل ضيف جديد ===
         elif st.session_state.page_view == "guest_reg":
             st.markdown("<div class='math-login-container'><div class='math-login-card'><h3>👥 تسجيل بياناتك كضيف</h3>", unsafe_allow_html=True)
             with st.form("guest_reg_form"):
@@ -5153,30 +5383,115 @@ if not st.session_state.get("teacher_panel_unlocked", False):
 total_exams_count = len(st.session_state.exams_df)
 total_students_count = len(st.session_state.users_df)
 
-# ===== شريط المعلم العلوي =====
-_nav_open = st.session_state.teacher_sidebar_open
-_toggle_col, _brand_col, _pills_col = st.columns([1.0, 2.3, 8.7], vertical_alignment="center")
-with _toggle_col:
-    if st.button(("✕" if _nav_open else "☰"), key="teacher_sidebar_toggle", use_container_width=True, help="إظهار أو إخفاء شريط التنقل"):
-        st.session_state.teacher_sidebar_open = not st.session_state.teacher_sidebar_open
-        st.rerun()
-with _brand_col:
-    st.markdown("<div class='top-navigation-title'>Σ Mathematic</div><div class='top-navigation-subtitle'>لوحة تحكم المعلم • م/ محمد غنيم</div>", unsafe_allow_html=True)
-    if st.button('🌐 زيارة المنصة الرئيسية', key='teacher_nav_visit_public', use_container_width=True):
-        st.session_state.active_mode = 'public'
-        st.session_state.page_view = 'home'
-        st.rerun()
-with _pills_col:
-    if _nav_open:
-        _teacher_nav = [("◉ الرئيسية","dashboard"), ("◫ Zoom","online_schedule"), ("▦ المواعيد","weekly_schedule"), ("▣ الامتحانات","exam_maker"), ("🤖 استوديو AI","ai_studio"), ("▤ بنك الأسئلة","question_bank"), ("▶ الفيديوهات","videos"), ("✦ عبقري","abqary"), ("▥ الدرجات","grades"), ("✎ المقالي","essays"), ("◌ الرسائل","chat"), ("♙ الطلاب","students"), ("＋ حصة","add_session"), ("＋ واجب","add_hw"), ("✎ تعديل السجلات","edit_records"), ("▥ السجلات","all_records"), ("📢 الإعلانات","ads"), ("▤ ولي الأمر","parent_report"), ("▰ المدفوعات","payments"), ("🏫 الأكاديميات","academies"), ("🎓 تنظيم درسلي","darssly_schedule"), ("💾 النسخ الاحتياطية","online_backup"), ("◈ واجهة الطالب","student_interface")]
-        _teacher_cols = st.columns(5, gap="small")
-        for _ti, (_label, _target) in enumerate(_teacher_nav):
-            with _teacher_cols[_ti % 5]:
-                if st.button(_label, key=f"teacher_top_nav_btn_{_ti}", use_container_width=True, type="primary" if _target == st.session_state.teacher_page else "secondary"):
-                    st.session_state.teacher_page = _target
-                    st.rerun()
-    else:
-        st.markdown('<div class="top-navigation-collapsed"><span class="top-navigation-subtitle">شريط التنقل مخفي — اضغط ☰ لإظهاره</span></div>', unsafe_allow_html=True)
+# ===== شريط المعلم العلوي (Image 5) =====
+st.markdown('<div class="math-navbar-wrap">', unsafe_allow_html=True)
+tb_brand, tb_links, tb_acts = st.columns([2.5, 6.0, 3.5], vertical_alignment="center")
+
+with tb_brand:
+    st.markdown("""
+        <div class="math-brand">
+            <span class="math-brand-sigma">Σ</span>
+            <span class="math-brand-text">Mathematic</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+with tb_links:
+    tn1, tn2, tn3, tn4, tn5, tn6 = st.columns(6, gap="small")
+    with tn1:
+        if st.button("الرئيسية", key="tnav_home", use_container_width=True):
+            st.session_state.active_mode = "public"
+            st.session_state.page_view = "home"
+            st.rerun()
+    with tn2:
+        if st.button("الكورسات", key="tnav_courses", use_container_width=True):
+            st.session_state.active_mode = "public"
+            st.session_state.page_view = "courses"
+            st.rerun()
+    with tn3:
+        if st.button("المحاضرات", key="tnav_lectures", use_container_width=True):
+            st.session_state.active_mode = "public"
+            st.session_state.page_view = "lectures"
+            st.rerun()
+    with tn4:
+        if st.button("لوحة الطالب", key="tnav_student", use_container_width=True):
+            st.session_state.active_mode = "student"
+            st.session_state.student_sub_page = "dashboard"
+            st.rerun()
+    with tn5:
+        if st.button("لوحة المعلم", key="tnav_teacher", use_container_width=True, type="primary"):
+            st.session_state.teacher_page = "dashboard"
+            st.rerun()
+    with tn6:
+        if st.button("تواصل معنا", key="tnav_contact", use_container_width=True):
+            st.session_state.active_mode = "public"
+            st.session_state.page_view = "contact"
+            st.rerun()
+
+with tb_acts:
+    tact1, tact2, tact3 = st.columns([2.0, 0.9, 0.6], gap="small")
+    with tact1:
+        st.markdown("<div style='color:#fff;font-size:13px;font-weight:800;white-space:nowrap;padding-top:8px;'>👤 م/ محمد غنيم</div>", unsafe_allow_html=True)
+    with tact2:
+        if st.button("خروج", key="teacher_logout_btn", use_container_width=True):
+            st.session_state.teacher_panel_unlocked = False
+            st.session_state.active_mode = "public"
+            st.session_state.page_view = "home"
+            st.rerun()
+    with tact3:
+        if st.button("🔍", key="teacher_search_btn", use_container_width=True):
+            st.session_state.teacher_page = "students"
+            st.rerun()
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Main Two-Column Layout (Sidebar + Content - Image 5)
+col_tside, col_tmain = st.columns([2.6, 9.4], gap="medium")
+
+with col_tside:
+    st.markdown("""
+    <div class="teacher-sidebar-container">
+      <div class="teacher-sidebar-header">
+        <span>Mathematic</span> <span style="color:#f5a623;">Σ</span>
+      </div>
+    """, unsafe_allow_html=True)
+    
+    _t_sidebar_menu = [
+        ("🏠 نظرة عامة", "dashboard"),
+        ("👥 إدارة الطلاب", "students"),
+        ("📺 الكورسات والمحاضرات", "videos"),
+        ("📝 تسجيل الحصص والغياب", "add_session"),
+        ("💳 دفتر القيود المالية", "payments"),
+        ("⭐ الواجبات والتقييمات", "grades"),
+        ("📄 الامتحانات والمقالي", "exam_maker"),
+        ("📦 بنك الأسئلة والاشتراكات", "question_bank"),
+        ("📅 الجداول ومواعيد Zoom", "online_schedule"),
+        ("📢 إدارة الإعلانات", "ads"),
+        ("🏛️ الأكاديميات الكبرى", "academies"),
+        ("🎟️ حجوزات المقاعد", "bookings"),
+        ("💾 النسخ الاحتياطية", "online_backup")
+    ]
+    for _m_label, _m_page in _t_sidebar_menu:
+        _is_m_active = (st.session_state.teacher_page == _m_page)
+        if st.button(_m_label, key=f"tside_{_m_page}", use_container_width=True, type="primary" if _is_m_active else "secondary"):
+            st.session_state.teacher_page = _m_page
+            st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# Main Dashboard Content Area
+_tmain_ctx = col_tmain
+with _tmain_ctx:
+    # Header row with title & status badge (Image 5)
+    st.markdown("""
+    <div class="teacher-dash-header-wrap">
+      <div>
+        <h1 class="teacher-dash-title">لوحة الإدارة والتحكم</h1>
+        <div class="teacher-dash-sub">م/ محمد غنيم — إدارة العمليات الأكاديمية والمالية الحية</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="teacher-status-pill">● متصل بقاعدة البيانات</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # رابط دخول الطالب — ظاهر للمعلم دائمًا، وكتلة code تحتوي زر نسخ مدمج من Streamlit.
 _student_public_url = "https://engmohamedghonaim.streamlit.app/?role=student"
@@ -5932,52 +6247,118 @@ td.time-col {{ width:85px; font-weight:bold; vertical-align:middle; background:#
 
 elif t_page == "dashboard":
     dashboard_students = sorted(list(set([str(x).strip() for x in st.session_state.users_df["اسم الطالب"].dropna().unique() if str(x).strip()] + [str(x).strip() for x in st.session_state.weekly_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()] + [str(x).strip() for x in st.session_state.online_schedule_df["اسم الطالب"].dropna().unique() if str(x).strip()])))
-    # الصورة الثابتة المدمجة هي الضمان الأساسي لظهور صورة المعلم دائماً أعلى لوحة التحكم.
-    profile_uri = STUDENT_FIXED_IMAGE_URI
-    total_due_all,total_paid_all,total_balance_all=get_all_financial_totals()
-    _teacher_notifs = _app_notifications("teacher")
-    _teacher_notif_count = len(_teacher_notifs)
-    _dash_head_a, _dash_head_b = st.columns([10, 1])
-    with _dash_head_a:
+    total_due_all, total_paid_all, total_balance_all = get_all_financial_totals()
+    total_st_count = len(dashboard_students)
+    today_sessions_count = len(st.session_state.sessions_df[st.session_state.sessions_df["تاريخ_الحصة"].astype(str).str[:10] == str(date.today())]) if not st.session_state.sessions_df.empty and "تاريخ_الحصة" in st.session_state.sessions_df.columns else 0
+    total_sessions_count = len(st.session_state.sessions_df)
+
+    # 4 Stat Cards in a row (Image 5)
+    st.markdown("<div style='margin-bottom:24px;'>", unsafe_allow_html=True)
+    sc1, sc2, sc3, sc4 = st.columns(4, gap="medium")
+    with sc1:
         st.markdown(f"""
-        <div class="dashboard-banner">
-          <div><div style="font-size:12px;background:#1677ff;padding:5px 11px;border-radius:999px;display:inline-block">لوحة تحكم المعلم</div>
-          <h2>مرحباً بك يا م/ محمد غنيم 👋</h2><p>إدارة الطلاب والحصص والواجبات والاختبارات والمواعيد والحسابات من مكان واحد.</p></div>
-          <img src="{profile_uri}" alt="م/ محمد غنيم">
+        <div class="teacher-stat-card">
+          <div>
+            <div class="teacher-stat-num">{total_st_count}</div>
+            <div class="teacher-stat-label">إجمالي الطلاب المسجلين</div>
+          </div>
+          <div class="teacher-stat-icon-wrap" style="background:#f3e8ff; color:#9333ea;">👥</div>
         </div>
-        """,unsafe_allow_html=True)
-    with _dash_head_b:
-        if st.button(f"🔔 {_teacher_notif_count}", key="teacher_notifications_btn", use_container_width=True, help="عرض الإشعارات"):
-            st.session_state.teacher_notifications_open = not st.session_state.teacher_notifications_open
+        """, unsafe_allow_html=True)
+    with sc2:
+        st.markdown(f"""
+        <div class="teacher-stat-card">
+          <div>
+            <div class="teacher-stat-num">{today_sessions_count}</div>
+            <div class="teacher-stat-label">حصص اليوم المنعقدة</div>
+          </div>
+          <div class="teacher-stat-icon-wrap" style="background:#fef3c7; color:#d97706;">📝</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with sc3:
+        st.markdown(f"""
+        <div class="teacher-stat-card">
+          <div>
+            <div class="teacher-stat-num">{total_sessions_count}</div>
+            <div class="teacher-stat-label">إجمالي الحصص المنفذة</div>
+          </div>
+          <div class="teacher-stat-icon-wrap" style="background:#e0f2fe; color:#0284c7;">📺</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with sc4:
+        st.markdown(f"""
+        <div class="teacher-stat-card">
+          <div>
+            <div class="teacher-stat-num">{total_due_all:,.2f} ج.م</div>
+            <div class="teacher-stat-label">إجمالي الاستحقاق المالي</div>
+          </div>
+          <div class="teacher-stat-icon-wrap" style="background:#ccfbf1; color:#0d9488;">💳</div>
+        </div>
+        """, unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Two Columns below stats: Quick Actions (Left) and Recent Students (Right) (Image 5)
+    qa_col, tbl_col = st.columns([4.2, 5.8], gap="medium")
+
+    with qa_col:
+        st.markdown("""
+        <div class="teacher-quick-panel">
+          <div class="teacher-quick-panel-title">⚡ إجراءات سريعة</div>
+        """, unsafe_allow_html=True)
+        if st.button("＋ تسجيل حصة وحضور جديد", key="tquick_act_add_session", use_container_width=True):
+            st.session_state.teacher_page = "add_session"
             st.rerun()
-    if st.session_state.teacher_notifications_open:
-        _render_notification_box("teacher")
+        if st.button("💵 تحصيل سند قبض مالي", key="tquick_act_receipt", use_container_width=True):
+            st.session_state.teacher_page = "payments"
+            st.rerun()
+        if st.button("👤 إضافة طالب جديد", key="tquick_act_add_student", use_container_width=True):
+            st.session_state.teacher_page = "students"
+            st.rerun()
+        if st.button("📝 تصحيح الأسئلة المقالية", key="tquick_act_essays", use_container_width=True):
+            st.session_state.teacher_page = "essays"
+            st.rerun()
+        st.markdown("""
+          <div class="teacher-quick-hint-box">
+            💡 كافة العمليات تُرحّل تلقائياً إلى دفتر القيود المحاسبي.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # إظهار ملخص الحسابات مباشرة أسفل رسالة الترحيب في الصفحة الرئيسية.
-    # ملخص مالي بارز في الصفحة الرئيسية، بنفس أسلوب البطاقات الإحصائية المرجعية.
-    st.markdown("""
-    <style>
-    .teacher-finance-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:12px 0 24px;direction:rtl}
-    .teacher-finance-card{min-height:132px;border:1px solid #dce8f5;border-radius:23px;padding:22px 20px;background:linear-gradient(145deg,#ffffff 0%,#eff6ff 100%);box-shadow:0 8px 24px rgba(32,83,140,.055);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
-    .teacher-finance-card.paid{background:linear-gradient(145deg,#ffffff 0%,#effcf6 100%)}
-    .teacher-finance-card.balance{background:linear-gradient(145deg,#ffffff 0%,#fff8e8 100%)}
-    .teacher-finance-icon{font-size:27px;line-height:1.2;margin-bottom:10px}
-    .teacher-finance-value{font-size:clamp(22px,2vw,30px);font-weight:850;color:#1260c4;line-height:1.35;direction:rtl}
-    .teacher-finance-label{font-size:16px;font-weight:700;color:#647b98;margin-top:7px}
-    @media(max-width:700px){.teacher-finance-grid{grid-template-columns:1fr;gap:12px}.teacher-finance-card{min-height:108px;padding:16px}}
-    </style>
-    <div class="teacher-finance-grid">
-      <div class="teacher-finance-card"><div class="teacher-finance-icon">💳</div><div class="teacher-finance-value">""" + f"{total_due_all:,.0f}" + """ جنيه</div><div class="teacher-finance-label">إجمالي المستحق</div></div>
-      <div class="teacher-finance-card paid"><div class="teacher-finance-icon">✅</div><div class="teacher-finance-value">""" + f"{total_paid_all:,.0f}" + """ جنيه</div><div class="teacher-finance-label">إجمالي المدفوع</div></div>
-      <div class="teacher-finance-card balance"><div class="teacher-finance-icon">💰</div><div class="teacher-finance-value">""" + f"{max(total_balance_all,0):,.0f}" + """ جنيه</div><div class="teacher-finance-label">الرصيد المتبقي</div></div>
-    </div>
-    """, unsafe_allow_html=True)
+    with tbl_col:
+        st.markdown("""
+        <div class="teacher-recent-panel">
+          <div class="teacher-recent-header">
+            <h3 class="teacher-recent-title">📋 أحدث الطلاب المسجلين</h3>
+          </div>
+          <div class="teacher-recent-table-head">
+            <div>اسم الطالب</div>
+            <div>الصف</div>
+            <div>الهاتف</div>
+            <div>الرصيد</div>
+          </div>
+        """, unsafe_allow_html=True)
+        recent_users = st.session_state.users_df.tail(5) if not st.session_state.users_df.empty else pd.DataFrame()
+        if recent_users.empty:
+            st.markdown('<div class="teacher-recent-empty">لا يوجد طلاب مسجلون حالياً.</div>', unsafe_allow_html=True)
+        else:
+            for _, u_row in recent_users.iterrows():
+                u_name = str(u_row.get("اسم الطالب", ""))
+                u_grade = str(u_row.get("المجموعة/الصف", ""))
+                u_phone = str(u_row.get("رقم الهاتف", ""))
+                st.markdown(f"""
+                <div style="display:grid;grid-template-columns:2fr 1.5fr 1.5fr 1.2fr;padding:10px 14px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:750;direction:rtl;">
+                  <div>{u_name}</div>
+                  <div style="color:#64748b;">{u_grade}</div>
+                  <div style="color:#64748b;">{u_phone}</div>
+                  <div style="color:#10b981;">0.00 ج.م</div>
+                </div>
+                """, unsafe_allow_html=True)
+        if st.button("عرض الكل ←", key="t_view_all_students_btn", use_container_width=True):
+            st.session_state.teacher_page = "students"
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # الصف الأول: إحصائيات الطلاب والمواعيد، والصف الثاني: الملخص المالي؛ كلاهما أسفل الترحيب.
-    st.markdown("<div style='height:14px'></div>",unsafe_allow_html=True)
-    s1,s2,s3,s4=st.columns(4)
-    for c,icon,num,label,cls in [(s1,'♙',len(dashboard_students),'إجمالي الطلاب','stat-purple'),(s2,'▣',len(st.session_state.weekly_schedule_df),'المواعيد الأسبوعية','stat-green'),(s3,'◉',len(st.session_state.online_schedule_df),'مواعيد Zoom','stat-blue'),(s4,'✎',len(st.session_state.sessions_df),'الحصص المرصودة','stat-yellow')]:
-        with c: st.markdown(f"<div class='modern-stat {cls}'><div class='icon'>{icon}</div><div class='num'>{num}</div><div class='label'>{label}</div></div>",unsafe_allow_html=True)
+    _render_teacher_today_lessons()
 
 
 
@@ -8869,3 +9250,11 @@ elif t_page == "ads":
                     st.caption("📎 يوجد حاليًا ملف صورة/فيديو مرتبط بهذا الإعلان.")
 
                 edit_file = None
+
+if t_page == "bookings":
+    st.markdown("### 🎟️ حجوزات المقاعد والطلبات الجديدة")
+    b_df = st.session_state.get("bookings_df", pd.DataFrame())
+    if b_df.empty:
+        st.info("لا توجد طلبات حجز مسجلة حالياً.")
+    else:
+        st.dataframe(b_df, use_container_width=True)
