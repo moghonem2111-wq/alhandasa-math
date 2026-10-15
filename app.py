@@ -31,10 +31,197 @@ except Exception:
     WeasyHTML = None
 
 st.set_page_config(
-    page_title="البشمهندس x الرياضه | منصة تعليمية للرياضيات والإحصاء",
+    page_title="Mathematic | رحلتك في عالم الرياضيات",
     page_icon="📐",
     layout="wide",
 )
+
+# هوية Mathematic الشاملة: تصميم متناسق لواجهات الطالب والمعلم والإدارة، دون تغيير منطق البيانات.
+st.markdown("""
+<style>
+:root {
+  --math-navy: #071a36;
+  --math-navy-2: #0b2853;
+  --math-blue: #245be8;
+  --math-blue-2: #3985ff;
+  --math-gold: #f5a623;
+  --math-cyan: #58d8f2;
+  --math-ink: #14233d;
+  --math-muted: #64748b;
+  --math-line: #e2eaf5;
+  --math-card: #ffffff;
+}
+.stApp {
+  background:
+    radial-gradient(ellipse at 92% 0%, rgba(56,132,255,.075), transparent 32%),
+    radial-gradient(ellipse at 0% 24%, rgba(88,216,242,.065), transparent 28%),
+    #f5f8fd;
+  color: var(--math-ink);
+}
+[data-testid="stHeader"] {
+  background: rgba(245,248,253,.88);
+  backdrop-filter: blur(14px);
+}
+[data-testid="stAppViewContainer"] .main .block-container {
+  max-width: 1480px;
+  padding-top: 1.35rem;
+  padding-bottom: 3rem;
+}
+h1, h2, h3, h4 {
+  color: var(--math-navy);
+  letter-spacing: -.025em;
+}
+h1 { font-weight: 900 !important; }
+h2 { font-weight: 850 !important; }
+h3 { font-weight: 800 !important; }
+p, label, [data-testid="stCaptionContainer"] { line-height: 1.75; }
+a { transition: color .2s ease, opacity .2s ease, transform .2s ease; }
+a[href*="?page="]:hover { filter: brightness(1.12); }
+[data-testid="stButton"] > button,
+[data-testid="stDownloadButton"] > button,
+[data-testid="stFormSubmitButton"] > button,
+[data-testid="stLinkButton"] > a {
+  min-height: 42px;
+  border-radius: 13px !important;
+  border: 1px solid rgba(36,91,232,.20) !important;
+  font-weight: 750 !important;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease !important;
+}
+[data-testid="stButton"] > button:hover,
+[data-testid="stDownloadButton"] > button:hover,
+[data-testid="stFormSubmitButton"] > button:hover,
+[data-testid="stLinkButton"] > a:hover {
+  transform: translateY(-2px);
+  border-color: rgba(36,91,232,.65) !important;
+  box-shadow: 0 9px 24px rgba(36,91,232,.16) !important;
+}
+[data-testid="stButton"] > button:active,
+[data-testid="stDownloadButton"] > button:active,
+[data-testid="stFormSubmitButton"] > button:active {
+  transform: translateY(0) scale(.985);
+}
+[data-testid="stBaseButton-primary"],
+[data-testid="stFormSubmitButton"] button[kind="primary"] {
+  background: linear-gradient(115deg, #1c4fd1, #3985ff) !important;
+  color: #fff !important;
+  box-shadow: 0 5px 16px rgba(36,91,232,.18);
+}
+[data-testid="stMetric"] {
+  padding: 15px 16px;
+  border: 1px solid rgba(36,91,232,.12);
+  border-radius: 17px !important;
+  background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(237,244,255,.9));
+  box-shadow: 0 6px 20px rgba(7,26,54,.045);
+  transition: transform .22s ease, box-shadow .22s ease;
+}
+[data-testid="stMetric"]:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 13px 28px rgba(7,26,54,.09);
+}
+[data-testid="stMetricLabel"] { color: #536782 !important; font-weight: 700; }
+[data-testid="stMetricValue"] { color: var(--math-navy) !important; font-weight: 850; }
+[data-testid="stExpander"] {
+  border: 1px solid var(--math-line) !important;
+  border-radius: 15px !important;
+  overflow: hidden;
+  background: rgba(255,255,255,.78);
+}
+[data-testid="stExpander"] summary:hover { background: rgba(36,91,232,.045); }
+[data-baseweb="tab-list"] {
+  gap: 7px;
+  border-bottom: 1px solid var(--math-line) !important;
+}
+[data-baseweb="tab"] {
+  border-radius: 11px 11px 0 0;
+  transition: background .2s ease, color .2s ease;
+  font-weight: 650;
+}
+[data-baseweb="tab"]:hover { background: rgba(36,91,232,.07); }
+[data-baseweb="tab"][aria-selected="true"] { color: var(--math-blue) !important; font-weight: 850; }
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #f8fbff 0%, #edf4ff 100%);
+  border-right: 1px solid rgba(36,91,232,.12);
+}
+[data-testid="stSidebar"] [data-testid="stButton"] > button {
+  text-align: right;
+  border-radius: 12px !important;
+}
+input, textarea, [data-baseweb="select"] > div,
+[data-testid="stDateInput"] input, [data-testid="stNumberInput"] input {
+  border-radius: 11px !important;
+}
+input:focus, textarea:focus {
+  border-color: var(--math-blue) !important;
+  box-shadow: 0 0 0 2px rgba(36,91,232,.12) !important;
+}
+[data-testid="stDataFrame"], [data-testid="stTable"] {
+  border: 1px solid var(--math-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+[data-testid="stAlert"] {
+  border-radius: 14px !important;
+  border-width: 1px !important;
+}
+[data-testid="stForm"] {
+  border: 1px solid rgba(36,91,232,.13);
+  border-radius: 17px;
+  padding: 1rem 1.1rem;
+  background: rgba(255,255,255,.74);
+}
+[data-testid="stFileUploader"] section {
+  border-radius: 15px;
+  border-color: rgba(36,91,232,.25);
+  background: rgba(255,255,255,.75);
+}
+[data-testid="stImage"] img { border-radius: 14px; }
+hr { border-color: rgba(36,91,232,.15) !important; }
+.vertical-section-header {
+  border-radius: 16px !important;
+  background: linear-gradient(110deg, #071a36, #174a9b) !important;
+  color: #fff !important;
+  padding: 15px 20px !important;
+  box-shadow: 0 8px 24px rgba(7,26,54,.12);
+}
+.math-dashed-notice-card {
+  border: 1.5px dashed #c7d7ef;
+  border-radius: 22px;
+  padding: 34px 24px;
+  text-align: center;
+  background: linear-gradient(145deg,#fff,#f5f9ff);
+  box-shadow: 0 8px 25px rgba(7,26,54,.045);
+}
+.math-dashed-title { color: var(--math-navy); font-weight: 850; font-size: 21px; }
+.math-dashed-desc { color: var(--math-muted); line-height: 1.9; margin-top: 8px; }
+.math-footer-wrap {
+  background: #020b1e; color: #fff; border-radius: 18px 18px 0 0;
+  margin-top: 32px; padding: 28px 18px; text-align: center;
+}
+@keyframes mathematicReveal {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+[data-testid="stVerticalBlock"] > [data-testid="stElementContainer"] {
+  animation: mathematicReveal .24s ease both;
+}
+@media (max-width: 768px) {
+  [data-testid="stAppViewContainer"] .main .block-container { padding: 1rem .75rem 2rem; }
+  h1 { font-size: 1.8rem !important; }
+  h2 { font-size: 1.45rem !important; }
+  [data-testid="stButton"] > button,
+  [data-testid="stDownloadButton"] > button { min-height: 44px; }
+  [data-testid="stForm"] { padding: .8rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+</style>
+""", unsafe_allow_html=True)
 
 try:
     from streamlit_paste_button import paste_image_button
